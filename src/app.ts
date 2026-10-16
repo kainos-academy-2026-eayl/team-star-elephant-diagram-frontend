@@ -1,11 +1,11 @@
-import express, { type Express, type Request, type Response } from 'express'
+import express, { type Express, type Request, type Response } from "express";
 
 export function createApp(): Express {
-  const app = express()
+	const app = express();
 
-  app.get('/health', (_req: Request, res: Response) => {
-    res.json({ status: 'ok', uptime: process.uptime() })
-  })
+	app.get("/health", (_req: Request, res: Response) => {
+		res.json({ status: "ok", uptime: process.uptime() });
+	});
 
-  return app
+	return app;
 }
