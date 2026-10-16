@@ -4,13 +4,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login</title>
+    <title>Log in</title>
+    <link rel="stylesheet" href="login.css">
 </head>
+
 <body>
-    <label for="username">Enter your Username</label>
-    <input type="text" name="username" id="username">
-    <label for="password">Enter your Password</label>
-    <input type="password" name="password" id="password">
-    <button type="submit">Login</button>
+    <main class="login">
+        <h1 class="login__title">Welcome back</h1>
+        <p class="login__intro">Log in to continue.</p>
+
+        <form action="/login" method="post">
+            <div class="field">
+                <label for="email">Email</label>
+                <input type="email" name="email" id="email" autocomplete="email" autofocus required>
+            </div>
+
+            <div class="field">
+                <label for="password">Password</label>
+                <input type="password" name="password" id="password" autocomplete="current-password" required>
+            </div>
+
+            <button type="submit" class="btn btn--primary">Log in</button>
+        </form>
+
+        <div class="login__divider"><span>Forgot your password?</span></div>
+
+        <a href="reset-password.html" class="btn btn--secondary">Reset password</a>
+    </main>
 </body>
+
 </html>
