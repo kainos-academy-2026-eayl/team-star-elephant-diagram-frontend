@@ -14,6 +14,10 @@ if (!Number.isInteger(PORT) || PORT < 0 || PORT > 65535) {
 
 const app = createApp();
 
+app.listen(3000, () => {
+	console.log("Server running on http://localhost:3000");
+});
+
 // Register new controllers / middleware here!
 
 // app.use('/', ...)
