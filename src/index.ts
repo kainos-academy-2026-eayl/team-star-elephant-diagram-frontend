@@ -14,18 +14,18 @@ if (!Number.isInteger(PORT) || PORT < 0 || PORT > 65535) {
 
 const app = createApp();
 
-app.listen(3000, () => {
-	console.log("Server running on http://localhost:3000");
-});
-
 // Register new controllers / middleware here!
-
+app.listen(PORT, () => {
+	console.log(`Server running on http://localhost:3000`);
+});
 // app.use('/', ...)
 
 // Keep everything below this comment at the bottom of the file
 const server = app.listen(PORT, HOST, () => {
 	console.log(`Listening on http://${HOST}:${PORT}`);
 });
+
+
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
 	process.on(signal, () => {
