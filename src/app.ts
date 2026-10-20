@@ -17,12 +17,24 @@ export function createApp(): Express {
 		res.json({ status: "ok", uptime: process.uptime() });
 	});
 
+	app.get("/", (_req: Request, res: Response) => {
+		res.redirect("/login");
+	});
+
 	app.get("/login", (_req: Request, res: Response) => {
 		res.render("login");
 	});
 
+	app.get("/", (_req: Request, res: Response) => {
+		res.redirect("/register");
+	});
+
 	app.get("/register", (_req: Request, res: Response) => {
-		res.render("Register");
+		res.render("register");
+	});
+
+	app.get("/", (_req: Request, res: Response) => {
+		res.redirect("/product_catalogue");
 	});
 
 	app.get("/products", (_req: Request, res: Response) => {
