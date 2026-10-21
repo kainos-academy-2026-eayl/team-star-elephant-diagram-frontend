@@ -19,7 +19,7 @@ Registration redirects to login; successful login redirects to `/products`.
 Forms display API validation errors without redisplaying passwords.
 The catalogue loads stored products from the backend, with search and category
 filtering. An empty database displays an empty catalogue. Product prices are
-decimal pounds, formatted as GBP, and `imageURL` supports HTTP(S) images.
+returned in pence and formatted as GBP, and `imageURL` supports HTTP(S) images.
 
 API calls run on the frontend server, not in the browser, so CORS is not needed.
 Backend requests time out after five seconds and show an unavailable message.

@@ -104,7 +104,7 @@ export function createApp({
 					formattedPrice: new Intl.NumberFormat("en-GB", {
 						style: "currency",
 						currency: "GBP",
-					}).format(product.price),
+					}).format(product.price / 100),
 					imageURL: /^https?:\/\//i.test(product.imageURL)
 						? product.imageURL
 						: "",
