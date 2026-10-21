@@ -25,20 +25,17 @@ export function createApp(): Express {
 		res.render("login");
 	});
 
-	app.get("/", (_req: Request, res: Response) => {
-		res.redirect("/register");
-	});
-
 	app.get("/register", (_req: Request, res: Response) => {
 		res.render("register");
-	});
-
-	app.get("/", (_req: Request, res: Response) => {
-		res.redirect("/product_catalogue");
 	});
 
 	app.get("/products", (_req: Request, res: Response) => {
 		res.render("product_catalogue");
 	});
+
+	app.get("/profile", (_req: Request, res: Response) => {
+		res.render("profile");
+	});
+
 	return app;
 }
