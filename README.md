@@ -18,6 +18,10 @@ new commits and reopened PRs) and pushes to `main` or `master`, including merges
 It builds the TypeScript application, checks lint and formatting with Biome,
 and runs the Vitest tests. A failed command fails the job.
 
+Template filenames must match the casing used by `res.render()` exactly.
+The Linux CI runner uses a case-sensitive filesystem; the page tests check
+the filenames explicitly so casing mistakes are also caught on macOS.
+
 ### Required GitHub configuration
 
 A workflow alone does not block merging. A repository administrator must:

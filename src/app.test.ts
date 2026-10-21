@@ -1,3 +1,4 @@
+import { readdirSync } from "node:fs";
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { createApp } from "./app";
@@ -16,6 +17,8 @@ describe("app", () => {
 		["/login", "Log in"],
 		["/register", "Create your account"],
 	])("GET %s renders the page", async (path, heading) => {
+		expect(readdirSync("pages")).toContain(`${path.slice(1)}.njk`);
+
 		const res = await request(app).get(path);
 
 		expect(res.status).toBe(200);
