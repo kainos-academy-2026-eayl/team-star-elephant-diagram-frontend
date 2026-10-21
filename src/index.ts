@@ -25,8 +25,6 @@ const server = app.listen(PORT, HOST, () => {
 	console.log(`Listening on http://${HOST}:${PORT}`);
 });
 
-
-
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
 	process.on(signal, () => {
 		server.close(() => process.exit(0));

@@ -9,13 +9,14 @@ Use Node.js 22 (see [.nvmrc](.nvmrc)). To run the same checks as CI:
 npm ci
 npm run build
 npm run lint
+npm run format
 npm test
 ```
 
 [The CI workflow](.github/workflows/ci.yml) runs on pull requests (including
 new commits and reopened PRs) and pushes to `main` or `master`, including merges.
-It builds the TypeScript application, lints with Biome, and runs the tests in
-`tests/` using Node's test runner through `tsx`. A failed command fails the job.
+It builds the TypeScript application, checks lint and formatting with Biome,
+and runs the Vitest tests. A failed command fails the job.
 
 ### Required GitHub configuration
 

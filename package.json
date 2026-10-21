@@ -9,6 +9,7 @@
 		"build": "npm run typecheck && esbuild src/index.ts --bundle --platform=node --format=esm --target=node22 --packages=external --outfile=dist/index.js --sourcemap",
 		"typecheck": "tsc",
 		"lint": "biome check .",
+		"format": "biome format .",
 		"lint:eslint": "eslint .",
 		"lint:fix": "biome check --write .",
 		"test": "vitest run",
@@ -40,4 +41,3 @@
 		"eslint@10.13.0": true
 	}
 }
-
