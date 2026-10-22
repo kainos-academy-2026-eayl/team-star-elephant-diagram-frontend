@@ -241,11 +241,11 @@ ul {
 	transition: transform 0.2s;
 }
 
-.menu-toggle:checked+.menu-button .menu-arrow {
+.menu-toggle:checked + .menu-button .menu-arrow {
 	transform: rotate(-135deg);
 }
 
-.menu-toggle:focus-visible+.menu-button {
+.menu-toggle:focus-visible + .menu-button {
 	outline: 3px solid rgba(47, 91, 234, 0.6);
 	outline-offset: -3px;
 }
@@ -265,7 +265,7 @@ ul {
 	z-index: 10;
 }
 
-.menu-toggle:checked~.dropdown {
+.menu-toggle:checked ~ .dropdown {
 	display: block;
 }
 
