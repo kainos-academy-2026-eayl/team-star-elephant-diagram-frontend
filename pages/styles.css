@@ -661,6 +661,17 @@ ul {
 	border: 0;
 }
 
+@media (max-width: 600px) {
+	.search-form[action="/admin/search"] {
+		flex-wrap: wrap;
+	}
+
+	.search-form[action="/admin/search"] input {
+		flex: 1 1 100%;
+		min-width: 0;
+	}
+}
+
 .search-form select {
 	padding: 0.6rem 0.875rem;
 	font: inherit;
