@@ -1,6 +1,31 @@
 # team-star-elephant-diagram-frontend
 Team Star Elephant Diagram Frontend
 
+## Run with the backend
+
+Use Node.js 22 and run `npm ci` in each repository. In the sibling backend repo,
+start PostgreSQL with `docker compose up -d`, apply migrations with
+`npm run db:deploy`, and run `npm run dev` with `PORT=3001` in its `.env`.
+
+In this repository, set the following in your local `.env`:
+
+```ini
+PORT=3000
+API_BASE_URL=http://localhost:3001
+```
+
+Run `npm run dev` here and open http://localhost:3000.
+Registration redirects to login; successful login redirects to `/products`.
+Forms display API validation errors without redisplaying passwords.
+The catalogue loads stored products from the backend, with search and category
+filtering. An empty database displays an empty catalogue. Product prices are
+returned in pence and formatted as GBP, and `imageURL` supports HTTP(S) images.
+
+API calls run on the frontend server, not in the browser, so CORS is not needed.
+Backend requests time out after five seconds and show an unavailable message.
+Login currently checks credentials only; sessions, protected pages, and basket
+persistence require separate backend functionality.
+
 ## Continuous integration
 
 Use Node.js 22 (see [.nvmrc](.nvmrc)). To run the same checks as CI:
