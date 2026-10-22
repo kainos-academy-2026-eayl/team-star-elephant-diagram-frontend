@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if product %}{{ product.name }} | Shop{% else %}Product not found | Shop{% endif %}</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <header class="navbar">
+        <a href="/products" class="navbar-brand">Home</a>
+
+        <input type="checkbox" id="menu-toggle" class="menu-toggle">
+        <label for="menu-toggle" class="menu-button">
+            <span>Menu</span>
+            <span class="menu-arrow"></span>
+        </label>
+
+        <nav class="dropdown">
+            <ul class="category-links">
+                <li><a href="/products">All</a></li>
+                <li><a href="/products?category=Category1">Category 1</a></li>
+                <li><a href="/products?category=Category2">Category 2</a></li>
+                <li><a href="/products?category=Category3">Category 3</a></li>
+            </ul>
+
+            <div class="dropdown-actions">
+                <a href="/login" class="action-button">Account</a>
+                <a href="/basket" class="action-button">Basket <span class="basket-count">0</span></a>
+            </div>
+        </nav>
+    </header>
+
+    <div class="search-bar">
+        <form action="/products" method="get" class="search-form">
+            <input type="search" name="q" placeholder="Search products">
+            <button type="submit">Search</button>
+        </form>
+    </div>
+
+    <main class="container">
+        {% if product %}
+        <a href="/products">Back to products</a>
+        <section class="product-detail" aria-labelledby="product-title">
+            <div class="product-gallery" aria-label="Product images">
+                {% for image in product.images %}
+                <img src="{{ image }}" alt="{{ product.name }} image {{ loop.index }}">
+                {% else %}
+                <div class="product-image" role="img" aria-label="No product image available"></div>
+                {% endfor %}
+            </div>
+
+            <div class="product-detail__info">
+                <p class="product-detail__category">{{ product.category }}</p>
+                <h1 class="product-detail__title" id="product-title">{{ product.name }}</h1>
+                <p class="product-detail__price">£{{ product.price }}</p>
+                <p class="product-detail__description">{{ product.description }}</p>
+
+                {% if product.stock > 0 %}
+                <p class="product-detail__stock product-detail__stock--available">In stock</p>
+                {% else %}
+                <p class="product-detail__stock product-detail__stock--unavailable">Out of stock</p>
+                {% endif %}
+
+                <form action="/basket" method="post" class="product-detail__form">
+                    <input type="hidden" name="productId" value="{{ product.id }}">
+                    <div class="product-detail__quantity">
+                        <label for="quantity">Quantity</label>
+                        <input type="number" id="quantity" name="quantity" min="1" max="{{ product.stock }}" value="1" required>
+                    </div>
+                    <button type="submit" class="add-button" {% if product.stock < 1 %}disabled{% endif %}>Add to basket</button>
+                </form>
+            </div>
+        </section>
+        {% else %}
+        <section class="product-not-found" aria-labelledby="not-found-title">
+            <h1 id="not-found-title">Product not found</h1>
+            <p>This product may have been removed or the link may be incorrect.</p>
+            <a href="/products">Return to the product catalogue</a>
+        </section>
+        {% endif %}
+    </main>
+</body>
+
+</html>
