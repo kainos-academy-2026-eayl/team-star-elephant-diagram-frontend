@@ -1,8 +1,14 @@
-import express, { type Express, type Request, type Response } from "express";
+import express, { type Express } from "express";
 import nunjucks from "nunjucks";
-import { BackendApi, BackendApiError } from "./backendApi";
-import { ProductCatalogueController } from "./controllers/productCatalogueController";
-import { UserController } from "./controllers/userController";
+import { BackendApi } from "./backendApi";
+import { AuthController } from "./controllers/authController";
+import { PageController } from "./controllers/pageController";
+import { ProductController } from "./controllers/productController";
+import { createAuthRoutes } from "./routes/authRoutes";
+import { createPageRoutes } from "./routes/pageRoutes";
+import { createProductRoutes } from "./routes/productRoutes";
+import { AuthService } from "./services/authService";
+import { ProductService } from "./services/productService";
 
 export function createApp({
 	apiBaseUrl = process.env.API_BASE_URL ?? "http://localhost:3001",
@@ -13,8 +19,9 @@ export function createApp({
 } = {}): Express {
 	const app = express();
 	const api = new BackendApi(apiBaseUrl, fetchApi);
-	const userController = new UserController(api);
-	const productCatalogueController = new ProductCatalogueController(api);
+	const authController = new AuthController(new AuthService(api));
+	const pageController = new PageController();
+	const productController = new ProductController(new ProductService(api));
 
 	nunjucks.configure("pages", {
 		autoescape: true,
@@ -26,118 +33,9 @@ export function createApp({
 	app.use(express.static("pages"));
 	app.use(express.urlencoded({ extended: false, limit: "100kb" }));
 
-	app.get("/health", (_req: Request, res: Response) => {
-		res.json({ status: "ok", uptime: process.uptime() });
-	});
-
-	app.get("/", (_req: Request, res: Response) => {
-		res.redirect("/login");
-	});
-
-	app.get("/login", (req: Request, res: Response) => {
-		res.render("login", { registered: req.query.registered === "1" });
-	});
-
-	app.get("/register", (_req: Request, res: Response) => {
-		res.render("register");
-	});
-
-	for (const page of ["login", "register"] as const) {
-		app.post(`/${page}`, async (req: Request, res: Response) => {
-			const fields =
-				page === "register"
-					? ["forename", "surname", "email", "password"]
-					: ["email", "password"];
-			const values = Object.fromEntries(
-				fields.map((field) => [
-					field,
-					typeof req.body?.[field] === "string" ? req.body[field] : "",
-				]),
-			);
-			const { password, ...safeValues } = values;
-			if (page === "register" && password !== req.body?.confirmPassword) {
-				res.status(400).render(page, {
-					values: safeValues,
-					error: "Passwords do not match.",
-				});
-				return;
-			}
-			try {
-				if (page === "register") {
-					await userController.register(values);
-				} else {
-					await userController.login(values);
-				}
-				res.redirect(
-					303,
-					page === "register" ? "/login?registered=1" : "/products",
-				);
-			} catch (error) {
-				const rejected =
-					error instanceof BackendApiError && [400, 401].includes(error.status);
-				res.status(rejected ? error.status : 503).render(page, {
-					values: safeValues,
-					error: rejected
-						? error.message
-						: "The service is temporarily unavailable. Please try again.",
-					details: rejected ? error.details : {},
-				});
-			}
-		});
-	}
-
-	app.get("/product_catalogue", (_req: Request, res: Response) => {
-		res.redirect("/products");
-	});
-
-	app.get("/products", async (req: Request, res: Response) => {
-		const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
-		const category =
-			typeof req.query.category === "string" ? req.query.category : "";
-		try {
-			const products = await productCatalogueController.getProducts();
-			const categories = [
-				...new Set(products.map((product) => product.category)),
-			].sort();
-			const filtered = products
-				.filter(
-					(product) =>
-						(!category || product.category === category) &&
-						`${product.name} ${product.description}`
-							.toLowerCase()
-							.includes(query.toLowerCase()),
-				)
-				.map((product) => ({
-					...product,
-					formattedPrice: new Intl.NumberFormat("en-GB", {
-						style: "currency",
-						currency: "GBP",
-					}).format(product.price / 100),
-					imageURL: /^https?:\/\//i.test(product.imageURL)
-						? product.imageURL
-						: "",
-				}));
-			res.render("product_catalogue", {
-				products: filtered,
-				categories: categories.map((name) => ({
-					name,
-					query: encodeURIComponent(name),
-				})),
-				query,
-				category,
-			});
-		} catch {
-			res.status(503).render("product_catalogue", {
-				error: "Products are temporarily unavailable. Please try again.",
-				query,
-				category,
-			});
-		}
-	});
-
-	app.get("/profile", (_req: Request, res: Response) => {
-		res.render("profile");
-	});
+	app.use(createPageRoutes(pageController));
+	app.use(createAuthRoutes(authController));
+	app.use(createProductRoutes(productController));
 
 	return app;
 }
