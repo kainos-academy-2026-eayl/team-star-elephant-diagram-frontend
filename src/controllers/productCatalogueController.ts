@@ -1,13 +1,5 @@
 import type { BackendApi } from "../backendApi";
-
-export interface Product {
-	prod_id: number;
-	name: string;
-	category: string;
-	description: string;
-	price: number;
-	imageURL: string;
-}
+import type { Product } from "../models/product";
 
 export class ProductCatalogueController {
 	constructor(private readonly api: BackendApi) {}
