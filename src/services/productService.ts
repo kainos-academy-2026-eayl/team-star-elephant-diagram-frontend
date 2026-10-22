@@ -7,4 +7,8 @@ export class ProductService {
 	getProducts(): Promise<Product[]> {
 		return this.api.request<Product[]>("/products");
 	}
+
+	getProduct(prodId: number): Promise<Product> {
+		return this.api.request<Product>(`/products/${prodId}`);
+	}
 }
