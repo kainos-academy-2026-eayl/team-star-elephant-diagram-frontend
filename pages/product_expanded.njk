@@ -58,7 +58,7 @@
                 <p class="product-detail__price">{{ product.formattedPrice }}</p>
                 <p class="product-detail__description">{{ product.description }}</p>
 
-                {% if product.stock > 0 %}
+                {% if inventory.qty > 0 %}
                 <p class="product-detail__stock product-detail__stock--available">In stock</p>
                 {% else %}
                 <p class="product-detail__stock product-detail__stock--unavailable">Out of stock</p>
@@ -68,9 +68,9 @@
                     <input type="hidden" name="productId" value="{{ product.prod_id }}">
                     <div class="product-detail__quantity">
                         <label for="quantity">Quantity</label>
-                        <input type="number" id="quantity" name="quantity" min="1" max="{{ product.stock }}" value="1" required>
+                        <input type="number" id="quantity" name="quantity" min="1" max="{{ inventory.qty }}" value="1" required>
                     </div>
-                    <button type="submit" class="add-button" {% if product.stock < 1 %}disabled{% endif %}>Add to basket</button>
+                    <button type="submit" class="add-button" {% if inventory.qty < 1 %}disabled{% endif %}>Add to basket</button>
                 </form>
             </div>
         </section>
