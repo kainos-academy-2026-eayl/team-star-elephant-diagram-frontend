@@ -323,7 +323,7 @@ ul {
 		border-color 0.15s;
 }
 
-.action-button:hover {
+.action-button:hover:not(.unavailable-action) {
 	background: var(--bg);
 	border-color: var(--accent);
 }

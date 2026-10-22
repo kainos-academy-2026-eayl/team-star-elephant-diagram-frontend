@@ -35,10 +35,8 @@ describe("app", () => {
 		expect(res.text).toContain("Add product (Unavailable)");
 		expect(res.text).toContain("Revenue this month (Unavailable)");
 		expect(res.text).not.toMatch(
-			/href="\/admin\/(orders|stock|products|users|baskets|reports)/,
+			/(?:href|action)="\/(?:admin\/(?:orders|stock|products|users|baskets|reports|search)(?:[/?][^"]*)?|logout)"/,
 		);
-		expect(res.text).not.toContain('action="/admin/search"');
-		expect(res.text).not.toContain('href="/logout"');
 	});
 
 	it("shows registration confirmation on the login page", async () => {
