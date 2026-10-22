@@ -46,7 +46,7 @@
         <section class="product-detail" aria-labelledby="product-title">
             <div class="product-gallery" aria-label="Product images">
                 {% if product.imageURL %}
-                <img src="{{ product.imageURL }}" alt="{{ product.name }}">
+                <img src="{{ product.imageURL }}" alt="{{ product.name }}" style="max-width: 100%; height: auto;">
                 {% else %}
                 <div class="product-image" role="img" aria-label="No product image available"></div>
                 {% endif %}
