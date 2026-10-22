@@ -134,5 +134,10 @@ export function createApp({
 			});
 		}
 	});
+
+	app.get("/profile", (_req: Request, res: Response) => {
+		res.render("profile");
+	});
+
 	return app;
 }
