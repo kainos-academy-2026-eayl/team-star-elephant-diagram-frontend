@@ -4,11 +4,14 @@ import { BackendApi } from "./backendApi";
 import { AuthController } from "./controllers/authController";
 import { PageController } from "./controllers/pageController";
 import { ProductController } from "./controllers/productController";
+import { ProfileController } from "./controllers/profileController";
 import { createAuthRoutes } from "./routes/authRoutes";
 import { createPageRoutes } from "./routes/pageRoutes";
 import { createProductRoutes } from "./routes/productRoutes";
+import { createProfileRoutes } from "./routes/profileRoutes";
 import { AuthService } from "./services/authService";
 import { ProductService } from "./services/productService";
+import { ProfileService } from "./services/profileService";
 
 export function createApp({
 	apiBaseUrl = process.env.API_BASE_URL ?? "http://localhost:3001",
@@ -22,6 +25,7 @@ export function createApp({
 	const authController = new AuthController(new AuthService(api));
 	const pageController = new PageController();
 	const productController = new ProductController(new ProductService(api));
+	const profileController = new ProfileController(new ProfileService(api));
 
 	nunjucks.configure("pages", {
 		autoescape: true,
@@ -36,6 +40,7 @@ export function createApp({
 	app.use(createPageRoutes(pageController));
 	app.use(createAuthRoutes(authController));
 	app.use(createProductRoutes(productController));
+	app.use(createProfileRoutes(profileController));
 
 	return app;
 }

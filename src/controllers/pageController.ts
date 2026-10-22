@@ -8,8 +8,4 @@ export class PageController {
 	home(res: Response): void {
 		res.redirect("/login");
 	}
-
-	profile(res: Response): void {
-		res.render("profile");
-	}
 }
