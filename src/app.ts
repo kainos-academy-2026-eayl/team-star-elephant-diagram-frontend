@@ -33,6 +33,36 @@ export function createApp(): Express {
 		res.render("product_catalogue");
 	});
 
+	app.get("/admin", (_req: Request, res: Response) => {
+		res.render("admin", {
+			staff: { name: "Staff member" },
+			sections: [
+				{ label: "Orders", href: "/admin/orders" },
+				{ label: "Stock", href: "/admin/stock" },
+				{ label: "Products", href: "/admin/products" },
+				{ label: "Users", href: "/admin/users" },
+				{ label: "Active Baskets", href: "/admin/baskets" },
+			],
+			quickActions: [
+				{ label: "Add product", href: "/admin/products/new" },
+				{ label: "Adjust stock", href: "/admin/stock" },
+				{ label: "Update order status", href: "/admin/orders" },
+				{ label: "Find user", href: "/admin/users" },
+			],
+			cards: [
+				{ label: "Orders today", value: "0", href: "/admin/orders?date=today" },
+				{ label: "Awaiting dispatch", value: "0", href: "/admin/orders?status=Processing" },
+				{ label: "Low stock", value: "0", href: "/admin/stock?filter=low" },
+				{ label: "Active baskets", value: "0", href: "/admin/baskets" },
+				{ label: "Registered users", value: "0", href: "/admin/users" },
+				{ label: "Revenue this month", value: "£0.00", href: "/admin/reports" },
+			],
+			recentOrders: [],
+			newUsers: [],
+			stockChanges: [],
+		});
+	});
+
 	app.get("/profile", (_req: Request, res: Response) => {
 		res.render("profile");
 	});

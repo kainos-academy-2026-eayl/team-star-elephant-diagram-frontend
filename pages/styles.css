@@ -241,11 +241,11 @@ ul {
 	transition: transform 0.2s;
 }
 
-.menu-toggle:checked + .menu-button .menu-arrow {
+.menu-toggle:checked+.menu-button .menu-arrow {
 	transform: rotate(-135deg);
 }
 
-.menu-toggle:focus-visible + .menu-button {
+.menu-toggle:focus-visible+.menu-button {
 	outline: 3px solid rgba(47, 91, 234, 0.6);
 	outline-offset: -3px;
 }
@@ -265,7 +265,7 @@ ul {
 	z-index: 10;
 }
 
-.menu-toggle:checked ~ .dropdown {
+.menu-toggle:checked~.dropdown {
 	display: block;
 }
 
@@ -647,4 +647,108 @@ ul {
 	.order-items {
 		font-size: 0.875rem;
 	}
+}
+
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+.search-form select {
+	padding: 0.6rem 0.875rem;
+	font: inherit;
+	color: var(--text);
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	cursor: pointer;
+}
+
+.search-form select:focus {
+	outline: none;
+	border-color: var(--accent);
+	box-shadow: 0 0 0 3px rgba(47, 91, 234, 0.25);
+}
+
+.staff-name {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	font-weight: 600;
+	color: var(--muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.quick-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.6rem;
+	margin-bottom: 1.5rem;
+}
+
+.quick-actions .action-button {
+	flex: 0 1 auto;
+	padding: 0.6rem 1rem;
+	background: var(--surface);
+}
+
+.stat-grid {
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+	margin-bottom: 2rem;
+}
+
+.stat-card {
+	color: var(--text);
+	text-decoration: none;
+}
+
+.stat-card .product-info h2 {
+	font-size: 0.9rem;
+	font-weight: 600;
+	color: var(--muted);
+}
+
+.stat-value {
+	margin: 0.25rem 0 0;
+	font-size: 1.75rem;
+}
+
+.activity-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+	gap: 1rem;
+}
+
+.activity-grid .order-card {
+	overflow-x: auto;
+}
+
+.activity-grid .order-card h2 {
+	margin-bottom: 0.75rem;
+	font-size: 1.15rem;
+}
+
+.activity-grid a {
+	color: var(--accent);
+	font-weight: 600;
+	text-decoration: none;
+}
+
+.activity-grid a:hover {
+	text-decoration: underline;
+}
+
+.error-message a {
+	margin-left: 0.5rem;
+	color: inherit;
+	font-weight: 600;
 }
