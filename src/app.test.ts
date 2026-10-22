@@ -26,6 +26,21 @@ describe("app", () => {
 		expect(res.text).toContain(heading);
 	});
 
+	it("shows unfinished admin actions as unavailable", async () => {
+		const res = await request(app).get("/admin");
+
+		expect(res.status).toBe(200);
+		expect(res.text).toContain("Search is unavailable.");
+		expect(res.text).toContain("Orders (Unavailable)");
+		expect(res.text).toContain("Add product (Unavailable)");
+		expect(res.text).toContain("Revenue this month (Unavailable)");
+		expect(res.text).not.toMatch(
+			/href="\/admin\/(orders|stock|products|users|baskets|reports)/,
+		);
+		expect(res.text).not.toContain('action="/admin/search"');
+		expect(res.text).not.toContain('href="/logout"');
+	});
+
 	it("shows registration confirmation on the login page", async () => {
 		const res = await request(app).get("/login?registered=1");
 

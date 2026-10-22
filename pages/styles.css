@@ -293,6 +293,12 @@ ul {
 	color: #fff;
 }
 
+.category-links .unavailable-link {
+	display: block;
+	padding: 0.5rem 0.75rem;
+	color: var(--muted);
+}
+
 .dropdown-actions {
 	display: flex;
 	gap: 0.6rem;
@@ -661,17 +667,6 @@ ul {
 	border: 0;
 }
 
-@media (max-width: 600px) {
-	.search-form[action="/admin/search"] {
-		flex-wrap: wrap;
-	}
-
-	.search-form[action="/admin/search"] input {
-		flex: 1 1 100%;
-		min-width: 0;
-	}
-}
-
 .search-form select {
 	padding: 0.6rem 0.875rem;
 	font: inherit;
@@ -712,6 +707,11 @@ ul {
 	background: var(--surface);
 }
 
+.unavailable-action {
+	color: var(--muted);
+	cursor: not-allowed;
+}
+
 .stat-grid {
 	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 	margin-bottom: 2rem;
@@ -720,6 +720,11 @@ ul {
 .stat-card {
 	color: var(--text);
 	text-decoration: none;
+}
+
+.unavailable-card:hover {
+	transform: none;
+	box-shadow: 0 4px 16px rgba(29, 36, 51, 0.08);
 }
 
 .stat-card .product-info h2 {
@@ -737,6 +742,11 @@ ul {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
 	gap: 1rem;
+}
+
+.admin-search-unavailable {
+	max-width: 600px;
+	color: var(--muted);
 }
 
 .activity-grid .order-card {

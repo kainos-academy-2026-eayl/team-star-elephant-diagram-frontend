@@ -22,30 +22,18 @@
             <ul class="category-links">
                 <li><a href="/admin" class="active">Dashboard</a></li>
                 {% for section in sections %}
-                <li><a href="{{ section.href }}">{{ section.label }}</a></li>
+                <li><span class="unavailable-link" aria-disabled="true">{{ section.label }} (Unavailable)</span></li>
                 {% endfor %}
             </ul>
 
             <div class="dropdown-actions">
                 <span class="staff-name">{{ staff.name }}</span>
-                <a href="/logout" class="action-button">Log out</a>
             </div>
         </nav>
     </header>
 
-    {% set searchTypes = [["all", "All"], ["orders", "Orders"], ["products", "Products"], ["users", "Users"]] %}
-
     <div class="search-bar">
-        <form action="/admin/search" method="get" class="search-form">
-            <label for="admin-search" class="visually-hidden">Search orders, products and users</label>
-            <input type="search" id="admin-search" name="q" placeholder="Search orders, products or users" value="{{ query }}">
-            <select name="type" aria-label="Search in">
-                {% for option in searchTypes %}
-                <option value="{{ option[0] }}" {% if type == option[0] %}selected{% endif %}>{{ option[1] }}</option>
-                {% endfor %}
-            </select>
-            <button type="submit">Search</button>
-        </form>
+        <div class="admin-search-unavailable" aria-disabled="true">Search is unavailable.</div>
     </div>
 
     <main class="container">
@@ -61,19 +49,19 @@
         {% if quickActions | length %}
         <section class="quick-actions" aria-label="Quick actions">
             {% for action in quickActions %}
-            <a href="{{ action.href }}" class="action-button">{{ action.label }}</a>
+            <span class="action-button unavailable-action" aria-disabled="true">{{ action.label }} (Unavailable)</span>
             {% endfor %}
         </section>
         {% endif %}
 
         <section class="product-grid stat-grid" aria-label="Summary">
             {% for card in cards %}
-            <a href="{{ card.href }}" class="product-card stat-card">
+            <div class="product-card stat-card unavailable-card" aria-disabled="true">
                 <div class="product-info">
-                    <h2>{{ card.label }}</h2>
+                    <h2>{{ card.label }} (Unavailable)</h2>
                     <p class="product-price stat-value">{{ card.value }}</p>
                 </div>
-            </a>
+            </div>
             {% endfor %}
         </section>
 
@@ -92,7 +80,7 @@
                     <tbody>
                         {% for order in recentOrders %}
                         <tr>
-                            <td><a href="/admin/orders/{{ order.id }}">#{{ order.id }}</a></td>
+                            <td>#{{ order.id }}</td>
                             <td>{{ order.customer }}</td>
                             <td>{{ order.date }}</td>
                             <td><span class="order-status">{{ order.status }}</span></td>
@@ -119,7 +107,7 @@
                     <tbody>
                         {% for user in newUsers %}
                         <tr>
-                            <td><a href="/admin/users/{{ user.id }}">{{ user.name }}</a></td>
+                            <td>{{ user.name }}</td>
                             <td>{{ user.email }}</td>
                             <td>{{ user.joined }}</td>
                         </tr>
