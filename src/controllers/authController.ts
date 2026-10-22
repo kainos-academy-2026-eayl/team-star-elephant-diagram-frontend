@@ -6,7 +6,10 @@ export class AuthController {
 	constructor(private readonly authService: AuthService) {}
 
 	getLogin(req: Request, res: Response): void {
-		res.render("login", { registered: req.query.registered === "1" });
+		res.render("login", {
+			registered: req.query.registered === "1",
+			passwordReset: req.query.reset === "1",
+		});
 	}
 
 	getRegister(res: Response): void {
@@ -21,15 +24,43 @@ export class AuthController {
 		await this.submit("register", req, res);
 	}
 
+	getForgotPassword(req: Request, res: Response): void {
+		res.render("forgot-password", { sent: req.query.sent === "1" });
+	}
+
+	getResetPassword(req: Request, res: Response): void {
+		const token = typeof req.query.token === "string" ? req.query.token : "";
+		const invalidToken = !/^[a-f0-9]{64}$/.test(token);
+		res.status(invalidToken ? 400 : 200).render("reset-password", {
+			values: { token: invalidToken ? "" : token },
+			invalidToken,
+			error: invalidToken
+				? "This reset link is invalid. Please request a new one."
+				: undefined,
+		});
+	}
+
+	async postForgotPassword(req: Request, res: Response): Promise<void> {
+		await this.submit("forgot-password", req, res);
+	}
+
+	async postResetPassword(req: Request, res: Response): Promise<void> {
+		await this.submit("reset-password", req, res);
+	}
+
 	private async submit(
-		page: "login" | "register",
+		page: "login" | "register" | "forgot-password" | "reset-password",
 		req: Request,
 		res: Response,
 	): Promise<void> {
 		const fields =
 			page === "register"
 				? ["forename", "surname", "email", "password"]
-				: ["email", "password"];
+				: page === "forgot-password"
+					? ["email"]
+					: page === "reset-password"
+						? ["token", "password"]
+						: ["email", "password"];
 		const values: Record<string, string> = Object.fromEntries(
 			fields.map((field) => [
 				field,
@@ -37,7 +68,10 @@ export class AuthController {
 			]),
 		);
 		const { password, ...safeValues } = values;
-		if (page === "register" && password !== req.body?.confirmPassword) {
+		if (
+			(page === "register" || page === "reset-password") &&
+			password !== req.body?.confirmPassword
+		) {
 			res.status(400).render(page, {
 				values: safeValues,
 				error: "Passwords do not match.",
@@ -48,13 +82,20 @@ export class AuthController {
 		try {
 			if (page === "register") {
 				await this.authService.register(values);
+			} else if (page === "forgot-password") {
+				await this.authService.forgotPassword(values);
+			} else if (page === "reset-password") {
+				await this.authService.resetPassword(values);
 			} else {
 				await this.authService.login(values);
 			}
-			res.redirect(
-				303,
-				page === "register" ? "/login?registered=1" : "/products",
-			);
+			const destinations = {
+				register: "/login?registered=1",
+				login: "/products",
+				"forgot-password": "/forgot-password?sent=1",
+				"reset-password": "/login?reset=1",
+			};
+			res.redirect(303, destinations[page]);
 		} catch (error) {
 			const rejected =
 				error instanceof BackendApiError && [400, 401].includes(error.status);
