@@ -103,6 +103,31 @@ describe("app", () => {
 		expect(fetchApi).not.toHaveBeenCalled();
 	});
 
+	it("rate-limits repeated authentication submissions", async () => {
+		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
+			new Response(JSON.stringify({ error: "Invalid email or password" }), {
+				status: 401,
+			}),
+		);
+		const client = request(createApp({ fetch: fetchApi }));
+
+		for (let attempt = 0; attempt < 10; attempt++) {
+			const res = await client
+				.post("/login")
+				.type("form")
+				.send({ email: "ada@example.com", password: "wrong-password" });
+			expect(res.status).toBe(401);
+		}
+
+		const limited = await client
+			.post("/login")
+			.type("form")
+			.send({ email: "ada@example.com", password: "wrong-password" });
+
+		expect(limited.status).toBe(429);
+		expect(fetchApi).toHaveBeenCalledTimes(10);
+	});
+
 	it("keeps a failed login on the form", async () => {
 		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
 			new Response(JSON.stringify({ error: "Invalid email or password" }), {
