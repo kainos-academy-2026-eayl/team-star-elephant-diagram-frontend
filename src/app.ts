@@ -51,7 +51,11 @@ export function createApp(): Express {
 			],
 			cards: [
 				{ label: "Orders today", value: "0", href: "/admin/orders?date=today" },
-				{ label: "Awaiting dispatch", value: "0", href: "/admin/orders?status=Processing" },
+				{
+					label: "Awaiting dispatch",
+					value: "0",
+					href: "/admin/orders?status=Processing",
+				},
 				{ label: "Low stock", value: "0", href: "/admin/stock?filter=low" },
 				{ label: "Active baskets", value: "0", href: "/admin/baskets" },
 				{ label: "Registered users", value: "0", href: "/admin/users" },
