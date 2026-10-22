@@ -83,12 +83,6 @@
                 </div>
             </dl>
 
-            <form action="/logout" method="post">
-                {% if csrfToken %}
-                <input type="hidden" name="_csrf" value="{{ csrfToken }}">
-                {% endif %}
-                <button type="submit" class="btn btn--secondary profile-signout">Sign out</button>
-            </form>
         </section>
 
         <h2 class="section-heading">Order History</h2>
