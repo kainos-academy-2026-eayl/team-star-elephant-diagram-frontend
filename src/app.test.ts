@@ -186,6 +186,7 @@ describe("app", () => {
 
 		expect(res.status).toBe(503);
 		expect(res.text).toContain("Your profile is temporarily unavailable.");
+		expect(res.text).not.toContain("You haven't placed any orders yet.");
 		expect(res.text).not.toContain("Connection refused");
 	});
 
