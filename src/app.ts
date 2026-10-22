@@ -1,6 +1,8 @@
 import express, { type Express, type Request, type Response } from "express";
 import nunjucks from "nunjucks";
-import { BackendApi, BackendApiError, type Product } from "./backendApi";
+import { BackendApi, BackendApiError } from "./backendApi";
+import { ProductCatalogueController } from "./controllers/productCatalogueController";
+import { UserController } from "./controllers/userController";
 
 export function createApp({
 	apiBaseUrl = process.env.API_BASE_URL ?? "http://localhost:3001",
@@ -11,6 +13,8 @@ export function createApp({
 } = {}): Express {
 	const app = express();
 	const api = new BackendApi(apiBaseUrl, fetchApi);
+	const userController = new UserController(api);
+	const productCatalogueController = new ProductCatalogueController(api);
 
 	nunjucks.configure("pages", {
 		autoescape: true,
@@ -59,7 +63,11 @@ export function createApp({
 				return;
 			}
 			try {
-				await api.request(`/${page}`, values);
+				if (page === "register") {
+					await userController.register(values);
+				} else {
+					await userController.login(values);
+				}
 				res.redirect(
 					303,
 					page === "register" ? "/login?registered=1" : "/products",
@@ -87,7 +95,7 @@ export function createApp({
 		const category =
 			typeof req.query.category === "string" ? req.query.category : "";
 		try {
-			const products = await api.request<Product[]>("/product_catalogue");
+			const products = await productCatalogueController.getProducts();
 			const categories = [
 				...new Set(products.map((product) => product.category)),
 			].sort();
