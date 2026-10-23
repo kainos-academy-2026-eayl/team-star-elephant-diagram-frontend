@@ -17,6 +17,14 @@ API_BASE_URL=http://localhost:3001
 Run `npm run dev` here and open http://localhost:3000.
 Registration redirects to login; successful login redirects to `/products`.
 Forms display API validation errors without redisplaying passwords.
+The login page links to `/forgot-password` beneath the sign-up prompt.
+Password reset uses backend `POST /forgot-password` (`email`) and
+`POST /reset-password` (`token`, `password`). A successful reset returns to login.
+For local development, enable `PASSWORD_RESET_DELIVERY=console` and set
+`FRONTEND_BASE_URL=http://localhost:3000` in the backend `.env`, then apply its
+latest migration. Request a reset and open the link printed in the backend
+console. Tokens expire after 15 minutes and can only be used once. Email delivery
+and profile-page password changes are not implemented yet.
 The catalogue loads stored products from the backend, with search and category
 filtering. An empty database displays an empty catalogue. Product prices are
 returned in pence and formatted as GBP, and `imageURL` supports HTTP(S) images.

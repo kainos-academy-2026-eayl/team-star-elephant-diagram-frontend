@@ -14,6 +14,7 @@
         <p class="login__intro">Welcome back.</p>
 
         {% if registered %}<p role="status">Account created. You can now log in.</p>{% endif %}
+        {% if passwordReset %}<p role="status">Password reset. You can now log in with your new password.</p>{% endif %}
         {% if error %}
         <div role="alert">
             <p>{{ error }}</p>
@@ -38,6 +39,7 @@
         </form>
 
         <p class="login__switch">Don't have an account? <a href="/register">Create one</a></p>
+        <p class="login__switch">Forgot your password? <a href="/forgot-password">Reset it</a></p>
     </main>
 </body>
 

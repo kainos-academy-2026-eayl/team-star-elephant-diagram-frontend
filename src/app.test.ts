@@ -16,6 +16,7 @@ describe("app", () => {
 	it.each([
 		["/login", "Log in"],
 		["/register", "Create your account"],
+		["/forgot-password", "Forgot your password?"],
 	])("GET %s renders the page", async (path, heading) => {
 		expect(readdirSync("pages")).toContain(`${path.slice(1)}.njk`);
 
@@ -30,6 +31,46 @@ describe("app", () => {
 
 		expect(res.status).toBe(200);
 		expect(res.text).toContain("Account created. You can now log in.");
+	});
+
+	it("places the forgotten-password prompt below the sign-up prompt", async () => {
+		const res = await request(app).get("/login");
+		expect(res.text).toContain('href="/forgot-password"');
+		expect(res.text.indexOf("Forgot your password?")).toBeGreaterThan(
+			res.text.indexOf("Don't have an account?"),
+		);
+	});
+
+	it("renders reset forms without caching or leaking referrers", async () => {
+		const token = "a".repeat(64);
+		const res = await request(app).get(`/reset-password?token=${token}`);
+		expect(readdirSync("pages")).toContain("reset-password.njk");
+		expect(res.status).toBe(200);
+		expect(res.headers["cache-control"]).toBe("no-store");
+		expect(res.headers["referrer-policy"]).toBe("no-referrer");
+		expect(res.text).toContain(`name="token" value="${token}"`);
+		expect(res.text).toContain('autocomplete="new-password"');
+	});
+
+	it.each(["", "?token=invalid", "?token=x&token=y"])(
+		"rejects a missing or malformed reset token %s",
+		async (query) => {
+			const res = await request(app).get(`/reset-password${query}`);
+			expect(res.status).toBe(400);
+			expect(res.text).toContain("This reset link is invalid.");
+			expect(res.text).not.toContain("<form");
+			expect(res.text).toContain('href="/forgot-password"');
+		},
+	);
+
+	it("shows generic reset-request confirmation and password-reset success", async () => {
+		const sent = await request(app).get("/forgot-password?sent=1");
+		expect(sent.text).toContain("If an account exists for that email");
+		expect(sent.text).not.toContain("<form");
+		const reset = await request(app).get("/login?reset=1");
+		expect(reset.text).toContain(
+			"Password reset. You can now log in with your new password.",
+		);
 	});
 
 	it("does not serve the removed legacy catalogue path", async () => {
@@ -50,6 +91,20 @@ describe("app", () => {
 			"login",
 			{ email: "ada@example.com", password: "correct-horse" },
 			"/products",
+		],
+		[
+			"forgot-password",
+			{ email: "ada@example.com" },
+			"/forgot-password?sent=1",
+		],
+		[
+			"reset-password",
+			{
+				token: "a".repeat(64),
+				password: "new-password",
+				confirmPassword: "new-password",
+			},
+			"/login?reset=1",
 		],
 		[
 			"register",
@@ -121,6 +176,51 @@ describe("app", () => {
 		expect(res.headers.location).toBeUndefined();
 		expect(res.text).not.toContain("wrong-password");
 	});
+
+	it("keeps the token but never passwords after a reset confirmation mismatch", async () => {
+		const fetchApi = vi.fn<typeof fetch>();
+		const token = "a".repeat(64);
+		const res = await request(createApp({ fetch: fetchApi }))
+			.post("/reset-password")
+			.type("form")
+			.send({
+				token,
+				password: "private-password",
+				confirmPassword: "different",
+			});
+		expect(res.status).toBe(400);
+		expect(res.text).toContain("Passwords do not match.");
+		expect(res.text).toContain(`value="${token}"`);
+		expect(res.text).not.toContain("private-password");
+		expect(fetchApi).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		["/forgot-password", "Invalid email address"],
+		["/reset-password", "This reset link is invalid or has expired."],
+	])(
+		"shows backend rejection for %s without redirecting",
+		async (path, error) => {
+			const fetchApi = vi
+				.fn<typeof fetch>()
+				.mockResolvedValue(
+					new Response(JSON.stringify({ error }), { status: 400 }),
+				);
+			const res = await request(createApp({ fetch: fetchApi }))
+				.post(path)
+				.type("form")
+				.send({
+					email: "ada@example.com",
+					token: "a".repeat(64),
+					password: "private-password",
+					confirmPassword: "private-password",
+				});
+			expect(res.status).toBe(400);
+			expect(res.text).toContain(error);
+			expect(res.text).not.toContain("private-password");
+			expect(res.headers.location).toBeUndefined();
+		},
+	);
 
 	it("loads products from the backend", async () => {
 		const fetchApi = vi
@@ -194,23 +294,26 @@ describe("app", () => {
 		expect(res.text).not.toContain("<script>");
 	});
 
-	it.each(["/login", "/register", "/products"])(
-		"handles an unavailable backend for %s",
-		async (path) => {
-			const fetchApi = vi
-				.fn<typeof fetch>()
-				.mockRejectedValue(new Error("Connection refused"));
-			const client = request(createApp({ fetch: fetchApi }));
-			const res =
-				path === "/products"
-					? await client.get(path)
-					: await client.post(path).type("form").send({
-							password: "correct-horse",
-							confirmPassword: "correct-horse",
-						});
-			expect(res.status).toBe(503);
-			expect(res.text).toContain("temporarily unavailable");
-			expect(res.text).not.toContain("Connection refused");
-		},
-	);
+	it.each([
+		"/login",
+		"/register",
+		"/forgot-password",
+		"/reset-password",
+		"/products",
+	])("handles an unavailable backend for %s", async (path) => {
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockRejectedValue(new Error("Connection refused"));
+		const client = request(createApp({ fetch: fetchApi }));
+		const res =
+			path === "/products"
+				? await client.get(path)
+				: await client.post(path).type("form").send({
+						password: "correct-horse",
+						confirmPassword: "correct-horse",
+					});
+		expect(res.status).toBe(503);
+		expect(res.text).toContain("temporarily unavailable");
+		expect(res.text).not.toContain("Connection refused");
+	});
 });
