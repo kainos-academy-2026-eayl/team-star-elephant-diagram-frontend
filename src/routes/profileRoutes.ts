@@ -2,13 +2,11 @@ import { Router } from "express";
 import type { ProfileController } from "../controllers/profileController";
 
 export function createProfileRoutes(
-    profileController: ProfileController,
+	profileController: ProfileController,
 ): Router {
-    const router = Router();
+	const router = Router();
 
-    router.get("/profile", (req, res) =>
-        profileController.getProfile(req, res),
-    );
+	router.get("/profile", (req, res) => profileController.getProfile(req, res));
 
-    return router;
+	return router;
 }
