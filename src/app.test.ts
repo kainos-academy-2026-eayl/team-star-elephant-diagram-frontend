@@ -16,6 +16,7 @@ describe("app", () => {
 	it.each([
 		["/login", "Log in"],
 		["/register", "Create your account"],
+		["/admin", "Admin dashboard"],
 		["/forgot-password", "Forgot your password?"],
 	])("GET %s renders the page", async (path, heading) => {
 		expect(readdirSync("pages")).toContain(`${path.slice(1)}.njk`);
@@ -24,6 +25,19 @@ describe("app", () => {
 
 		expect(res.status).toBe(200);
 		expect(res.text).toContain(heading);
+	});
+
+	it("shows unfinished admin actions as unavailable", async () => {
+		const res = await request(app).get("/admin");
+
+		expect(res.status).toBe(200);
+		expect(res.text).toContain("Search is unavailable.");
+		expect(res.text).toContain("Orders (Unavailable)");
+		expect(res.text).toContain("Add product (Unavailable)");
+		expect(res.text).toContain("Revenue this month (Unavailable)");
+		expect(res.text).not.toMatch(
+			/(?:href|action)="\/(?:admin\/(?:orders|stock|products|users|baskets|reports|search)(?:[/?][^"]*)?|logout)"/,
+		);
 	});
 
 	it("shows registration confirmation on the login page", async () => {
@@ -155,6 +169,31 @@ describe("app", () => {
 		expect(res.status).toBe(400);
 		expect(res.text).toContain("Passwords do not match.");
 		expect(fetchApi).not.toHaveBeenCalled();
+	});
+
+	it("rate-limits repeated authentication submissions", async () => {
+		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
+			new Response(JSON.stringify({ error: "Invalid email or password" }), {
+				status: 401,
+			}),
+		);
+		const client = request(createApp({ fetch: fetchApi }));
+
+		for (let attempt = 0; attempt < 10; attempt++) {
+			const res = await client
+				.post("/login")
+				.type("form")
+				.send({ email: "ada@example.com", password: "wrong-password" });
+			expect(res.status).toBe(401);
+		}
+
+		const limited = await client
+			.post("/login")
+			.type("form")
+			.send({ email: "ada@example.com", password: "wrong-password" });
+
+		expect(limited.status).toBe(429);
+		expect(fetchApi).toHaveBeenCalledTimes(10);
 	});
 
 	it("keeps a failed login on the form", async () => {

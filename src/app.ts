@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response } from "express";
 import nunjucks from "nunjucks";
 import { BackendApi } from "./backendApi";
 import { AuthController } from "./controllers/authController";
@@ -36,6 +36,39 @@ export function createApp({
 
 	app.use(express.static("pages"));
 	app.use(express.urlencoded({ extended: false, limit: "100kb" }));
+
+	app.get("/admin", (_req: Request, res: Response) => {
+		res.render("admin", {
+			staff: { name: "Staff member" },
+			sections: [
+				{ label: "Orders" },
+				{ label: "Stock" },
+				{ label: "Products" },
+				{ label: "Users" },
+				{ label: "Active Baskets" },
+			],
+			quickActions: [
+				{ label: "Add product" },
+				{ label: "Adjust stock" },
+				{ label: "Update order status" },
+				{ label: "Find user" },
+			],
+			cards: [
+				{ label: "Orders today", value: "0" },
+				{
+					label: "Awaiting dispatch",
+					value: "0",
+				},
+				{ label: "Low stock", value: "0" },
+				{ label: "Active baskets", value: "0" },
+				{ label: "Registered users", value: "0" },
+				{ label: "Revenue this month", value: "£0.00" },
+			],
+			recentOrders: [],
+			newUsers: [],
+			stockChanges: [],
+		});
+	});
 
 	app.use(createPageRoutes(pageController));
 	app.use(createAuthRoutes(authController));
