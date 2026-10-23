@@ -1,13 +1,12 @@
 import type { Request, Response } from "express";
 import { BackendApiError } from "../backendApi";
-import type { Product } from "../models/product";
 import type { ProductService } from "../services/productService";
 
 export class ProductController {
-	constructor(private readonly productService: ProductService) {}
+	constructor(private readonly productService: ProductService) { }
 
 	async getProduct(
-		req: Request<{ prodId: string }>,
+		req: Request<{ prodId: string; }>,
 		res: Response,
 	): Promise<void> {
 		const { prodId } = req.params;
@@ -21,7 +20,7 @@ export class ProductController {
 		try {
 			const product = await this.productService.getProduct(Number(prodId));
 			res.render("product_expanded", {
-				product: this.formatProduct(product),
+				product,
 			});
 		} catch (error) {
 			if (error instanceof BackendApiError && error.status === 404) {
@@ -43,15 +42,13 @@ export class ProductController {
 			const categories = [
 				...new Set(products.map((product) => product.category)),
 			].sort();
-			const filtered = products
-				.filter(
-					(product) =>
-						(!category || product.category === category) &&
-						`${product.name} ${product.description}`
-							.toLowerCase()
-							.includes(query.toLowerCase()),
-				)
-				.map((product) => this.formatProduct(product));
+			const filtered = products.filter(
+				(product) =>
+					(!category || product.category === category) &&
+					`${product.name} ${product.description}`
+						.toLowerCase()
+						.includes(query.toLowerCase()),
+			);
 			res.render("product_catalogue", {
 				products: filtered,
 				categories: categories.map((name) => ({
@@ -68,16 +65,5 @@ export class ProductController {
 				category,
 			});
 		}
-	}
-
-	private formatProduct(product: Product) {
-		return {
-			...product,
-			formattedPrice: new Intl.NumberFormat("en-GB", {
-				style: "currency",
-				currency: "GBP",
-			}).format(product.price / 100),
-			imageURL: /^https?:\/\//i.test(product.imageURL) ? product.imageURL : "",
-		};
 	}
 }
