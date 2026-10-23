@@ -3,10 +3,10 @@ import { BackendApiError } from "../backendApi";
 import type { ProductService } from "../services/productService";
 
 export class ProductController {
-	constructor(private readonly productService: ProductService) { }
+	constructor(private readonly productService: ProductService) {}
 
 	async getProduct(
-		req: Request<{ prodId: string; }>,
+		req: Request<{ prodId: string }>,
 		res: Response,
 	): Promise<void> {
 		const { prodId } = req.params;

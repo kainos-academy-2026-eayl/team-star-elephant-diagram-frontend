@@ -1,10 +1,10 @@
 import type { BackendApi } from "../backendApi";
 import type { Product } from "../models/product";
 
-type FormattedProduct = Product & { formattedPrice: string; };
+type FormattedProduct = Product & { formattedPrice: string };
 
 export class ProductService {
-	constructor(private readonly api: BackendApi) { }
+	constructor(private readonly api: BackendApi) {}
 
 	async getProducts(): Promise<FormattedProduct[]> {
 		const products = await this.api.request<Product[]>("/products");
