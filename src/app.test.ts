@@ -317,10 +317,81 @@ describe("app", () => {
 			.query({ q: "tea", category: "Food & Drink" });
 		expect(res.status).toBe(200);
 		expect(res.text).toContain("Green tea");
+		expect(res.text).toContain('href="/products/1"');
 		expect(res.text).toContain("£12.99");
 		expect(res.text).toContain('src="https://example.com/tea.jpg"');
 		expect(res.text).not.toContain("Coffee");
 		expect(res.text).toContain("Food%20%26%20Drink");
+	});
+
+	it("loads an expanded product by prodId", async () => {
+		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					prod_id: 42,
+					name: "Green tea",
+					category: "Food & Drink",
+					description: "Fresh tea",
+					price: 1299,
+					imageURL: "https://example.com/tea.jpg",
+				}),
+			),
+		);
+		const res = await request(
+			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
+		).get("/products/42");
+
+		expect(res.status).toBe(200);
+		expect(String(fetchApi.mock.calls[0]?.[0])).toBe(
+			"http://backend:4000/products/42",
+		);
+		expect(res.text).toContain("Green tea");
+		expect(res.text).toContain("Fresh tea");
+		expect(res.text).toContain("£12.99");
+		expect(res.text).toContain('src="https://example.com/tea.jpg"');
+		expect(res.text).toContain('name="productId" value="42"');
+		expect(res.text).toContain('href="/styles.css"');
+	});
+
+	it.each(["abc", "0", "-1", "1.5", "9007199254740992"])(
+		"rejects invalid product ID %s without calling the backend",
+		async (prodId) => {
+			const fetchApi = vi.fn<typeof fetch>();
+			const res = await request(createApp({ fetch: fetchApi })).get(
+				`/products/${prodId}`,
+			);
+
+			expect(res.status).toBe(400);
+			expect(res.text).toContain("Invalid product ID.");
+			expect(fetchApi).not.toHaveBeenCalled();
+		},
+	);
+
+	it("renders the not-found page for a missing product", async () => {
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(
+				new Response(JSON.stringify({ error: "Not found" }), { status: 404 }),
+			);
+		const res = await request(createApp({ fetch: fetchApi })).get(
+			"/products/42",
+		);
+
+		expect(res.status).toBe(404);
+		expect(res.text).toContain("Product not found");
+	});
+
+	it("shows an unavailable message when the product backend fails", async () => {
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockRejectedValue(new Error("Connection refused"));
+		const res = await request(createApp({ fetch: fetchApi })).get(
+			"/products/42",
+		);
+
+		expect(res.status).toBe(503);
+		expect(res.text).toContain("Product is temporarily unavailable");
+		expect(res.text).not.toContain("Connection refused");
 	});
 
 	it("shows backend field validation without exposing the password", async () => {

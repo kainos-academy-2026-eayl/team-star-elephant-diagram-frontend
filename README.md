@@ -28,6 +28,10 @@ and profile-page password changes are not implemented yet.
 The catalogue loads stored products from the backend, with search and category
 filtering. An empty database displays an empty catalogue. Product prices are
 returned in pence and formatted as GBP, and `imageURL` supports HTTP(S) images.
+Select a product to open `/products/:prodId`, which renders the expanded product
+page using `GET /products/:prodId` on the backend. Product IDs must be positive
+safe integers. Invalid IDs return 400, missing products return 404, and backend
+failures display an unavailable message with status 503.
 
 API calls run on the frontend server, not in the browser, so CORS is not needed.
 Backend requests time out after five seconds and show an unavailable message.
