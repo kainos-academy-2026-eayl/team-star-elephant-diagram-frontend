@@ -36,32 +36,49 @@
 	<main class="container">
 		<h1 class="section-heading">Your basket</h1>
 
-		<div id="basket-error" class="basket-error" role="alert" hidden></div>
-
-		<p id="basket-loading" class="basket-state">Loading your basket…</p>
-
-		<div id="basket-empty" class="basket-state" hidden>
-			<h2>Your basket is empty</h2>
-			<p>Add some products and they'll show up here.</p>
-			<a class="btn btn--primary" href="/">Continue shopping</a>
-		</div>
-
-		<div id="basket-content" class="basket-layout" hidden>
-			<ul id="basket-list" class="basket-list" aria-live="polite"></ul>
+		{% if error %}
+		<div class="basket-error" role="alert">{{ error }}</div>
+		{% elif basket.items.length %}
+		<div id="basket-content" class="basket-layout">
+			<ul id="basket-list" class="basket-list" aria-live="polite">
+				{% for item in basket.items %}
+				<li class="basket-item">
+					{% if item.imageURL %}
+					<img class="basket-item__image" src="{{ item.imageURL }}" alt="{{ item.productName }}" />
+					{% else %}
+					<div class="basket-item__image" aria-hidden="true"></div>
+					{% endif %}
+					<div>
+						<h2 class="basket-item__name">{{ item.productName }}</h2>
+						<p class="basket-item__meta">{{ item.displayUnitPrice }} each · Quantity: {{ item.quantity }}</p>
+					</div>
+					<div class="basket-item__side">
+						<span class="basket-item__total">{{ item.displaySubtotal }}</span>
+					</div>
+				</li>
+				{% endfor %}
+			</ul>
 
 			<aside class="basket-summary" aria-labelledby="summary-heading">
 				<h2 id="summary-heading">Order summary</h2>
 				<div class="summary-row">
 					<span>Items</span>
-					<span id="summary-count">0</span>
+					<span>{{ basket.itemCount }}</span>
 				</div>
 				<div class="summary-row summary-row--total">
 					<span>Subtotal</span>
-					<span id="summary-subtotal">£0.00</span>
+					<span>{{ basket.displaySubtotal }}</span>
 				</div>
 				<a class="btn btn--primary" href="/checkout.html">Proceed to checkout</a>
 			</aside>
 		</div>
+		{% else %}
+		<div id="basket-empty" class="basket-state">
+			<h2>Your basket is empty</h2>
+			<p>Add some products and they'll show up here.</p>
+			<a class="btn btn--primary" href="/products">Continue shopping</a>
+		</div>
+		{% endif %}
 	</main>
 
 	
