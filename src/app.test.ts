@@ -582,14 +582,14 @@ describe("app", () => {
 		const client = request(createApp({ fetch: fetchApi }));
 		const res = ["/products", "/admin", "/basket"].includes(path)
 			? await (path === "/admin" || path === "/basket"
-				? client
-					.get(path)
-					.set("Authorization", ["Bearer", "test-token"].join(" "))
-				: client.get(path))
+					? client
+							.get(path)
+							.set("Authorization", ["Bearer", "test-token"].join(" "))
+					: client.get(path))
 			: await client.post(path).type("form").send({
-				password: "correct-horse",
-				confirmPassword: "correct-horse",
-			});
+					password: "correct-horse",
+					confirmPassword: "correct-horse",
+				});
 		expect(res.status).toBe(503);
 		expect(res.text).toContain("temporarily unavailable");
 		expect(res.text).not.toContain("Connection refused");
