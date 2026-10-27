@@ -3,16 +3,19 @@ import nunjucks from "nunjucks";
 import { BackendApi } from "./backendApi";
 import { AdminController } from "./controllers/adminController";
 import { AuthController } from "./controllers/authController";
+import { BasketController } from "./controllers/basketController";
 import { PageController } from "./controllers/pageController";
 import { ProductController } from "./controllers/productController";
 import { ProfileController } from "./controllers/profileController";
 import { createAdminRoutes } from "./routes/adminRoutes";
 import { createAuthRoutes } from "./routes/authRoutes";
+import { createBasketRoutes } from "./routes/basketRoutes";
 import { createPageRoutes } from "./routes/pageRoutes";
 import { createProductRoutes } from "./routes/productRoutes";
 import { createProfileRoutes } from "./routes/profileRoutes";
 import { AdminService } from "./services/adminService";
 import { AuthService } from "./services/authService";
+import { BasketService } from "./services/basketService";
 import { ProductService } from "./services/productService";
 import { ProfileService } from "./services/profileService";
 
@@ -27,6 +30,7 @@ export function createApp({
 	const api = new BackendApi(apiBaseUrl, fetchApi);
 	const authController = new AuthController(new AuthService(api));
 	const adminController = new AdminController(new AdminService(api));
+	const basketController = new BasketController(new BasketService(api));
 	const pageController = new PageController();
 	const productController = new ProductController(new ProductService(api));
 	const profileController = new ProfileController(new ProfileService(api));
@@ -45,6 +49,7 @@ export function createApp({
 	app.use(createPageRoutes(pageController));
 	app.use(createAdminRoutes(adminController));
 	app.use(createAuthRoutes(authController));
+	app.use(createBasketRoutes(basketController));
 	app.use(createProductRoutes(productController));
 	app.use(createProfileRoutes(profileController));
 
