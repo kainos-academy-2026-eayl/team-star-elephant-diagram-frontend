@@ -69,6 +69,32 @@ describe("app", () => {
 		expect(fetchApi).not.toHaveBeenCalled();
 	});
 
+	it("loads admin dashboard data with a browser session cookie", async () => {
+		const dashboard = {
+			staff: { name: "Staff member" },
+			sections: [],
+			quickActions: [],
+			cards: [],
+			recentOrders: [],
+			newUsers: [],
+			stockChanges: [],
+		};
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(new Response(JSON.stringify(dashboard)));
+		const res = await request(
+			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
+		)
+			.get("/admin")
+			.set("Cookie", "session=staff-session");
+
+		expect(res.status).toBe(200);
+		expect(res.text).toContain("Staff member");
+		expect(fetchApi.mock.calls[0]?.[1]?.headers).toMatchObject({
+			Cookie: "session=staff-session",
+		});
+	});
+
 	it("does not render admin data when the backend rejects staff credentials", async () => {
 		const fetchApi = vi
 			.fn<typeof fetch>()
@@ -79,7 +105,7 @@ describe("app", () => {
 			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 		)
 			.get("/admin")
-			.set("Authorization", ["Bearer", "test-token"].join(" "));
+			.set("Cookie", "session=customer-session");
 
 		expect(res.status).toBe(403);
 		expect(res.text).not.toContain("New registrations");

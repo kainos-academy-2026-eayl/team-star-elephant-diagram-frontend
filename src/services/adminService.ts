@@ -19,12 +19,24 @@ export interface AdminDashboard {
 	}>;
 }
 
+export interface AdminRequestCredentials {
+	authorization?: string;
+	cookie?: string;
+}
+
 export class AdminService {
 	constructor(private readonly api: BackendApi) {}
 
-	getDashboard(authorization: string): Promise<AdminDashboard> {
+	getDashboard(credentials: AdminRequestCredentials): Promise<AdminDashboard> {
+		const headers: Record<string, string> = {};
+		if (credentials.authorization) {
+			headers.Authorization = credentials.authorization;
+		}
+		if (credentials.cookie) {
+			headers.Cookie = credentials.cookie;
+		}
 		return this.api.request<AdminDashboard>("/admin", undefined, {
-			Authorization: authorization,
+			...headers,
 		});
 	}
 }
