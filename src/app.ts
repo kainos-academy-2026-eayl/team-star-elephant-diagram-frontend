@@ -35,6 +35,7 @@ export function createApp({
 	app.set("view engine", "njk");
 
 	app.use(express.static("src/pages"));
+	app.use(express.static("src/styles"));
 	app.use(express.urlencoded({ extended: false, limit: "100kb" }));
 
 	app.get("/admin", (_req: Request, res: Response) => {
