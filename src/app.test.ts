@@ -69,6 +69,32 @@ describe("app", () => {
 		expect(fetchApi).not.toHaveBeenCalled();
 	});
 
+	it("loads admin dashboard data with a browser session cookie", async () => {
+		const dashboard = {
+			staff: { name: "Staff member" },
+			sections: [],
+			quickActions: [],
+			cards: [],
+			recentOrders: [],
+			newUsers: [],
+			stockChanges: [],
+		};
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(new Response(JSON.stringify(dashboard)));
+		const res = await request(
+			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
+		)
+			.get("/admin")
+			.set("Cookie", "session=staff-session");
+
+		expect(res.status).toBe(200);
+		expect(res.text).toContain("Staff member");
+		expect(fetchApi.mock.calls[0]?.[1]?.headers).toMatchObject({
+			Cookie: "session=staff-session",
+		});
+	});
+
 	it("does not render admin data when the backend rejects staff credentials", async () => {
 		const fetchApi = vi
 			.fn<typeof fetch>()
@@ -79,10 +105,119 @@ describe("app", () => {
 			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 		)
 			.get("/admin")
-			.set("Authorization", ["Bearer", "test-token"].join(" "));
+			.set("Cookie", "session=customer-session");
 
 		expect(res.status).toBe(403);
 		expect(res.text).not.toContain("New registrations");
+	});
+
+	it("loads basket data and forwards browser credentials to the backend", async () => {
+		const basket = {
+			items: [
+				{
+					id: 1,
+					productName: "Green tea",
+					quantity: 2,
+					unitPrice: 3.5,
+					imageURL: "https://example.com/tea.jpg",
+				},
+			],
+			subtotal: 7,
+		};
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(new Response(JSON.stringify(basket)));
+		const res = await request(
+			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
+		)
+			.get("/basket")
+			.set("Authorization", ["Bearer", "test-token"].join(" "))
+			.set("Cookie", "session=customer-session");
+
+		expect(res.status).toBe(200);
+		expect(res.text).toContain("Green tea");
+		expect(res.text).toContain("£3.50 each");
+		expect(res.text).toContain("£7.00");
+		expect(String(fetchApi.mock.calls[0]?.[0])).toBe(
+			"http://backend:4000/basket",
+		);
+		expect(fetchApi.mock.calls[0]?.[1]?.headers).toEqual({
+			"Content-Type": "application/json",
+			Authorization: ["Bearer", "test-token"].join(" "),
+			Cookie: "session=customer-session",
+		});
+	});
+
+	it("requires authentication before loading a basket", async () => {
+		const fetchApi = vi.fn<typeof fetch>();
+		const res = await request(
+			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
+		).get("/basket");
+
+		expect(res.status).toBe(401);
+		expect(res.text).toContain("Please log in to view your basket.");
+		expect(res.text).toContain('href="/login"');
+		expect(res.text).toMatch(/id="basket-empty"[^>]*hidden/);
+		expect(fetchApi).not.toHaveBeenCalled();
+	});
+
+	it("establishes a browser session at login and uses it to load the basket", async () => {
+		const basket = {
+			items: [
+				{
+					id: 1,
+					productName: "Green tea",
+					quantity: 1,
+					unitPrice: 3.5,
+				},
+			],
+			subtotal: 3.5,
+		};
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ status: "ok" }), {
+					headers: {
+						"Set-Cookie":
+							"session=customer-session; Domain=backend.local; Path=/; HttpOnly; SameSite=Strict",
+					},
+				}),
+			)
+			.mockResolvedValueOnce(new Response(JSON.stringify(basket)));
+		const client = request.agent(
+			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
+		);
+
+		const login = await client
+			.post("/login")
+			.type("form")
+			.send({ email: "ada@example.com", password: "correct-horse" });
+		const basketResponse = await client.get("/basket");
+
+		expect(login.status).toBe(303);
+		expect(login.headers["set-cookie"]).toEqual([
+			"session=customer-session; Path=/; HttpOnly; SameSite=Lax",
+		]);
+		expect(basketResponse.status).toBe(200);
+		expect(basketResponse.text).toContain("Green tea");
+		expect(fetchApi.mock.calls[1]?.[1]?.headers).toMatchObject({
+			Cookie: "session=customer-session",
+		});
+	});
+
+	it("handles rejected basket credentials as unauthenticated", async () => {
+		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
+			new Response(JSON.stringify({ error: "Unauthorized" }), {
+				status: 401,
+			}),
+		);
+		const res = await request(createApp({ fetch: fetchApi }))
+			.get("/basket")
+			.set("Authorization", ["Bearer", "test-token"].join(" "));
+
+		expect(res.status).toBe(401);
+		expect(res.text).toContain("Please log in to view your basket.");
+		expect(res.text).not.toContain("temporarily unavailable");
 	});
 
 	it("shows registration confirmation on the login page", async () => {
@@ -439,13 +574,14 @@ describe("app", () => {
 		"/reset-password",
 		"/products",
 		"/admin",
+		"/basket",
 	])("handles an unavailable backend for %s", async (path) => {
 		const fetchApi = vi
 			.fn<typeof fetch>()
 			.mockRejectedValue(new Error("Connection refused"));
 		const client = request(createApp({ fetch: fetchApi }));
-		const res = ["/products", "/admin"].includes(path)
-			? await (path === "/admin"
+		const res = ["/products", "/admin", "/basket"].includes(path)
+			? await (path === "/admin" || path === "/basket"
 					? client
 							.get(path)
 							.set("Authorization", ["Bearer", "test-token"].join(" "))
