@@ -37,6 +37,8 @@ The `/payment_gateway` checkout page loads selectable products from the backend
 quantities, verifies each item and calculates totals from backend product prices
 (in pence). The gateway is simulated only: it does not collect card details,
 create an order, or charge a payment method.
+Payment request validation, product lookup, and simulation are handled by
+`PaymentGatewayService`; the controller only handles HTTP responses and rendering.
 
 API calls run on the frontend server, not in the browser, so CORS is not needed.
 Backend requests time out after five seconds and show an unavailable message.
