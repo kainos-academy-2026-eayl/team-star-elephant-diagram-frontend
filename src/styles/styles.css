@@ -626,6 +626,67 @@ ul {
 	margin-top: 1.25rem;
 }
 
+.payment-layout {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 320px;
+	gap: 1.5rem;
+	align-items: start;
+}
+
+.payment-card {
+	padding: 1.5rem;
+	background: var(--surface);
+	border-radius: var(--radius);
+	box-shadow: 0 4px 16px rgba(29, 36, 51, 0.08);
+}
+
+.payment-card h2 {
+	margin-bottom: 0.25rem;
+	font-size: 1.25rem;
+}
+
+.payment-intro {
+	margin-bottom: 1.25rem;
+	color: var(--muted);
+}
+
+.payment-notice {
+	margin-bottom: 1.25rem;
+	padding: 0.75rem 0.875rem;
+	color: #72520a;
+	background: #fff7df;
+	border: 1px solid #ead89e;
+	border-radius: var(--radius);
+	font-size: 0.9rem;
+}
+
+.payment-form {
+	display: flex;
+	flex-direction: column;
+	gap: 1.25rem;
+}
+
+.payment-form .field input:disabled {
+	color: var(--muted);
+	background: var(--bg);
+	cursor: not-allowed;
+}
+
+.payment-fields-row {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 1rem;
+}
+
+.payment-form .btn:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.payment-back {
+	margin-top: 1.25rem;
+}
+
 .basket-state {
 	padding: 3rem 1.5rem;
 	text-align: center;
@@ -660,9 +721,17 @@ ul {
 	.basket-layout {
 		grid-template-columns: 1fr;
 	}
+
+	.payment-layout {
+		grid-template-columns: 1fr;
+	}
 }
 
 @media (max-width: 30rem) {
+	.payment-fields-row {
+		grid-template-columns: 1fr;
+	}
+
 	.basket-item {
 		grid-template-columns: 72px 1fr;
 	}

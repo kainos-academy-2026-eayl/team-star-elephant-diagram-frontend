@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Secure checkout</title>
+	<link rel="stylesheet" href="/styles.css" />
+</head>
+
+<body>
+	<nav class="navbar">
+		<a href="/products" class="navbar-brand">Products</a>
+
+		<input type="checkbox" id="menu-toggle" class="menu-toggle" />
+		<label for="menu-toggle" class="menu-button">
+			<span>Menu</span>
+			<span class="menu-arrow"></span>
+		</label>
+
+		<div class="dropdown">
+			<ul class="category-links">
+				<li><a href="/products">All products</a></li>
+			</ul>
+
+			<div class="dropdown-actions">
+				<a href="/login" class="action-button">Account</a>
+			</div>
+		</div>
+		<a href="/basket" class="action-button navbar-basket">Basket <span class="basket-count">0</span></a>
+	</nav>
+
+	<main class="container">
+		<h1 class="section-heading">Secure checkout</h1>
+
+		<div class="payment-layout">
+			<section class="payment-card" aria-labelledby="payment-heading">
+				<h2 id="payment-heading">Payment details</h2>
+				<p class="payment-intro">Your payment will be handled by our secure payment provider.</p>
+
+				<div class="payment-notice" role="status">
+					Secure payment is not available yet. No payment details will be collected on this page.
+				</div>
+
+				<form class="payment-form">
+					<div class="field">
+						<label for="cardholder">Name on card</label>
+						<input type="text" id="cardholder" name="cardholder" autocomplete="cc-name" disabled>
+					</div>
+
+					<div class="field">
+						<label for="card-number">Card number</label>
+						<input type="text" id="card-number" name="cardNumber" inputmode="numeric" autocomplete="cc-number" disabled>
+					</div>
+
+					<div class="payment-fields-row">
+						<div class="field">
+							<label for="expiry">Expiry date</label>
+							<input type="text" id="expiry" name="expiry" placeholder="MM/YY" autocomplete="cc-exp" disabled>
+						</div>
+						<div class="field">
+							<label for="security-code">Security code</label>
+							<input type="text" id="security-code" name="securityCode" inputmode="numeric" autocomplete="cc-csc" disabled>
+						</div>
+					</div>
+
+					<button type="button" class="btn btn--primary" disabled>Continue to payment</button>
+				</form>
+			</section>
+
+			<aside class="basket-summary" aria-labelledby="summary-heading">
+				<h2 id="summary-heading">Order summary</h2>
+				<div class="summary-row">
+					<span>Items</span>
+					<span>{{ itemCount | default("—") }}</span>
+				</div>
+				<div class="summary-row summary-row--total">
+					<span>Total</span>
+					<span>{{ total | default("To be confirmed") }}</span>
+				</div>
+				<a class="btn btn--secondary payment-back" href="/basket">Return to basket</a>
+			</aside>
+		</div>
+	</main>
+</body>
+
+</html>

@@ -18,6 +18,7 @@ describe("app", () => {
 		["/register", "Create your account"],
 		["/admin", "Admin dashboard"],
 		["/forgot-password", "Forgot your password?"],
+		["/payment_gateway", "Secure checkout"],
 	])("GET %s renders the page", async (path, heading) => {
 		expect(readdirSync("src/pages")).toContain(`${path.slice(1)}.njk`);
 

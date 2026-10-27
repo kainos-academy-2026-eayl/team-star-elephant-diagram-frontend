@@ -5,6 +5,9 @@ export function createPageRoutes(pageController: PageController): Router {
 	const router = Router();
 
 	router.get("/health", (_req, res) => pageController.health(res));
+	router.get("/payment_gateway", (_req, res) =>
+		pageController.paymentGateway(res),
+	);
 	router.get("/", (_req, res) => pageController.home(res));
 
 	return router;

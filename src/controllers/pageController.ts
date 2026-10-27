@@ -8,4 +8,8 @@ export class PageController {
 	home(res: Response): void {
 		res.redirect("/login");
 	}
+
+	paymentGateway(res: Response): void {
+		res.render("payment_gateway");
+	}
 }
