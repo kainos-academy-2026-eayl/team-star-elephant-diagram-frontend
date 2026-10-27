@@ -446,9 +446,9 @@ describe("app", () => {
 		const res = ["/products", "/admin", "/basket"].includes(path)
 			? await client.get(path)
 			: await client.post(path).type("form").send({
-				password: "correct-horse",
-				confirmPassword: "correct-horse",
-			});
+					password: "correct-horse",
+					confirmPassword: "correct-horse",
+				});
 		expect(res.status).toBe(503);
 		expect(res.text).toContain("temporarily unavailable");
 		expect(res.text).not.toContain("Connection refused");
