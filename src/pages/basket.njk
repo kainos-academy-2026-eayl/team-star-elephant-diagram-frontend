@@ -12,7 +12,7 @@
 
 <body>
 	<nav class="navbar">
-		<span class="navbar-brand navbar-brand--static">Basket</span>
+		<a href="/products" class="navbar-brand">Products</a>
 
 		<input type="checkbox" id="menu-toggle" class="menu-toggle" />
 		<label for="menu-toggle" class="menu-button">
@@ -22,69 +22,50 @@
 
 		<div class="dropdown">
 			<ul class="category-links">
-				<li><a href="/">All products</a></li>
+				<li><a href="/products">All products</a></li>
 			</ul>
 			
 			<div class="dropdown-actions">
 				<a href="/login" class="action-button">Account</a>
-				<a href="/basket" class="action-button">Basket <span class="basket-count">0</span></a>
 			</div>
 			
 		</div>
+		<a href="/basket" class="action-button navbar-basket" aria-current="page">Basket <span class="basket-count">0</span></a>
 	</nav>
 
 	<main class="container">
 		<h1 class="section-heading">Your basket</h1>
 
-		{% if error %}
-		<div class="basket-error" role="alert">
-			{{ error }}
-			{% if loginRequired %}<a href="/login">Log in</a>{% endif %}
+		<div id="basket-error" class="basket-error" role="alert" hidden></div>
+
+		<p id="basket-loading" class="basket-state">Loading your basket…</p>
+
+		<div id="basket-empty" class="basket-state" hidden>
+			<h2>Your basket is empty</h2>
+			<p>Add some products and they'll show up here.</p>
+			<a class="btn btn--primary" href="/">Continue shopping</a>
 		</div>
-		{% elif basket.items.length %}
-		<div id="basket-content" class="basket-layout">
-			<ul id="basket-list" class="basket-list" aria-live="polite">
-				{% for item in basket.items %}
-				<li class="basket-item">
-					{% if item.imageURL %}
-					<img class="basket-item__image" src="{{ item.imageURL }}" alt="{{ item.productName }}" />
-					{% else %}
-					<div class="basket-item__image" aria-hidden="true"></div>
-					{% endif %}
-					<div>
-						<h2 class="basket-item__name">{{ item.productName }}</h2>
-						<p class="basket-item__meta">{{ item.displayUnitPrice }} each · Quantity: {{ item.quantity }}</p>
-					</div>
-					<div class="basket-item__side">
-						<span class="basket-item__total">{{ item.displaySubtotal }}</span>
-					</div>
-				</li>
-				{% endfor %}
-			</ul>
+
+		<div id="basket-content" class="basket-layout" hidden>
+			<ul id="basket-list" class="basket-list" aria-live="polite"></ul>
 
 			<aside class="basket-summary" aria-labelledby="summary-heading">
 				<h2 id="summary-heading">Order summary</h2>
 				<div class="summary-row">
 					<span>Items</span>
-					<span>{{ basket.itemCount }}</span>
+					<span id="summary-count">0</span>
 				</div>
 				<div class="summary-row summary-row--total">
 					<span>Subtotal</span>
-					<span>{{ basket.displaySubtotal }}</span>
+					<span id="summary-subtotal">£0.00</span>
 				</div>
 				<a class="btn btn--primary" href="/checkout.html">Proceed to checkout</a>
 			</aside>
 		</div>
-		{% else %}
-		<div id="basket-empty" class="basket-state">
-			<h2>Your basket is empty</h2>
-			<p>Add some products and they'll show up here.</p>
-			<a class="btn btn--primary" href="/products">Continue shopping</a>
-		</div>
-		{% endif %}
 	</main>
 
 	
 </body>
 
 </html>
+
