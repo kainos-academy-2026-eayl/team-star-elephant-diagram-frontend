@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Your basket</title>
+	<link rel="stylesheet" href="styles.css" />
+
+	
+</head>
+
+<body>
+	<nav class="navbar">
+		<a href="/products" class="navbar-brand">Products</a>
+
+		<input type="checkbox" id="menu-toggle" class="menu-toggle" />
+		<label for="menu-toggle" class="menu-button">
+			<span>Menu</span>
+			<span class="menu-arrow"></span>
+		</label>
+
+		<div class="dropdown">
+			<ul class="category-links">
+				<li><a href="/products">All products</a></li>
+			</ul>
+			
+			<div class="dropdown-actions">
+				<a href="/login" class="action-button">Account</a>
+			</div>
+			
+		</div>
+		<a href="/basket" class="action-button navbar-basket" aria-current="page">Basket <span class="basket-count">0</span></a>
+	</nav>
+
+	<main class="container">
+		<h1 class="section-heading">Your basket</h1>
+
+		<div id="basket-error" class="basket-error" role="alert" hidden></div>
+
+		<p id="basket-loading" class="basket-state">Loading your basket…</p>
+
+		<div id="basket-empty" class="basket-state" hidden>
+			<h2>Your basket is empty</h2>
+			<p>Add some products and they'll show up here.</p>
+			<a class="btn btn--primary" href="/">Continue shopping</a>
+		</div>
+
+		<div id="basket-content" class="basket-layout" hidden>
+			<ul id="basket-list" class="basket-list" aria-live="polite"></ul>
+
+			<aside class="basket-summary" aria-labelledby="summary-heading">
+				<h2 id="summary-heading">Order summary</h2>
+				<div class="summary-row">
+					<span>Items</span>
+					<span id="summary-count">0</span>
+				</div>
+				<div class="summary-row summary-row--total">
+					<span>Subtotal</span>
+					<span id="summary-subtotal">£0.00</span>
+				</div>
+				<a class="btn btn--primary" href="/checkout.html">Proceed to checkout</a>
+			</aside>
+		</div>
+	</main>
+
+	
+</body>
+
+</html>
+

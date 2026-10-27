@@ -10,4 +10,12 @@ export class AuthService {
 	async login(details: Record<string, string>): Promise<void> {
 		await this.api.request("/login", details);
 	}
+
+	async forgotPassword(details: Record<string, string>): Promise<void> {
+		await this.api.request("/forgot-password", details);
+	}
+
+	async resetPassword(details: Record<string, string>): Promise<void> {
+		await this.api.request("/reset-password", details);
+	}
 }

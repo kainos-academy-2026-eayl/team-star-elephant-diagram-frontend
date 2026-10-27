@@ -135,7 +135,7 @@
             </article>
             {% endfor %}
         </section>
-        {% else %}
+        {% elif not error %}
         <section class="profile-card profile-empty">
             <p>You haven't placed any orders yet.</p>
             <a href="/products" class="btn btn--primary">Start shopping</a>
