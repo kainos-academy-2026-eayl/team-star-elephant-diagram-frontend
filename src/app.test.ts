@@ -19,7 +19,7 @@ describe("app", () => {
 		["/admin", "Admin dashboard"],
 		["/forgot-password", "Forgot your password?"],
 	])("GET %s renders the page", async (path, heading) => {
-		expect(readdirSync("pages")).toContain(`${path.slice(1)}.njk`);
+		expect(readdirSync("src/pages")).toContain(`${path.slice(1)}.njk`);
 
 		const res = await request(app).get(path);
 
@@ -58,7 +58,7 @@ describe("app", () => {
 	it("renders reset forms without caching or leaking referrers", async () => {
 		const token = "a".repeat(64);
 		const res = await request(app).get(`/reset-password?token=${token}`);
-		expect(readdirSync("pages")).toContain("reset-password.njk");
+		expect(readdirSync("src/pages")).toContain("reset-password.njk");
 		expect(res.status).toBe(200);
 		expect(res.headers["cache-control"]).toBe("no-store");
 		expect(res.headers["referrer-policy"]).toBe("no-referrer");

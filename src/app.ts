@@ -27,14 +27,14 @@ export function createApp({
 	const productController = new ProductController(new ProductService(api));
 	const profileController = new ProfileController(new ProfileService(api));
 
-	nunjucks.configure("pages", {
+	nunjucks.configure("src/pages", {
 		autoescape: true,
 		express: app,
 	});
 
 	app.set("view engine", "njk");
 
-	app.use(express.static("pages"));
+	app.use(express.static("src/pages"));
 	app.use(express.urlencoded({ extended: false, limit: "100kb" }));
 
 	app.get("/admin", (_req: Request, res: Response) => {
