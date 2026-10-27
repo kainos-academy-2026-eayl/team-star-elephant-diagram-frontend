@@ -1,5 +1,9 @@
 import type { Request, Response } from "express";
-import type { BasketService } from "../services/basketService";
+import { BackendApiError } from "../backendApi";
+import type {
+	BasketRequestCredentials,
+	BasketService,
+} from "../services/basketService";
 
 const formatPrice = (amount: number): string =>
 	new Intl.NumberFormat("en-GB", {
@@ -10,9 +14,23 @@ const formatPrice = (amount: number): string =>
 export class BasketController {
 	constructor(private readonly basketService: BasketService) {}
 
-	async getBasket(_req: Request, res: Response): Promise<void> {
+	async getBasket(req: Request, res: Response): Promise<void> {
+		const authorization = req.get("authorization");
+		const cookie = req.get("cookie");
+		const credentials: BasketRequestCredentials = {
+			...(authorization ? { authorization } : {}),
+			...(cookie ? { cookie } : {}),
+		};
+		if (!authorization && !cookie) {
+			res.status(401).render("basket", {
+				error: "Please log in to view your basket.",
+				loginRequired: true,
+			});
+			return;
+		}
+
 		try {
-			const basket = await this.basketService.getBasket();
+			const basket = await this.basketService.getBasket(credentials);
 			const items = basket.items.map((item) => ({
 				...item,
 				imageURL: /^https?:\/\//i.test(item.imageURL ?? "")
@@ -28,7 +46,14 @@ export class BasketController {
 					displaySubtotal: formatPrice(basket.subtotal),
 				},
 			});
-		} catch {
+		} catch (error) {
+			if (error instanceof BackendApiError && error.status === 401) {
+				res.status(401).render("basket", {
+					error: "Please log in to view your basket.",
+					loginRequired: true,
+				});
+				return;
+			}
 			res.status(503).render("basket", {
 				error: "Your basket is temporarily unavailable. Please try again.",
 			});

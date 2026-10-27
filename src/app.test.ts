@@ -103,7 +103,10 @@ describe("app", () => {
 			.mockResolvedValue(new Response(JSON.stringify(basket)));
 		const res = await request(
 			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
-		).get("/basket");
+		)
+			.get("/basket")
+			.set("Authorization", ["Bearer", "test-token"].join(" "))
+			.set("Cookie", "session=customer-session");
 
 		expect(res.status).toBe(200);
 		expect(res.text).toContain("Green tea");
@@ -112,6 +115,38 @@ describe("app", () => {
 		expect(String(fetchApi.mock.calls[0]?.[0])).toBe(
 			"http://backend:4000/basket",
 		);
+		expect(fetchApi.mock.calls[0]?.[1]?.headers).toEqual({
+			"Content-Type": "application/json",
+			Authorization: ["Bearer", "test-token"].join(" "),
+			Cookie: "session=customer-session",
+		});
+	});
+
+	it("requires authentication before loading a basket", async () => {
+		const fetchApi = vi.fn<typeof fetch>();
+		const res = await request(
+			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
+		).get("/basket");
+
+		expect(res.status).toBe(401);
+		expect(res.text).toContain("Please log in to view your basket.");
+		expect(res.text).toContain('href="/login"');
+		expect(fetchApi).not.toHaveBeenCalled();
+	});
+
+	it("handles a rejected basket credential as unauthenticated", async () => {
+		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
+			new Response(JSON.stringify({ error: "Unauthorized" }), {
+				status: 401,
+			}),
+		);
+		const res = await request(createApp({ fetch: fetchApi }))
+			.get("/basket")
+			.set("Authorization", ["Bearer", "test-token"].join(" "));
+
+		expect(res.status).toBe(401);
+		expect(res.text).toContain("Please log in to view your basket.");
+		expect(res.text).not.toContain("temporarily unavailable");
 	});
 
 	it("shows registration confirmation on the login page", async () => {
@@ -475,7 +510,7 @@ describe("app", () => {
 			.mockRejectedValue(new Error("Connection refused"));
 		const client = request(createApp({ fetch: fetchApi }));
 		const res = ["/products", "/admin", "/basket"].includes(path)
-			? await (path === "/admin"
+			? await (path === "/admin" || path === "/basket"
 					? client
 							.get(path)
 							.set("Authorization", ["Bearer", "test-token"].join(" "))

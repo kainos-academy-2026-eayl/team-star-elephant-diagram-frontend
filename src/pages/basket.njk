@@ -37,7 +37,10 @@
 		<h1 class="section-heading">Your basket</h1>
 
 		{% if error %}
-		<div class="basket-error" role="alert">{{ error }}</div>
+		<div class="basket-error" role="alert">
+			{{ error }}
+			{% if loginRequired %}<a href="/login">Log in</a>{% endif %}
+		</div>
 		{% elif basket.items.length %}
 		<div id="basket-content" class="basket-layout">
 			<ul id="basket-list" class="basket-list" aria-live="polite">
@@ -85,4 +88,3 @@
 </body>
 
 </html>
-
