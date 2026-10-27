@@ -9,7 +9,4 @@ export class PageController {
 		res.redirect("/login");
 	}
 
-	paymentGateway(res: Response): void {
-		res.render("payment_gateway");
-	}
 }

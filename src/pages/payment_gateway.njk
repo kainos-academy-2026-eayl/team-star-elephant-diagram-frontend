@@ -34,50 +34,66 @@
 		<h1 class="section-heading">Secure checkout</h1>
 
 		<div class="payment-layout">
-			<section class="payment-card" aria-labelledby="payment-heading">
-				<h2 id="payment-heading">Payment details</h2>
-				<p class="payment-intro">Your payment will be handled by our secure payment provider.</p>
-
+			<section class="payment-card" aria-labelledby="checkout-heading">
+				{% if paymentResult %}
+				<h2 id="checkout-heading">Payment simulated</h2>
+				<p class="payment-intro">This is a mock checkout. No payment was taken.</p>
 				<div class="payment-notice" role="status">
-					Secure payment is not available yet. No payment details will be collected on this page.
+					Mock payment successful. No real payment was processed.
 				</div>
-
-				<form class="payment-form">
-					<div class="field">
-						<label for="cardholder">Name on card</label>
-						<input type="text" id="cardholder" name="cardholder" autocomplete="cc-name" disabled>
-					</div>
-
-					<div class="field">
-						<label for="card-number">Card number</label>
-						<input type="text" id="card-number" name="cardNumber" inputmode="numeric" autocomplete="cc-number" disabled>
-					</div>
-
-					<div class="payment-fields-row">
-						<div class="field">
-							<label for="expiry">Expiry date</label>
-							<input type="text" id="expiry" name="expiry" placeholder="MM/YY" autocomplete="cc-exp" disabled>
-						</div>
-						<div class="field">
-							<label for="security-code">Security code</label>
-							<input type="text" id="security-code" name="securityCode" inputmode="numeric" autocomplete="cc-csc" disabled>
-						</div>
-					</div>
-
-					<button type="button" class="btn btn--primary" disabled>Continue to payment</button>
+				<ul class="payment-order-list">
+					{% for item in paymentResult.items %}
+					<li class="payment-order-item">
+						<span>{{ item.name }} × {{ item.quantity }}</span>
+						<span>{{ item.formattedSubtotal }}</span>
+					</li>
+					{% endfor %}
+				</ul>
+				{% else %}
+				<h2 id="checkout-heading">Choose your products</h2>
+				<p class="payment-intro">Select quantities to preview a simulated checkout. No payment details are collected.</p>
+				{% if error %}
+				<div class="payment-notice payment-notice--error" role="alert">{{ error }}</div>
+				{% endif %}
+				{% if products and products.length %}
+				<form class="payment-form" action="/payment_gateway" method="post">
+					<ul class="payment-product-list">
+						{% for product in products %}
+						<li class="payment-product">
+							<div>
+								<h3>{{ product.name }}</h3>
+								<p>{{ product.category }} · {{ product.formattedPrice }}</p>
+							</div>
+							<div class="field payment-quantity">
+								<label for="quantity-{{ product.prod_id }}">Quantity</label>
+								<input type="hidden" name="productId" value="{{ product.prod_id }}">
+								<input type="number" id="quantity-{{ product.prod_id }}" name="quantity" min="0" max="99" value="0" required>
+							</div>
+						</li>
+						{% endfor %}
+					</ul>
+					<button type="submit" class="btn btn--primary">Simulate payment</button>
 				</form>
+				{% else %}
+				<p class="payment-intro">No products are currently available.</p>
+				{% endif %}
+				{% endif %}
 			</section>
 
 			<aside class="basket-summary" aria-labelledby="summary-heading">
 				<h2 id="summary-heading">Order summary</h2>
+				{% if paymentResult %}
 				<div class="summary-row">
 					<span>Items</span>
-					<span>{{ itemCount | default("—") }}</span>
+					<span>{{ paymentResult.itemCount }}</span>
 				</div>
 				<div class="summary-row summary-row--total">
 					<span>Total</span>
-					<span>{{ total | default("To be confirmed") }}</span>
+					<span>{{ paymentResult.formattedTotal }}</span>
 				</div>
+				{% else %}
+				<p class="payment-intro">Choose product quantities to submit a simulated checkout.</p>
+				{% endif %}
 				<a class="btn btn--secondary payment-back" href="/basket">Return to basket</a>
 			</aside>
 		</div>

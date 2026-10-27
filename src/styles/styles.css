@@ -666,25 +666,64 @@ ul {
 	gap: 1.25rem;
 }
 
-.payment-form .field input:disabled {
-	color: var(--muted);
-	background: var(--bg);
-	cursor: not-allowed;
+.payment-product-list,
+.payment-order-list {
+	list-style: none;
+	padding: 0;
 }
 
-.payment-fields-row {
-	display: grid;
-	grid-template-columns: 1fr 1fr;
+.payment-product-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+}
+
+.payment-product,
+.payment-order-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
 	gap: 1rem;
+	padding: 0.9rem;
+	background: var(--bg);
+	border-radius: var(--radius);
 }
 
-.payment-form .btn:disabled {
-	opacity: 0.6;
-	cursor: not-allowed;
+.payment-product h3 {
+	font-size: 1rem;
+}
+
+.payment-product p {
+	color: var(--muted);
+	font-size: 0.9rem;
+}
+
+.payment-quantity {
+	flex: 0 0 7rem;
+}
+
+.payment-quantity input {
+	width: 100%;
+	padding: 0.5rem;
+	font: inherit;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+}
+
+.payment-notice--error {
+	color: #a12b2b;
+	background: #fdecec;
+	border-color: #f3c2c2;
 }
 
 .payment-back {
 	margin-top: 1.25rem;
+}
+
+.payment-order-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
 }
 
 .basket-state {
@@ -728,8 +767,14 @@ ul {
 }
 
 @media (max-width: 30rem) {
-	.payment-fields-row {
-		grid-template-columns: 1fr;
+	.payment-product {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+
+	.payment-quantity {
+		width: 100%;
+		flex-basis: auto;
 	}
 
 	.basket-item {

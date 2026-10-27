@@ -18,7 +18,6 @@ describe("app", () => {
 		["/register", "Create your account"],
 		["/admin", "Admin dashboard"],
 		["/forgot-password", "Forgot your password?"],
-		["/payment_gateway", "Secure checkout"],
 	])("GET %s renders the page", async (path, heading) => {
 		expect(readdirSync("src/pages")).toContain(`${path.slice(1)}.njk`);
 
@@ -274,6 +273,140 @@ describe("app", () => {
 			"http://backend:4000/products",
 		);
 		expect(res.text).toContain("No products found.");
+	});
+
+	it("loads Product-table data for the payment gateway", async () => {
+		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
+			new Response(
+				JSON.stringify([
+					{
+						prod_id: 7,
+						name: "Green tea",
+						category: "Food & Drink",
+						description: "Fresh tea",
+						price: 1299,
+						imageURL: "",
+					},
+				]),
+			),
+		);
+		const res = await request(
+			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
+		).get("/payment_gateway");
+
+		expect(res.status).toBe(200);
+		expect(String(fetchApi.mock.calls[0]?.[0])).toBe(
+			"http://backend:4000/products",
+		);
+		expect(res.text).toContain("Green tea");
+		expect(res.text).toContain("£12.99");
+		expect(res.text).toContain('name="productId" value="7"');
+	});
+
+	it("shows a clear unavailable response when the product service is offline", async () => {
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockRejectedValue(new Error("Connection refused"));
+		const res = await request(createApp({ fetch: fetchApi })).get(
+			"/payment_gateway",
+		);
+
+		expect(res.status).toBe(503);
+		expect(res.text).toContain("Products are temporarily unavailable.");
+		expect(res.text).not.toContain("Connection refused");
+	});
+
+	it("simulates a payment using product-table prices, not submitted prices", async () => {
+		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
+			new Response(
+				JSON.stringify([
+					{
+						prod_id: 7,
+						name: "Green tea",
+						category: "Food & Drink",
+						description: "Fresh tea",
+						price: 1299,
+						imageURL: "",
+					},
+				]),
+			),
+		);
+		const res = await request(
+			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
+		)
+			.post("/payment_gateway")
+			.type("form")
+			.send({ productId: "7", quantity: "2", price: "0.01" });
+
+		expect(res.status).toBe(200);
+		expect(res.text).toContain(
+			"Mock payment successful. No real payment was processed.",
+		);
+		expect(res.text).toContain("£25.98");
+		expect(res.text).toContain("Green tea × 2");
+		expect(fetchApi).toHaveBeenCalledTimes(1);
+	});
+
+	it("simulates multiple selected products and totals their quantities", async () => {
+		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
+			new Response(
+				JSON.stringify([
+					{
+						prod_id: 7,
+						name: "Green tea",
+						category: "Food & Drink",
+						description: "Fresh tea",
+						price: 1299,
+						imageURL: "",
+					},
+					{
+						prod_id: 8,
+						name: "Coffee",
+						category: "Food & Drink",
+						description: "Roasted beans",
+						price: 500,
+						imageURL: "",
+					},
+				]),
+			),
+		);
+		const res = await request(createApp({ fetch: fetchApi }))
+			.post("/payment_gateway")
+			.type("form")
+			.send({ productId: ["7", "8"], quantity: ["2", "1"] });
+
+		expect(res.status).toBe(200);
+		expect(res.text).toContain("Green tea × 2");
+		expect(res.text).toContain("Coffee × 1");
+		expect(res.text).toContain("£30.98");
+		expect(res.text).toContain(">3</span>");
+	});
+
+	it("rejects payment requests with no selected products", async () => {
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(new Response(JSON.stringify([])));
+		const res = await request(createApp({ fetch: fetchApi }))
+			.post("/payment_gateway")
+			.type("form")
+			.send({ productId: "7", quantity: "0" });
+
+		expect(res.status).toBe(400);
+		expect(res.text).toContain("Select at least one product");
+	});
+
+	it("rejects product IDs that are not in the products table", async () => {
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(new Response(JSON.stringify([])));
+		const res = await request(createApp({ fetch: fetchApi }))
+			.post("/payment_gateway")
+			.type("form")
+			.send({ productId: "7", quantity: "1" });
+
+		expect(res.status).toBe(400);
+		expect(res.text).toContain("Selected product is no longer available.");
+		expect(res.text).toContain("Choose your products");
 	});
 
 	it("loads profile details and order history from the backend", async () => {

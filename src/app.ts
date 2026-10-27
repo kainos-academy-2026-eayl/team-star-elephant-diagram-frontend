@@ -3,13 +3,16 @@ import nunjucks from "nunjucks";
 import { BackendApi } from "./backendApi";
 import { AuthController } from "./controllers/authController";
 import { PageController } from "./controllers/pageController";
+import { PaymentGatewayController } from "./controllers/paymentGatewayController";
 import { ProductController } from "./controllers/productController";
 import { ProfileController } from "./controllers/profileController";
 import { createAuthRoutes } from "./routes/authRoutes";
 import { createPageRoutes } from "./routes/pageRoutes";
+import { createPaymentGatewayRoutes } from "./routes/paymentGatewayRoutes";
 import { createProductRoutes } from "./routes/productRoutes";
 import { createProfileRoutes } from "./routes/profileRoutes";
 import { AuthService } from "./services/authService";
+import { PaymentGatewayService } from "./services/paymentGatewayService";
 import { ProductService } from "./services/productService";
 import { ProfileService } from "./services/profileService";
 
@@ -24,7 +27,11 @@ export function createApp({
 	const api = new BackendApi(apiBaseUrl, fetchApi);
 	const authController = new AuthController(new AuthService(api));
 	const pageController = new PageController();
-	const productController = new ProductController(new ProductService(api));
+	const productService = new ProductService(api);
+	const productController = new ProductController(productService);
+	const paymentGatewayController = new PaymentGatewayController(
+		new PaymentGatewayService(productService),
+	);
 	const profileController = new ProfileController(new ProfileService(api));
 
 	nunjucks.configure("src/pages", {
@@ -36,6 +43,7 @@ export function createApp({
 
 	app.use(express.static("src/pages"));
 	app.use(express.static("src/styles"));
+	app.use(express.json({ limit: "100kb" }));
 	app.use(express.urlencoded({ extended: false, limit: "100kb" }));
 
 	app.get("/admin", (_req: Request, res: Response) => {
@@ -74,6 +82,7 @@ export function createApp({
 	app.use(createPageRoutes(pageController));
 	app.use(createAuthRoutes(authController));
 	app.use(createProductRoutes(productController));
+	app.use(createPaymentGatewayRoutes(paymentGatewayController));
 	app.use(createProfileRoutes(profileController));
 
 	return app;

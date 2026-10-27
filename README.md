@@ -32,6 +32,11 @@ Select a product to open `/products/:prodId`, which renders the expanded product
 page using `GET /products/:prodId` on the backend. Product IDs must be positive
 safe integers. Invalid IDs return 400, missing products return 404, and backend
 failures display an unavailable message with status 503.
+The `/payment_gateway` checkout page loads selectable products from the backend
+`Product` table. Its `POST /payment_gateway` endpoint accepts product IDs and
+quantities, verifies each item and calculates totals from backend product prices
+(in pence). The gateway is simulated only: it does not collect card details,
+create an order, or charge a payment method.
 
 API calls run on the frontend server, not in the browser, so CORS is not needed.
 Backend requests time out after five seconds and show an unavailable message.
