@@ -161,6 +161,50 @@ describe("app", () => {
 		expect(fetchApi).not.toHaveBeenCalled();
 	});
 
+	it("establishes a browser session at login and uses it to load the basket", async () => {
+		const basket = {
+			items: [
+				{
+					id: 1,
+					productName: "Green tea",
+					quantity: 1,
+					unitPrice: 3.5,
+				},
+			],
+			subtotal: 3.5,
+		};
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ status: "ok" }), {
+					headers: {
+						"Set-Cookie":
+							"session=customer-session; Domain=backend.local; Path=/; HttpOnly; SameSite=Strict",
+					},
+				}),
+			)
+			.mockResolvedValueOnce(new Response(JSON.stringify(basket)));
+		const client = request.agent(
+			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
+		);
+
+		const login = await client
+			.post("/login")
+			.type("form")
+			.send({ email: "ada@example.com", password: "correct-horse" });
+		const basketResponse = await client.get("/basket");
+
+		expect(login.status).toBe(303);
+		expect(login.headers["set-cookie"]).toEqual([
+			"session=customer-session; Path=/; HttpOnly; SameSite=Lax",
+		]);
+		expect(basketResponse.status).toBe(200);
+		expect(basketResponse.text).toContain("Green tea");
+		expect(fetchApi.mock.calls[1]?.[1]?.headers).toMatchObject({
+			Cookie: "session=customer-session",
+		});
+	});
+
 	it("handles rejected basket credentials as unauthenticated", async () => {
 		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
 			new Response(JSON.stringify({ error: "Unauthorized" }), {

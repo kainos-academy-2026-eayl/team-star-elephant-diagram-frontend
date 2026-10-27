@@ -2,6 +2,22 @@ import type { Request, Response } from "express";
 import { BackendApiError } from "../backendApi";
 import type { AuthService } from "../services/authService";
 
+const getSessionCookie = (setCookie: string): string | undefined => {
+	const pair = setCookie.split(";", 1)[0]?.trim();
+	const separator = pair?.indexOf("=") ?? -1;
+	const name = pair?.slice(0, separator) ?? "";
+	const value = pair?.slice(separator + 1) ?? "";
+	if (
+		separator < 1 ||
+		!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name) ||
+		!value ||
+		!/^[\x21\x23-\x2B\x2D-\x3A\x3C-\x5B\x5D-\x7E]+$/.test(value)
+	) {
+		return undefined;
+	}
+	return `${name}=${value}`;
+};
+
 export class AuthController {
 	constructor(private readonly authService: AuthService) {}
 
@@ -80,6 +96,7 @@ export class AuthController {
 		}
 
 		try {
+			let sessionCookies: string[] = [];
 			if (page === "register") {
 				await this.authService.register(values);
 			} else if (page === "forgot-password") {
@@ -87,7 +104,16 @@ export class AuthController {
 			} else if (page === "reset-password") {
 				await this.authService.resetPassword(values);
 			} else {
-				await this.authService.login(values);
+				sessionCookies = await this.authService.login(values);
+			}
+			for (const setCookie of sessionCookies) {
+				const cookie = getSessionCookie(setCookie);
+				if (cookie) {
+					res.append(
+						"Set-Cookie",
+						`${cookie}; Path=/; HttpOnly; SameSite=Lax${process.env.NODE_ENV === "production" ? "; Secure" : ""}`,
+					);
+				}
 			}
 			const destinations = {
 				register: "/login?registered=1",
