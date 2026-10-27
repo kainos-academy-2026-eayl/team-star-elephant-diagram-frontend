@@ -43,7 +43,9 @@ describe("app", () => {
 			.mockResolvedValue(new Response(JSON.stringify(dashboard)));
 		const res = await request(
 			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
-		).get("/admin");
+		)
+			.get("/admin")
+			.set("Authorization", ["Bearer", "test-token"].join(" "));
 
 		expect(res.status).toBe(200);
 		expect(res.text).toContain("Orders today");
@@ -52,6 +54,35 @@ describe("app", () => {
 		expect(String(fetchApi.mock.calls[0]?.[0])).toBe(
 			"http://backend:4000/admin",
 		);
+		expect(fetchApi.mock.calls[0]?.[1]?.headers).toMatchObject({
+			Authorization: ["Bearer", "test-token"].join(" "),
+		});
+	});
+
+	it("requires staff credentials before requesting the admin dashboard", async () => {
+		const fetchApi = vi.fn<typeof fetch>();
+		const res = await request(
+			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
+		).get("/admin");
+
+		expect(res.status).toBe(401);
+		expect(fetchApi).not.toHaveBeenCalled();
+	});
+
+	it("does not render admin data when the backend rejects staff credentials", async () => {
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(
+				new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 }),
+			);
+		const res = await request(
+			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
+		)
+			.get("/admin")
+			.set("Authorization", ["Bearer", "test-token"].join(" "));
+
+		expect(res.status).toBe(403);
+		expect(res.text).not.toContain("New registrations");
 	});
 
 	it("loads basket data from the backend", async () => {
@@ -444,7 +475,11 @@ describe("app", () => {
 			.mockRejectedValue(new Error("Connection refused"));
 		const client = request(createApp({ fetch: fetchApi }));
 		const res = ["/products", "/admin", "/basket"].includes(path)
-			? await client.get(path)
+			? await (path === "/admin"
+					? client
+							.get(path)
+							.set("Authorization", ["Bearer", "test-token"].join(" "))
+					: client.get(path))
 			: await client.post(path).type("form").send({
 					password: "correct-horse",
 					confirmPassword: "correct-horse",

@@ -22,7 +22,9 @@ export interface AdminDashboard {
 export class AdminService {
 	constructor(private readonly api: BackendApi) {}
 
-	getDashboard(): Promise<AdminDashboard> {
-		return this.api.request<AdminDashboard>("/admin");
+	getDashboard(authorization: string): Promise<AdminDashboard> {
+		return this.api.request<AdminDashboard>("/admin", undefined, {
+			Authorization: authorization,
+		});
 	}
 }
