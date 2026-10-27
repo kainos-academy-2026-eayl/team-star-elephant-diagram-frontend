@@ -12,7 +12,7 @@
 
 <body>
 	<nav class="navbar">
-		<span class="navbar-brand navbar-brand--static">Basket</span>
+		<a href="/products" class="navbar-brand">Products</a>
 
 		<input type="checkbox" id="menu-toggle" class="menu-toggle" />
 		<label for="menu-toggle" class="menu-button">
@@ -22,15 +22,15 @@
 
 		<div class="dropdown">
 			<ul class="category-links">
-				<li><a href="/">All products</a></li>
+				<li><a href="/products">All products</a></li>
 			</ul>
 			
 			<div class="dropdown-actions">
 				<a href="/login" class="action-button">Account</a>
-				<a href="/basket" class="action-button">Basket <span class="basket-count">0</span></a>
 			</div>
 			
 		</div>
+		<a href="/basket" class="action-button navbar-basket" aria-current="page">Basket <span class="basket-count">0</span></a>
 	</nav>
 
 	<main class="container">
