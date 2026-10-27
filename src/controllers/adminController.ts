@@ -7,13 +7,20 @@ export class AdminController {
 
 	async getDashboard(req: Request, res: Response): Promise<void> {
 		const authorization = req.get("authorization");
-		if (!authorization || !/^Bearer\s+\S+$/i.test(authorization)) {
+		const cookie = req.get("cookie");
+		const credentials = {
+			...(authorization && /^Bearer\s+\S+$/i.test(authorization)
+				? { authorization }
+				: {}),
+			...(cookie ? { cookie } : {}),
+		};
+		if (!credentials.authorization && !credentials.cookie) {
 			res.sendStatus(401);
 			return;
 		}
 
 		try {
-			const dashboard = await this.adminService.getDashboard(authorization);
+			const dashboard = await this.adminService.getDashboard(credentials);
 			res.render("admin", dashboard);
 		} catch (error) {
 			if (
