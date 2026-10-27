@@ -16,7 +16,6 @@ describe("app", () => {
 	it.each([
 		["/login", "Log in"],
 		["/register", "Create your account"],
-		["/admin", "Admin dashboard"],
 		["/forgot-password", "Forgot your password?"],
 	])("GET %s renders the page", async (path, heading) => {
 		expect(readdirSync("src/pages")).toContain(`${path.slice(1)}.njk`);
@@ -27,17 +26,63 @@ describe("app", () => {
 		expect(res.text).toContain(heading);
 	});
 
-	it("shows unfinished admin actions as unavailable", async () => {
-		const res = await request(app).get("/admin");
+	it("loads admin dashboard data from the backend", async () => {
+		const dashboard = {
+			staff: { name: "Staff member" },
+			sections: [{ label: "Orders" }],
+			quickActions: [{ label: "Add product" }],
+			cards: [{ label: "Orders today", value: "4" }],
+			recentOrders: [
+				{ id: 42, customer: "Ada Lovelace", date: "2026-10-27", status: "New" },
+			],
+			newUsers: [],
+			stockChanges: [],
+		};
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(new Response(JSON.stringify(dashboard)));
+		const res = await request(
+			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
+		)
+			.get("/admin")
+			.set("Authorization", ["Bearer", "test-token"].join(" "));
 
 		expect(res.status).toBe(200);
-		expect(res.text).toContain("Search is unavailable.");
-		expect(res.text).toContain("Orders (Unavailable)");
-		expect(res.text).toContain("Add product (Unavailable)");
-		expect(res.text).toContain("Revenue this month (Unavailable)");
-		expect(res.text).not.toMatch(
-			/(?:href|action)="\/(?:admin\/(?:orders|stock|products|users|baskets|reports|search)(?:[/?][^"]*)?|logout)"/,
+		expect(res.text).toContain("Orders today");
+		expect(res.text).toContain(">4</p>");
+		expect(res.text).toContain("Ada Lovelace");
+		expect(String(fetchApi.mock.calls[0]?.[0])).toBe(
+			"http://backend:4000/admin",
 		);
+		expect(fetchApi.mock.calls[0]?.[1]?.headers).toMatchObject({
+			Authorization: ["Bearer", "test-token"].join(" "),
+		});
+	});
+
+	it("requires staff credentials before requesting the admin dashboard", async () => {
+		const fetchApi = vi.fn<typeof fetch>();
+		const res = await request(
+			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
+		).get("/admin");
+
+		expect(res.status).toBe(401);
+		expect(fetchApi).not.toHaveBeenCalled();
+	});
+
+	it("does not render admin data when the backend rejects staff credentials", async () => {
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(
+				new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 }),
+			);
+		const res = await request(
+			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
+		)
+			.get("/admin")
+			.set("Authorization", ["Bearer", "test-token"].join(" "));
+
+		expect(res.status).toBe(403);
+		expect(res.text).not.toContain("New registrations");
 	});
 
 	it("shows registration confirmation on the login page", async () => {
@@ -393,18 +438,22 @@ describe("app", () => {
 		"/forgot-password",
 		"/reset-password",
 		"/products",
+		"/admin",
 	])("handles an unavailable backend for %s", async (path) => {
 		const fetchApi = vi
 			.fn<typeof fetch>()
 			.mockRejectedValue(new Error("Connection refused"));
 		const client = request(createApp({ fetch: fetchApi }));
-		const res =
-			path === "/products"
-				? await client.get(path)
-				: await client.post(path).type("form").send({
-						password: "correct-horse",
-						confirmPassword: "correct-horse",
-					});
+		const res = ["/products", "/admin"].includes(path)
+			? await (path === "/admin"
+					? client
+							.get(path)
+							.set("Authorization", ["Bearer", "test-token"].join(" "))
+					: client.get(path))
+			: await client.post(path).type("form").send({
+					password: "correct-horse",
+					confirmPassword: "correct-horse",
+				});
 		expect(res.status).toBe(503);
 		expect(res.text).toContain("temporarily unavailable");
 		expect(res.text).not.toContain("Connection refused");

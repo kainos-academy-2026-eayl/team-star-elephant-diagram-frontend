@@ -17,10 +17,11 @@ export class BackendApi {
 	async request<Result>(
 		path: string,
 		body?: Record<string, string>,
+		headers: Record<string, string> = {},
 	): Promise<Result> {
 		const response = await this.fetchApi(new URL(path, this.baseUrl), {
 			method: body ? "POST" : "GET",
-			headers: { "Content-Type": "application/json" },
+			headers: { "Content-Type": "application/json", ...headers },
 			...(body ? { body: JSON.stringify(body) } : {}),
 			signal: AbortSignal.timeout(5000),
 		});
