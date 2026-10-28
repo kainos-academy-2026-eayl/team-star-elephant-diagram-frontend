@@ -41,7 +41,7 @@
 
         {% if error %}
         <div class="error-message" role="alert">
-            Admin data couldn't be loaded - please try again.
+            {{ error }}
             <a href="/admin">Retry</a>
         </div>
         {% else %}
@@ -56,9 +56,9 @@
 
         <section class="product-grid stat-grid" aria-label="Summary">
             {% for card in cards %}
-            <div class="product-card stat-card unavailable-card" aria-disabled="true">
+            <div class="product-card stat-card">
                 <div class="product-info">
-                    <h2>{{ card.label }} (Unavailable)</h2>
+                    <h2>{{ card.label }}</h2>
                     <p class="product-price stat-value">{{ card.value }}</p>
                 </div>
             </div>

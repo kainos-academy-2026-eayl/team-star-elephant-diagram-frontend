@@ -17,10 +17,24 @@ export class BackendApi {
 	async request<Result>(
 		path: string,
 		body?: Record<string, string>,
+		headers: Record<string, string> = {},
 	): Promise<Result> {
+		const { result } = await this.requestWithResponse<Result>(
+			path,
+			body,
+			headers,
+		);
+		return result;
+	}
+
+	async requestWithResponse<Result>(
+		path: string,
+		body?: Record<string, string>,
+		headers: Record<string, string> = {},
+	): Promise<{ result: Result; cookies: string[] }> {
 		const response = await this.fetchApi(new URL(path, this.baseUrl), {
 			method: body ? "POST" : "GET",
-			headers: { "Content-Type": "application/json" },
+			headers: { "Content-Type": "application/json", ...headers },
 			...(body ? { body: JSON.stringify(body) } : {}),
 			signal: AbortSignal.timeout(5000),
 		});
@@ -47,6 +61,9 @@ export class BackendApi {
 				details,
 			);
 		}
-		return response.json() as Promise<Result>;
+		return {
+			result: (await response.json()) as Result,
+			cookies: response.headers.getSetCookie(),
+		};
 	}
 }
