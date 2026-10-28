@@ -17,11 +17,8 @@ import { createProductRoutes } from "./routes/productRoutes";
 import { createProfileRoutes } from "./routes/profileRoutes";
 import { AdminService } from "./services/adminService";
 import { AuthService } from "./services/authService";
-<<<<<<< HEAD
-import { PaymentGatewayService } from "./services/paymentGatewayService";
-=======
 import { BasketService } from "./services/basketService";
->>>>>>> main
+import { PaymentGatewayService } from "./services/paymentGatewayService";
 import { ProductService } from "./services/productService";
 import { ProfileService } from "./services/profileService";
 
