@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if basket %}Basket #{{ basket.basketId }} | {% endif %}Baskets | Admin | Shop</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+
+<body>
+    {% set activeNav = "baskets" %}
+    {% include "partials/admin-nav.njk" %}
+
+    <main class="container">
+        <p><a href="/admin/baskets" class="admin-back-link">&larr; Return to basket list</a></p>
+
+        {% if notFound %}
+        <h1 class="section-heading">Basket not found</h1>
+        <p class="order-empty">This basket does not exist or is no longer active.</p>
+        {% elif error %}
+        <h1 class="section-heading">Basket details</h1>
+        <div class="error-message" role="alert">
+            {{ error }}
+            <a href="/admin/baskets/{{ basketId | string | urlencode }}">Retry</a>
+        </div>
+        {% else %}
+        <h1 class="section-heading">Basket #{{ basket.basketId }}</h1>
+
+        <div class="activity-grid admin-details-grid">
+            <section class="profile-card" aria-labelledby="basket-information">
+                <h2 id="basket-information">Basket information</h2>
+                <dl class="profile-details">
+                    <div class="profile-row">
+                        <dt>Basket ID</dt>
+                        <dd>#{{ basket.basketId }}</dd>
+                    </div>
+                    <div class="profile-row">
+                        <dt>Created</dt>
+                        <dd>{{ basket.createdAt }}</dd>
+                    </div>
+                    <div class="profile-row">
+                        <dt>Last activity</dt>
+                        <dd>{{ basket.lastActivity }}</dd>
+                    </div>
+                    <div class="profile-row">
+                        <dt>Status</dt>
+                        <dd><span class="order-status">{{ basket.status }}</span></dd>
+                    </div>
+                </dl>
+            </section>
+
+            <section class="profile-card" aria-labelledby="customer-information">
+                <h2 id="customer-information">Customer information</h2>
+                <dl class="profile-details">
+                    <div class="profile-row">
+                        <dt>Name</dt>
+                        <dd>{{ basket.customer.name }}</dd>
+                    </div>
+                    <div class="profile-row">
+                        <dt>Email</dt>
+                        <dd>{{ basket.customer.email }}</dd>
+                    </div>
+                </dl>
+            </section>
+        </div>
+
+        <section class="order-card admin-table-card" aria-labelledby="basket-contents">
+            <h2 id="basket-contents" class="admin-card-heading">Basket contents</h2>
+            {% if basket.items | length %}
+            <table class="order-items admin-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Product</th>
+                        <th scope="col" class="admin-numeric">Quantity</th>
+                        <th scope="col" class="admin-numeric">Unit price</th>
+                        <th scope="col" class="admin-numeric">Total price</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in basket.items %}
+                    <tr>
+                        <td>{{ item.productName }}</td>
+                        <td class="admin-numeric">{{ item.quantity }}</td>
+                        <td class="admin-numeric">{{ item.unitPrice }}</td>
+                        <td class="admin-numeric">{{ item.totalPrice }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="order-empty" role="status">This basket is empty.</p>
+            {% endif %}
+
+            <dl class="admin-basket-summary" aria-label="Basket summary">
+                <div class="summary-row">
+                    <dt>Total items</dt>
+                    <dd>{{ basket.itemCount }}</dd>
+                </div>
+                <div class="summary-row summary-row--total">
+                    <dt>Basket total</dt>
+                    <dd>{{ basket.total }}</dd>
+                </div>
+            </dl>
+        </section>
+        {% endif %}
+    </main>
+</body>
+
+</html>

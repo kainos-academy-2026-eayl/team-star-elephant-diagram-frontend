@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if user %}{{ user.name }} | {% endif %}Users | Admin | Shop</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+
+<body>
+    {% set activeNav = "users" %}
+    {% include "partials/admin-nav.njk" %}
+
+    <main class="container">
+        <p><a href="/admin/users" class="admin-back-link">&larr; Back to users</a></p>
+
+        {% if notFound %}
+        <h1 class="section-heading">User not found</h1>
+        <p class="order-empty">This user account does not exist.</p>
+        {% elif error %}
+        <h1 class="section-heading">User details</h1>
+        <div class="error-message" role="alert">
+            {{ error }}
+            <a href="/admin/users/{{ userId | urlencode }}">Retry</a>
+        </div>
+        {% else %}
+        <h1 class="section-heading">{{ user.name }}</h1>
+
+        {% if updated == "suspended" %}
+        <div class="success-message" role="status">The account has been suspended.</div>
+        {% elif updated == "reactivated" %}
+        <div class="success-message" role="status">The account has been reactivated.</div>
+        {% endif %}
+        {% if actionFailed %}
+        <div class="error-message" role="alert">The account status could not be updated. Please try again.</div>
+        {% endif %}
+
+        <section class="profile-card" aria-labelledby="customer-information">
+            <h2 id="customer-information">Customer information</h2>
+            <dl class="profile-details">
+                <div class="profile-row">
+                    <dt>Name</dt>
+                    <dd>{{ user.name }}</dd>
+                </div>
+                <div class="profile-row">
+                    <dt>Email</dt>
+                    <dd>{{ user.email }}</dd>
+                </div>
+                <div class="profile-row">
+                    <dt>Registered</dt>
+                    <dd>{{ user.displayRegisteredAt }}</dd>
+                </div>
+                <div class="profile-row">
+                    <dt>Account status</dt>
+                    <dd><span class="order-status{% if user.isSuspended %} status-suspended{% endif %}">{{ user.statusLabel }}</span></dd>
+                </div>
+            </dl>
+
+            <div class="admin-user-actions">
+                {% if user.isSuspended %}
+                <form action="{{ user.detailsHref }}/reactivate" method="post">
+                    <button type="submit" class="btn btn--secondary">Reactivate account</button>
+                </form>
+                {% else %}
+                <form action="{{ user.detailsHref }}/suspend" method="post">
+                    <button type="submit" class="btn btn--danger">Suspend account</button>
+                </form>
+                {% endif %}
+            </div>
+        </section>
+
+        <div class="activity-grid">
+            <section class="order-card" aria-labelledby="orders-summary">
+                <h2 id="orders-summary">Recent orders</h2>
+                <table class="order-items">
+                    <thead>
+                        <tr>
+                            <th scope="col">Order</th>
+                            <th scope="col">Date</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for order in recentOrders %}
+                        <tr>
+                            <td>#{{ order.id }}</td>
+                            <td>{{ order.displayPlacedAt }}</td>
+                            <td><span class="order-status">{{ order.status }}</span></td>
+                            <td>{{ order.displayTotal }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="order-empty">No orders yet.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </section>
+
+            <section class="order-card" aria-labelledby="basket-summary">
+                <h2 id="basket-summary">Current basket</h2>
+                {% if basket.items | length %}
+                <table class="order-items">
+                    <thead>
+                        <tr>
+                            <th scope="col">Product</th>
+                            <th scope="col">Quantity</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in basket.items %}
+                        <tr>
+                            <td>{{ item.productName }}</td>
+                            <td>{{ item.quantity }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <th scope="row">{{ basket.itemCount }} item{% if basket.itemCount != 1 %}s{% endif %}</th>
+                            <th class="order-total">{{ basket.displaySubtotal }}</th>
+                        </tr>
+                    </tfoot>
+                </table>
+                {% else %}
+                <p class="order-empty">The basket is empty.</p>
+                {% endif %}
+            </section>
+        </div>
+        {% endif %}
+    </main>
+</body>
+
+</html>

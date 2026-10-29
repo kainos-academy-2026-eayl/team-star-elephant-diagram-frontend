@@ -22,16 +22,21 @@ import { SessionService } from "./services/sessionService";
 
 export function createApp({
 	apiBaseUrl = process.env.API_BASE_URL ?? "http://localhost:3001",
+	trustedProxy = process.env.TRUSTED_PROXY,
 	fetch: fetchApi = fetch,
 }: {
 	apiBaseUrl?: string;
+	trustedProxy?: string;
 	fetch?: typeof fetch;
 } = {}): Express {
 	const app = express();
+	if (trustedProxy) {
+		app.set("trust proxy", trustedProxy);
+	}
 	const api = new BackendApi(apiBaseUrl, fetchApi);
 	const sessions = new SessionService(api);
 	const authController = new AuthController(new AuthService(api), sessions);
-	const adminController = new AdminController(new AdminService(sessions));
+	const adminController = new AdminController(new AdminService(api, sessions));
 	const basketController = new BasketController(new BasketService(sessions));
 	const pageController = new PageController();
 	const productController = new ProductController(new ProductService(api));

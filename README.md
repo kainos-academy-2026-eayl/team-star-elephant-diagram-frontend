@@ -67,6 +67,23 @@ Customer and staff login share cookie names, so they replace one another.
 Basket persistence and staff dashboard metrics still require backend functionality;
 the profile shows identity, but order history remains explicitly unavailable.
 
+Admin user management (`/admin/users`, `/admin/users/:id`) forwards the staff
+`Authorization`/`Cookie` headers to backend `GET /admin/users?search=&page=`
+(`{ users, pagination? }`), `GET /admin/users/:id`
+(`{ user, recentOrders, basket }`), and `POST /admin/users/:id/suspend` or
+`/reactivate`. These backend endpoints are not implemented yet; see
+`src/models/adminUser.ts` for the expected shapes.
+When deployed behind a TLS-terminating reverse proxy, set `TRUSTED_PROXY` to
+the proxy's IP address or CIDR (comma-separated for multiple proxies) so HTTPS
+origin checks use the forwarded protocol. Only trust the actual proxy addresses
+and prevent untrusted clients from connecting directly to the frontend.
+
+Admin basket viewing (`/admin/baskets`, `/admin/baskets/:id`) forwards the same
+staff headers to backend `GET /admin/baskets` (`{ baskets }`) and
+`GET /admin/baskets/:id` (`{ basket }`). Basket search is filtered on the
+frontend by basket ID, customer name or email. These backend endpoints are not
+implemented yet; see `src/models/adminBasket.ts` for the expected shapes.
+
 ## Continuous integration
 
 Use Node.js 22 (see [.nvmrc](.nvmrc)). To run the same checks as CI:
