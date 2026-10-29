@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { BackendApi } from "../api/BackendApi";
+import { BackendApiError } from "../backendApi";
 import type { ProductExpandedService } from "../services/ProductExpandedService";
 
 export class ProductExpandedController {
@@ -9,9 +9,17 @@ export class ProductExpandedController {
         req: Request<{ id: string }>,
         res: Response
     ): Promise<void> {
-        const productId = req.params.id;
-        const productExpanded = await this.productExpandedService.getProductExpanded(productId);
-        res.json(productExpanded);
+        try {
+            const productId = req.params.id;
+            const productExpanded = await this.productExpandedService.getProductExpanded(productId);
+            res.json(productExpanded);
+        } catch (error) {
+            if (error instanceof BackendApiError) {
+                res.status(error.status).json({ message: error.message });
+            } else {
+                res.status(500).json({ message: "Internal server error" });
+            }
+        }
     }
 
    
