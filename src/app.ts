@@ -6,20 +6,17 @@ import { AuthController } from "./controllers/authController";
 import { BasketController } from "./controllers/basketController";
 import { PageController } from "./controllers/pageController";
 import { ProductController } from "./controllers/productController";
-import { ProductExpandedController } from "./controllers/ProductExpandedController";
 import { ProfileController } from "./controllers/profileController";
 import { createAdminRoutes } from "./routes/adminRoutes";
 import { createAuthRoutes } from "./routes/authRoutes";
 import { createBasketRoutes } from "./routes/basketRoutes";
 import { createPageRoutes } from "./routes/pageRoutes";
 import { createProductRoutes } from "./routes/productRoutes";
-import { createProductExpandedRoutes } from "./routes/ProductExpandedRoutes";
 import { createProfileRoutes } from "./routes/profileRoutes";
 import { AdminService } from "./services/adminService";
 import { AuthService } from "./services/authService";
 import { BasketService } from "./services/basketService";
 import { ProductService } from "./services/productService";
-import { ProductExpandedService } from "./services/ProductExpandedService";
 import { ProfileService } from "./services/profileService";
 
 export function createApp({
@@ -36,9 +33,6 @@ export function createApp({
 	const basketController = new BasketController(new BasketService(api));
 	const pageController = new PageController();
 	const productController = new ProductController(new ProductService(api));
-	const productExpandedController = new ProductExpandedController(
-		new ProductExpandedService(api),
-	);
 	const profileController = new ProfileController(new ProfileService(api));
 
 	nunjucks.configure("src/pages", {
@@ -57,7 +51,6 @@ export function createApp({
 	app.use(createAuthRoutes(authController));
 	app.use(createBasketRoutes(basketController));
 	app.use(createProductRoutes(productController));
-	app.use(createProductExpandedRoutes(productExpandedController));
 	app.use(createProfileRoutes(profileController));
 
 	return app;

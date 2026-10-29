@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Top Picks | Shop</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="/styles.css">
 </head>
 
 <body>
@@ -50,13 +50,15 @@
         <section class="product-grid">
             {% for product in products %}
             <article class="product-card">
-                <div class="product-image">
-                    {% if product.imageURL %}<img src="{{ product.imageURL }}" alt="{{ product.name }}" loading="lazy" style="width: 100%; height: 100%; object-fit: contain;">{% endif %}
-                </div>
+                <a class="product-image" href="/products/{{ product.productId }}" tabindex="-1" aria-hidden="true">
+                    {% if product.imageURL %}<img src="{{ product.imageURL }}" alt="" loading="lazy">{% endif %}
+                </a>
                 <div class="product-info">
-                    <h2><a href="/products/{{ product.prod_id }}">{{ product.name }}</a></h2>
-                    <p>{{ product.description }}</p>
+                    <p class="product-card__category">{{ product.category }}</p>
+                    <h2 class="product-card__title"><a href="/products/{{ product.productId }}">{{ product.name }}</a></h2>
+                    <p class="product-card__description" title="{{ product.description }}">{{ product.shortDescription }}</p>
                     <p class="product-price">{{ product.formattedPrice }}</p>
+                    <a class="product-card__link" href="/products/{{ product.productId }}" aria-label="View details for {{ product.name }}">View details</a>
                 </div>
             </article>
             {% else %}
