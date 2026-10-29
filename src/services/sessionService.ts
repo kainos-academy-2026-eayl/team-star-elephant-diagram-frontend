@@ -26,7 +26,11 @@ function cookieValue(req: Request, name: string): string | undefined {
 export class SessionService {
 	private readonly refreshing = new Map<
 		string,
-		Promise<{ result: LoginResponse; cookies: string[] }>
+		{
+			promise: Promise<{ result: LoginResponse; cookies: string[] }>;
+			invalidated: boolean;
+			users: number;
+		}
 	>();
 
 	constructor(private readonly api: BackendApi) {}
@@ -65,40 +69,55 @@ export class SessionService {
 		}
 		const refresh = cookieValue(req, "refreshToken");
 		if (!refresh) throw new BackendApiError(401, "Please log in.");
-		let pending = this.refreshing.get(refresh);
-		if (!pending) {
-			pending = this.api.requestWithResponse<LoginResponse>(
-				"/auth/refresh",
-				{},
-				{
-					Cookie: `refreshToken=${refresh}`,
-				},
-			);
-			this.refreshing.set(refresh, pending);
+		let operation = this.refreshing.get(refresh);
+		if (!operation) {
+			operation = {
+				promise: this.api.requestWithResponse<LoginResponse>(
+					"/auth/refresh",
+					{},
+					{
+						Cookie: `refreshToken=${refresh}`,
+					},
+				),
+				invalidated: false,
+				users: 0,
+			};
+			this.refreshing.set(refresh, operation);
 		}
+		operation.users += 1;
 		try {
-			const credentials = await pending;
-			this.establish(res, credentials);
-			return await this.api.request<Result>(path, undefined, {
+			const credentials = await operation.promise;
+			const result = await this.api.request<Result>(path, undefined, {
 				Authorization: `Bearer ${credentials.result.accessToken}`,
 			});
+			if (!operation.invalidated) this.establish(res, credentials);
+			return result;
 		} catch (error) {
 			if (error instanceof BackendApiError && error.status === 401)
 				this.clear(res);
 			throw error;
 		} finally {
-			if (this.refreshing.get(refresh) === pending)
+			operation.users -= 1;
+			if (operation.users === 0 && this.refreshing.get(refresh) === operation)
 				this.refreshing.delete(refresh);
 		}
 	}
 
 	async logout(req: Request, res: Response): Promise<void> {
 		const refresh = cookieValue(req, "refreshToken");
+		if (refresh) {
+			const operation = this.refreshing.get(refresh);
+			if (operation) operation.invalidated = true;
+		}
 		await this.api.request(
 			"/auth/logout",
 			{},
 			refresh ? { Cookie: `refreshToken=${refresh}` } : {},
 		);
+		if (refresh) {
+			const operation = this.refreshing.get(refresh);
+			if (operation) operation.invalidated = true;
+		}
 		this.clear(res);
 	}
 

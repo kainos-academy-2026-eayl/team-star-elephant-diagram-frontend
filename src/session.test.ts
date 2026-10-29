@@ -199,6 +199,56 @@ describe("persistent authentication", () => {
 		expect(result.headers["set-cookie"]).toHaveLength(2);
 	});
 
+	it("does not restore cookies when a refreshed protected response arrives after logout", async () => {
+		let resolveRefresh!: (result: Response) => void;
+		const refreshResponse = new Promise<Response>((resolve) => {
+			resolveRefresh = resolve;
+		});
+		let refreshStarted!: () => void;
+		const refreshRequestStarted = new Promise<void>((resolve) => {
+			refreshStarted = resolve;
+		});
+		let resolveProfile!: (result: Response) => void;
+		const profileResponse = new Promise<Response>((resolve) => {
+			resolveProfile = resolve;
+		});
+		let profileStarted!: () => void;
+		const profileRequestStarted = new Promise<void>((resolve) => {
+			profileStarted = resolve;
+		});
+		const api = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+			const path = String(input);
+			if (path.endsWith("/auth/refresh")) {
+				refreshStarted();
+				return refreshResponse;
+			}
+			if (path.endsWith("/profile")) {
+				profileStarted();
+				return profileResponse;
+			}
+			return response({ status: "Success" });
+		});
+		const app = createApp({ fetch: api });
+		const pageRequest = request(app)
+			.get("/profile")
+			.set("Cookie", "refreshToken=current-refresh")
+			.then((result) => result);
+
+		await refreshRequestStarted;
+		resolveRefresh(credentials());
+		await profileRequestStarted;
+
+		const logout = await request(app)
+			.post("/logout")
+			.set("Cookie", "refreshToken=current-refresh; accessToken=old-access");
+		expect(logout.status).toBe(303);
+		resolveProfile(response(profile));
+		const page = await pageRequest;
+
+		expect(page.status).toBe(200);
+		expect(page.headers["set-cookie"]).toBeUndefined();
+	});
+
 	it("rejects cross-origin login and logout", async () => {
 		const api = vi.fn<typeof fetch>();
 		const app = createApp({ fetch: api });
