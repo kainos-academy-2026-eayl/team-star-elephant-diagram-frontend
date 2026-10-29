@@ -1,9 +1,6 @@
 import type { Request, Response } from "express";
 import { BackendApiError } from "../backendApi";
-import type {
-	BasketRequestCredentials,
-	BasketService,
-} from "../services/basketService";
+import type { BasketService } from "../services/basketService";
 
 const formatPrice = (amount: number): string =>
 	new Intl.NumberFormat("en-GB", {
@@ -15,23 +12,8 @@ export class BasketController {
 	constructor(private readonly basketService: BasketService) {}
 
 	async getBasket(req: Request, res: Response): Promise<void> {
-		const authorization = req.get("authorization");
-		const cookie = req.get("cookie");
-		const credentials: BasketRequestCredentials = {
-			...(authorization ? { authorization } : {}),
-			...(cookie ? { cookie } : {}),
-		};
-		if (!authorization && !cookie) {
-			res.status(401).render("basket", {
-				error: "Please log in to view your basket.",
-				loginRequired: true,
-				basket: { items: [], itemCount: 0, displaySubtotal: formatPrice(0) },
-			});
-			return;
-		}
-
 		try {
-			const basket = await this.basketService.getBasket(credentials);
+			const basket = await this.basketService.getBasket(req, res);
 			const items = basket.items.map((item) => ({
 				...item,
 				imageURL: /^https?:\/\//i.test(item.imageURL ?? "")

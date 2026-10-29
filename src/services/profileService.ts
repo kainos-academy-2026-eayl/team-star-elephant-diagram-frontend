@@ -1,10 +1,11 @@
-import type { BackendApi } from "../backendApi";
+import type { Request, Response } from "express";
 import type { ProfileData } from "../models/profile";
+import type { SessionService } from "./sessionService";
 
 export class ProfileService {
-	constructor(private readonly api: BackendApi) {}
+	constructor(private readonly sessions: SessionService) {}
 
-	getProfile(): Promise<ProfileData> {
-		return this.api.request<ProfileData>("/profile");
+	getProfile(req: Request, res: Response): Promise<ProfileData> {
+		return this.sessions.request<ProfileData>("/profile", req, res);
 	}
 }

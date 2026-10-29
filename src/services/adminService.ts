@@ -1,4 +1,5 @@
-import type { BackendApi } from "../backendApi";
+import type { Request, Response } from "express";
+import type { SessionService } from "./sessionService";
 
 export interface AdminDashboard {
 	staff: { name: string };
@@ -19,24 +20,10 @@ export interface AdminDashboard {
 	}>;
 }
 
-export interface AdminRequestCredentials {
-	authorization?: string;
-	cookie?: string;
-}
-
 export class AdminService {
-	constructor(private readonly api: BackendApi) {}
+	constructor(private readonly sessions: SessionService) {}
 
-	getDashboard(credentials: AdminRequestCredentials): Promise<AdminDashboard> {
-		const headers: Record<string, string> = {};
-		if (credentials.authorization) {
-			headers.Authorization = credentials.authorization;
-		}
-		if (credentials.cookie) {
-			headers.Cookie = credentials.cookie;
-		}
-		return this.api.request<AdminDashboard>("/admin", undefined, {
-			...headers,
-		});
+	getDashboard(req: Request, res: Response): Promise<AdminDashboard> {
+		return this.sessions.request<AdminDashboard>("/admin", req, res);
 	}
 }
