@@ -11,8 +11,9 @@
         <ul class="category-links">
             <li><a href="/admin"{% if activeNav == "dashboard" %} class="active" aria-current="page"{% endif %}>Dashboard</a></li>
             <li><a href="/admin/users"{% if activeNav == "users" %} class="active" aria-current="page"{% endif %}>Users</a></li>
+            <li><a href="/admin/baskets"{% if activeNav == "baskets" %} class="active" aria-current="page"{% endif %}>Baskets</a></li>
             {% for section in sections %}
-            {% if section.label | lower != "users" %}
+            {% if section.label | lower not in ["users", "baskets"] %}
             <li><span class="unavailable-link" aria-disabled="true">{{ section.label }} (Unavailable)</span></li>
             {% endif %}
             {% endfor %}

@@ -114,6 +114,61 @@ export class AdminController {
 		await this.changeUserStatus("reactivate", req, res);
 	}
 
+	async getBaskets(req: Request, res: Response): Promise<void> {
+		const credentials = this.getCredentials(req);
+		if (!credentials) {
+			res.sendStatus(401);
+			return;
+		}
+		const search = this.adminService.normaliseSearch(req.query.q);
+
+		try {
+			const baskets = await this.adminService.getBaskets(credentials, search);
+			res.render("admin-baskets", { search, baskets });
+		} catch (error) {
+			if (isAuthError(error)) {
+				res.sendStatus(error.status);
+				return;
+			}
+			res.status(503).render("admin-baskets", {
+				search,
+				baskets: [],
+				error: "Baskets are temporarily unavailable. Please try again.",
+			});
+		}
+	}
+
+	async getBasketDetails(req: Request, res: Response): Promise<void> {
+		const credentials = this.getCredentials(req);
+		if (!credentials) {
+			res.sendStatus(401);
+			return;
+		}
+		const id = String(req.params.id ?? "");
+		if (!this.adminService.isValidId(id)) {
+			this.renderBasketNotFound(res);
+			return;
+		}
+
+		try {
+			const basket = await this.adminService.getBasketById(credentials, id);
+			res.render("admin-basket-details", { basket, basketId: id });
+		} catch (error) {
+			if (isAuthError(error)) {
+				res.sendStatus(error.status);
+				return;
+			}
+			if (isNotFound(error)) {
+				this.renderBasketNotFound(res);
+				return;
+			}
+			res.status(503).render("admin-basket-details", {
+				basketId: id,
+				error: "Basket details are temporarily unavailable. Please try again.",
+			});
+		}
+	}
+
 	private async changeUserStatus(
 		action: AdminUserStatusAction,
 		req: Request,
@@ -140,7 +195,7 @@ export class AdminController {
 			return;
 		}
 
-		const detailsPath = `/admin/users/${encodeURIComponent(id)}`;
+		const detailsPath = this.adminService.getUserDetailsHref(id);
 		try {
 			const updated = await this.adminService.changeUserStatus(
 				credentials,
@@ -170,5 +225,9 @@ export class AdminController {
 
 	private renderUserNotFound(res: Response): void {
 		res.status(404).render("admin-user-details", { notFound: true });
+	}
+
+	private renderBasketNotFound(res: Response): void {
+		res.status(404).render("admin-basket-details", { notFound: true });
 	}
 }

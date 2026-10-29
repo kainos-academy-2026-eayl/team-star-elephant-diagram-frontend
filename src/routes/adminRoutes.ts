@@ -15,6 +15,12 @@ export function createAdminRoutes(adminController: AdminController): Router {
 	router.post("/admin/users/:id/reactivate", (req, res) =>
 		adminController.postReactivateUser(req, res),
 	);
+	router.get("/admin/baskets", (req, res) =>
+		adminController.getBaskets(req, res),
+	);
+	router.get("/admin/baskets/:id", (req, res) =>
+		adminController.getBasketDetails(req, res),
+	);
 
 	return router;
 }
