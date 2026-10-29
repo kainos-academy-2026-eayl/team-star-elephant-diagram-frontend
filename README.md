@@ -35,8 +35,7 @@ failures display an unavailable message with status 503.
 The `/payment_gateway` checkout page loads selectable products from the backend
 `Product` table. Its `POST /payment_gateway` endpoint accepts product IDs and
 quantities, verifies each item and calculates totals from backend product prices
-(in pence). The gateway is simulated only: it does not collect card details,
-create an order, or charge a payment method.
+(in pence).
 Payment request validation, product lookup, and simulation are handled by
 `PaymentGatewayService`; the controller only handles HTTP responses and rendering.
 
