@@ -56,6 +56,22 @@ const getCredentials = (req: Request): AdminRequestCredentials => {
 const hasCredentials = (credentials: AdminRequestCredentials): boolean =>
 	Boolean(credentials.authorization || credentials.cookie);
 
+const hasSameOrigin = (req: Request): boolean => {
+	const origin = req.get("origin");
+	const host = req.get("host");
+	if (!origin || !host) {
+		return false;
+	}
+
+	try {
+		return (
+			new URL(origin).origin === new URL(`${req.protocol}://${host}`).origin
+		);
+	} catch {
+		return false;
+	}
+};
+
 const isAuthError = (error: unknown): error is BackendApiError =>
 	error instanceof BackendApiError && [401, 403].includes(error.status);
 
@@ -208,6 +224,10 @@ export class AdminController {
 		const credentials = getCredentials(req);
 		if (!hasCredentials(credentials)) {
 			res.sendStatus(401);
+			return;
+		}
+		if (!hasSameOrigin(req)) {
+			res.sendStatus(403);
 			return;
 		}
 

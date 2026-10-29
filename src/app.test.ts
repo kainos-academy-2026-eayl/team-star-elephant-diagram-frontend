@@ -385,6 +385,8 @@ describe("app", () => {
 				createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 			)
 				.post(`/admin/users/7/${action}`)
+				.set("Host", "shop.example")
+				.set("Origin", "http://shop.example")
 				.set("Cookie", "session=staff-session");
 
 			expect(res.status).toBe(303);
@@ -397,6 +399,34 @@ describe("app", () => {
 				Cookie: "session=staff-session",
 			});
 		});
+
+		it.each(["suspend", "reactivate"])(
+			"rejects cross-origin %s requests before calling the backend",
+			async (action) => {
+				const fetchApi = vi.fn<typeof fetch>();
+				const res = await request(createApp({ fetch: fetchApi }))
+					.post(`/admin/users/7/${action}`)
+					.set("Host", "shop.example")
+					.set("Origin", "https://attacker.example")
+					.set("Cookie", "session=staff-session");
+
+				expect(res.status).toBe(403);
+				expect(fetchApi).not.toHaveBeenCalled();
+			},
+		);
+
+		it.each(["suspend", "reactivate"])(
+			"rejects %s requests without an Origin before calling the backend",
+			async (action) => {
+				const fetchApi = vi.fn<typeof fetch>();
+				const res = await request(createApp({ fetch: fetchApi }))
+					.post(`/admin/users/7/${action}`)
+					.set("Cookie", "session=staff-session");
+
+				expect(res.status).toBe(403);
+				expect(fetchApi).not.toHaveBeenCalled();
+			},
+		);
 
 		it("confirms a status change on the details page", async () => {
 			const fetchApi = vi
@@ -425,6 +455,8 @@ describe("app", () => {
 				.mockResolvedValue(jsonResponse({ error: "Forbidden" }, 403));
 			const res = await request(createApp({ fetch: fetchApi }))
 				.post("/admin/users/7/suspend")
+				.set("Host", "shop.example")
+				.set("Origin", "http://shop.example")
 				.set("Cookie", "session=customer-session");
 
 			expect(res.status).toBe(403);
@@ -438,6 +470,8 @@ describe("app", () => {
 			const app = createApp({ fetch: fetchApi });
 			const res = await request(app)
 				.post("/admin/users/7/suspend")
+				.set("Host", "shop.example")
+				.set("Origin", "http://shop.example")
 				.set("Cookie", "session=staff-session");
 
 			expect(res.status).toBe(303);
