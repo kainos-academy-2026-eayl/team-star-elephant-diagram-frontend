@@ -50,3 +50,41 @@ export interface AdminUserDetailsResponse {
 export interface AdminUserStatusResponse {
 	user: Pick<AdminUserSummary, "id" | "status">;
 }
+
+export type AdminUserStatusAction = "suspend" | "reactivate";
+
+export type AdminUserStatusUpdate = "suspended" | "reactivated";
+
+export interface AdminUserView extends AdminUserSummary {
+	detailsHref: string;
+	displayRegisteredAt: string;
+	statusLabel: "Active" | "Suspended";
+	isSuspended: boolean;
+}
+
+export interface AdminUserOrderView extends AdminUserOrder {
+	displayPlacedAt: string;
+	displayTotal: string;
+}
+
+export interface AdminUserBasketView {
+	itemCount: number;
+	items: AdminUserBasket["items"];
+	displaySubtotal: string;
+}
+
+export interface AdminUserPaginationView extends AdminUserPagination {
+	previousHref?: string | undefined;
+	nextHref?: string | undefined;
+}
+
+export interface AdminUserListView {
+	users: AdminUserView[];
+	pagination?: AdminUserPaginationView;
+}
+
+export interface AdminUserDetailsView {
+	user: AdminUserView;
+	recentOrders: AdminUserOrderView[];
+	basket: AdminUserBasketView;
+}
