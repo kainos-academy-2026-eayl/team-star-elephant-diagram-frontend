@@ -1,4 +1,4 @@
- export interface ProfileUser {
+export interface ProfileUser {
 	firstName: string;
 	lastName: string;
 	email: string;

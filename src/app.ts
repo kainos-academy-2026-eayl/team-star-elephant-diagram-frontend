@@ -4,22 +4,22 @@ import { BackendApi } from "./backendApi";
 import { AdminController } from "./controllers/adminController";
 import { AuthController } from "./controllers/authController";
 import { BasketController } from "./controllers/basketController";
+import { ProductExpandedController } from "./controllers/ProductExpandedController";
 import { PageController } from "./controllers/pageController";
 import { ProductController } from "./controllers/productController";
-import { ProductExpandedController } from "./controllers/ProductExpandedController";
 import { ProfileController } from "./controllers/profileController";
 import { createAdminRoutes } from "./routes/adminRoutes";
 import { createAuthRoutes } from "./routes/authRoutes";
 import { createBasketRoutes } from "./routes/basketRoutes";
+import { createProductExpandedRoutes } from "./routes/ProductExpandedRoutes";
 import { createPageRoutes } from "./routes/pageRoutes";
 import { createProductRoutes } from "./routes/productRoutes";
-import { createProductExpandedRoutes } from "./routes/ProductExpandedRoutes";
 import { createProfileRoutes } from "./routes/profileRoutes";
 import { AdminService } from "./services/adminService";
 import { AuthService } from "./services/authService";
 import { BasketService } from "./services/basketService";
-import { ProductService } from "./services/productService";
 import { ProductExpandedService } from "./services/ProductExpandedService";
+import { ProductService } from "./services/productService";
 import { ProfileService } from "./services/profileService";
 
 export function createApp({
