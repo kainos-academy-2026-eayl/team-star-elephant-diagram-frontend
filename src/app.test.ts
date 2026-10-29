@@ -706,6 +706,32 @@ describe("app", () => {
 			});
 		});
 
+		it.each([
+			["suspend", "suspended"],
+			["reactivate", "reactivated"],
+		])(
+			"accepts HTTPS-proxied %s requests from the configured proxy",
+			async (action, updated) => {
+				const fetchApi = vi
+					.fn<typeof fetch>()
+					.mockResolvedValue(
+						jsonResponse({ user: { id: 7, status: "suspended" } }),
+					);
+				const res = await request(
+					createApp({ fetch: fetchApi, trustedProxy: "loopback" }),
+				)
+					.post(`/admin/users/7/${action}`)
+					.set("Host", "shop.example")
+					.set("Origin", "https://shop.example")
+					.set("X-Forwarded-Proto", "https")
+					.set("Cookie", "session=staff-session");
+
+				expect(res.status).toBe(303);
+				expect(res.headers.location).toBe(`/admin/users/7?updated=${updated}`);
+				expect(fetchApi).toHaveBeenCalledOnce();
+			},
+		);
+
 		it.each(["suspend", "reactivate"])(
 			"rejects cross-origin %s requests before calling the backend",
 			async (action) => {

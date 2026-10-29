@@ -40,6 +40,10 @@ Admin user management (`/admin/users`, `/admin/users/:id`) forwards the staff
 (`{ user, recentOrders, basket }`), and `POST /admin/users/:id/suspend` or
 `/reactivate`. These backend endpoints are not implemented yet; see
 `src/models/adminUser.ts` for the expected shapes.
+When deployed behind a TLS-terminating reverse proxy, set `TRUSTED_PROXY` to
+the proxy's IP address or CIDR (comma-separated for multiple proxies) so HTTPS
+origin checks use the forwarded protocol. Only trust the actual proxy addresses
+and prevent untrusted clients from connecting directly to the frontend.
 
 Admin basket viewing (`/admin/baskets`, `/admin/baskets/:id`) forwards the same
 staff headers to backend `GET /admin/baskets` (`{ baskets }`) and
