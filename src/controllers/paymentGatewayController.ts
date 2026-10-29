@@ -1,6 +1,9 @@
 import type { Request, Response } from "express";
+import type {
+	BasketRequestCredentials,
+	BasketService,
+} from "../services/basketService";
 import type { PaymentGatewayService } from "../services/paymentGatewayService";
-import type { BasketService, BasketRequestCredentials } from "../services/basketService";
 
 export class PaymentGatewayController {
 	constructor(
