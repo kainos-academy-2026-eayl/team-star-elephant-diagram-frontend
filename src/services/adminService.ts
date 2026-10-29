@@ -1,5 +1,12 @@
 import type { BackendApi } from "../backendApi";
 import type {
+	BasketDetails,
+	BasketDetailsResponse,
+	BasketListResponse,
+	BasketSummary,
+	BasketSummaryView,
+} from "../models/adminBasket";
+import type {
 	AdminUserDetailsResponse,
 	AdminUserDetailsView,
 	AdminUserListQuery,
@@ -58,6 +65,9 @@ const toHeaders = (
 	}
 	return headers;
 };
+
+const basketPath = (id: string): string =>
+	`/admin/baskets/${encodeURIComponent(id)}`;
 
 const userPath = (id: string): string =>
 	`/admin/users/${encodeURIComponent(id)}`;
@@ -145,6 +155,10 @@ export class AdminService {
 	normalisePage(value: unknown): number {
 		const page = typeof value === "string" ? Number(value) : 1;
 		return Number.isInteger(page) && page > 0 ? page : 1;
+	}
+
+	getUserDetailsHref(id: string): string {
+		return userPath(id);
 	}
 
 	isValidId(id: string): boolean {
@@ -235,5 +249,42 @@ export class AdminService {
 
 	parseStatusUpdate(value: unknown): AdminUserStatusUpdate | undefined {
 		return value === "suspended" || value === "reactivated" ? value : undefined;
+	}
+
+	async getBaskets(
+		credentials: AdminRequestCredentials,
+		search = "",
+	): Promise<BasketSummaryView[]> {
+		const { baskets } = await this.api.request<BasketListResponse>(
+			"/admin/baskets",
+			undefined,
+			toHeaders(credentials),
+		);
+		const normalisedSearch = search.trim().toLowerCase();
+		return (baskets ?? [])
+			.filter(
+				(basket: BasketSummary) =>
+					!normalisedSearch ||
+					[basket.basketId, basket.customerName, basket.customerEmail]
+						.join(" ")
+						.toLowerCase()
+						.includes(normalisedSearch),
+			)
+			.map((basket) => ({
+				...basket,
+				detailsHref: basketPath(String(basket.basketId)),
+			}));
+	}
+
+	async getBasketById(
+		credentials: AdminRequestCredentials,
+		id: string,
+	): Promise<BasketDetails> {
+		const { basket } = await this.api.request<BasketDetailsResponse>(
+			basketPath(id),
+			undefined,
+			toHeaders(credentials),
+		);
+		return basket;
 	}
 }

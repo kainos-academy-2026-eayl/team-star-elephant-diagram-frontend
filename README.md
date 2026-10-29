@@ -41,6 +41,12 @@ Admin user management (`/admin/users`, `/admin/users/:id`) forwards the staff
 `/reactivate`. These backend endpoints are not implemented yet; see
 `src/models/adminUser.ts` for the expected shapes.
 
+Admin basket viewing (`/admin/baskets`, `/admin/baskets/:id`) forwards the same
+staff headers to backend `GET /admin/baskets` (`{ baskets }`) and
+`GET /admin/baskets/:id` (`{ basket }`). Basket search is filtered on the
+frontend by basket ID, customer name or email. These backend endpoints are not
+implemented yet; see `src/models/adminBasket.ts` for the expected shapes.
+
 ## Continuous integration
 
 Use Node.js 22 (see [.nvmrc](.nvmrc)). To run the same checks as CI:
