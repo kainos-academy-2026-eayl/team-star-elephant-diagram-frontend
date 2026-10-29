@@ -51,7 +51,7 @@
 				</ul>
 				{% else %}
 				<h2 id="checkout-heading">Choose your products</h2>
-				<p class="payment-intro">Select quantities to preview a simulated checkout. No payment details are collected.</p>
+				<p class="payment-intro">Select quantities for checkout. Enter payment details.</p>
 				{% if error %}
 				<div class="payment-notice payment-notice--error" role="alert">{{ error }}</div>
 				{% endif %}
@@ -92,7 +92,7 @@
 					<span>{{ paymentResult.formattedTotal }}</span>
 				</div>
 				{% else %}
-				<p class="payment-intro">Choose product quantities to submit a simulated checkout.</p>
+				<p class="payment-intro">Choose product quantities to submit checkout.</p>
 				{% endif %}
 
 				{% if hasItems and not paymentResult %}
