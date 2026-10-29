@@ -112,7 +112,9 @@ export class SessionService {
 			maxAge: credentials.result.expiresIn * 1000,
 		});
 		for (const cookie of credentials.cookies) {
-			if (cookie.startsWith("refreshToken=")) res.append("Set-Cookie", cookie);
+			if (cookie.startsWith("refreshToken=")) {
+				res.append("Set-Cookie", cookie.replace(/;\s*Domain\s*=[^;]*/gi, ""));
+			}
 		}
 	}
 
