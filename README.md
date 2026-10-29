@@ -38,6 +38,13 @@ Backend requests time out after five seconds and show an unavailable message.
 Login currently checks credentials only; sessions, protected pages, and basket
 persistence require separate backend functionality.
 
+Admin user management (`/admin/users`, `/admin/users/:id`) forwards the staff
+`Authorization`/`Cookie` headers to backend `GET /admin/users?search=&page=`
+(`{ users, pagination? }`), `GET /admin/users/:id`
+(`{ user, recentOrders, basket }`), and `POST /admin/users/:id/suspend` or
+`/reactivate`. These backend endpoints are not implemented yet; see
+`src/models/adminUser.ts` for the expected shapes.
+
 ## Continuous integration
 
 Use Node.js 22 (see [.nvmrc](.nvmrc)). To run the same checks as CI:
