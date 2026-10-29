@@ -28,11 +28,15 @@ export function createAuthRoutes(authController: AuthController): Router {
 		}
 		next();
 	});
-	router.get(["/login", "/admin/login"], (req, res) =>
-		authController.getLogin(req, res),
+	router.get("/admin/login", (req, res) =>
+		authController.getLogin(req, res, true),
 	);
+	router.get("/login", (req, res) => authController.getLogin(req, res));
 	router.get("/register", (_req, res) => authController.getRegister(res));
-	router.post(["/login", "/admin/login"], authRateLimit, (req, res) =>
+	router.post("/admin/login", authRateLimit, (req, res) =>
+		authController.postLogin(req, res, true),
+	);
+	router.post("/login", authRateLimit, (req, res) =>
 		authController.postLogin(req, res),
 	);
 	router.post("/logout", (req, res) => authController.logout(req, res));

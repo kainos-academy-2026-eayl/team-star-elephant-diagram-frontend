@@ -42,6 +42,27 @@ describe("persistent authentication", () => {
 		},
 	);
 
+	it("strips the backend cookie domain while preserving refresh-cookie expiry", async () => {
+		const api = vi.fn<typeof fetch>().mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({ accessToken: "new-access", expiresIn: 900 }),
+				{
+					headers: {
+						"Set-Cookie":
+							"refreshToken=new-refresh; Domain=backend.local; Expires=Wed, 21 Oct 2037 07:28:00 GMT; Path=/; HttpOnly; Secure; SameSite=Strict",
+					},
+				},
+			),
+		);
+		const result = await request(createApp({ fetch: api }))
+			.post("/login")
+			.type("form")
+			.send({ email: "ada@example.com", password: "correct-horse" });
+		const refreshCookie = String(result.headers["set-cookie"]);
+		expect(refreshCookie).toContain("Expires=Wed, 21 Oct 2037 07:28:00 GMT");
+		expect(refreshCookie).not.toContain("Domain=backend.local");
+	});
+
 	it.each(["customer", "admin"])(
 		"restores %s login using only a refresh cookie after reload/access expiry",
 		async (kind) => {
@@ -167,6 +188,22 @@ describe("persistent authentication", () => {
 		expect(result.headers["set-cookie"]).toHaveLength(2);
 	});
 
+	it("keeps admin login dispatch for case-insensitive URLs with trailing slashes", async () => {
+		const api = vi.fn<typeof fetch>().mockResolvedValueOnce(credentials());
+		const app = createApp({ fetch: api });
+		const form = await request(app).get("/ADMIN/LOGIN/");
+		expect(form.text).toContain('<h1 class="login__title">Admin log in</h1>');
+		expect(form.text).toContain('action="/admin/login"');
+
+		const result = await request(app)
+			.post("/ADMIN/LOGIN/")
+			.type("form")
+			.send({ email: "admin@example.com", password: "correct-horse" });
+		expect(result.status).toBe(303);
+		expect(result.headers.location).toBe("/admin");
+		expect(String(api.mock.calls[0]?.[0])).toContain("/admin/login");
+	});
+
 	it("rejects login responses missing actual tokens instead of pretending a session exists", async () => {
 		const api = vi
 			.fn<typeof fetch>()
@@ -247,6 +284,113 @@ describe("persistent authentication", () => {
 
 		expect(page.status).toBe(200);
 		expect(page.headers["set-cookie"]).toBeUndefined();
+	});
+
+	it("shares a refresh request across concurrent protected requests", async () => {
+		let resolveRefresh!: (result: Response) => void;
+		const refreshResponse = new Promise<Response>((resolve) => {
+			resolveRefresh = resolve;
+		});
+		let refreshStarted!: () => void;
+		const refreshRequestStarted = new Promise<void>((resolve) => {
+			refreshStarted = resolve;
+		});
+		let resolveBothProfiles!: () => void;
+		const bothProfilesStarted = new Promise<void>((resolve) => {
+			resolveBothProfiles = resolve;
+		});
+		let profileRequests = 0;
+		const api = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+			const path = String(input);
+			if (path.endsWith("/auth/refresh")) {
+				refreshStarted();
+				return refreshResponse;
+			}
+			if (path.endsWith("/profile")) {
+				profileRequests += 1;
+				if (profileRequests === 2) resolveBothProfiles();
+				await bothProfilesStarted;
+				return response(profile);
+			}
+			return response({ status: "Success" });
+		});
+		const app = createApp({ fetch: api });
+		const firstPage = request(app)
+			.get("/profile")
+			.set("Cookie", "refreshToken=shared-refresh")
+			.then((result) => result);
+		const secondPage = request(app)
+			.get("/profile")
+			.set("Cookie", "refreshToken=shared-refresh")
+			.then((result) => result);
+
+		await refreshRequestStarted;
+		resolveRefresh(credentials());
+		await bothProfilesStarted;
+		const [firstResult, secondResult] = await Promise.all([
+			firstPage,
+			secondPage,
+		]);
+
+		expect(
+			api.mock.calls.filter(([input]) =>
+				String(input).endsWith("/auth/refresh"),
+			),
+		).toHaveLength(1);
+		expect(firstResult.status).toBe(200);
+		expect(secondResult.status).toBe(200);
+		expect(firstResult.headers["set-cookie"]).toHaveLength(2);
+		expect(secondResult.headers["set-cookie"]).toHaveLength(2);
+	});
+
+	it("cleans up a shared failed refresh so a later request can retry", async () => {
+		let resolveRefresh!: (result: Response) => void;
+		const refreshResponse = new Promise<Response>((resolve) => {
+			resolveRefresh = resolve;
+		});
+		let refreshStarted!: () => void;
+		const refreshRequestStarted = new Promise<void>((resolve) => {
+			refreshStarted = resolve;
+		});
+		let refreshRequests = 0;
+		const api = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+			const path = String(input);
+			if (path.endsWith("/auth/refresh")) {
+				refreshRequests += 1;
+				if (refreshRequests === 1) {
+					refreshStarted();
+					return refreshResponse;
+				}
+				return credentials();
+			}
+			return response(profile);
+		});
+		const app = createApp({ fetch: api });
+		const firstPage = request(app)
+			.get("/profile")
+			.set("Cookie", "refreshToken=retry-refresh")
+			.then((result) => result);
+		const secondPage = request(app)
+			.get("/profile")
+			.set("Cookie", "refreshToken=retry-refresh")
+			.then((result) => result);
+
+		await refreshRequestStarted;
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		resolveRefresh(response({ error: "Expired refresh" }, 401));
+		const [firstResult, secondResult] = await Promise.all([
+			firstPage,
+			secondPage,
+		]);
+		expect(firstResult.status).toBe(303);
+		expect(secondResult.status).toBe(303);
+		expect(refreshRequests).toBe(1);
+
+		const retry = await request(app)
+			.get("/profile")
+			.set("Cookie", "refreshToken=retry-refresh");
+		expect(retry.status).toBe(200);
+		expect(refreshRequests).toBe(2);
 	});
 
 	it("rejects cross-origin login and logout", async () => {

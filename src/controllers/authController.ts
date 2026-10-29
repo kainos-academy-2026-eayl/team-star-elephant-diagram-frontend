@@ -9,9 +9,9 @@ export class AuthController {
 		private readonly sessions: SessionService,
 	) {}
 
-	getLogin(req: Request, res: Response): void {
+	getLogin(req: Request, res: Response, admin = false): void {
 		res.render("login", {
-			admin: req.path === "/admin/login",
+			admin,
 			registered: req.query.registered === "1",
 			passwordReset: req.query.reset === "1",
 		});
@@ -21,8 +21,8 @@ export class AuthController {
 		res.render("register");
 	}
 
-	async postLogin(req: Request, res: Response): Promise<void> {
-		await this.submit("login", req, res);
+	async postLogin(req: Request, res: Response, admin = false): Promise<void> {
+		await this.submit("login", req, res, admin);
 	}
 
 	async logout(req: Request, res: Response): Promise<void> {
@@ -67,6 +67,7 @@ export class AuthController {
 		page: "login" | "register" | "forgot-password" | "reset-password",
 		req: Request,
 		res: Response,
+		admin = false,
 	): Promise<void> {
 		const fields =
 			page === "register"
@@ -104,12 +105,12 @@ export class AuthController {
 			} else {
 				this.sessions.establish(
 					res,
-					await this.authService.login(values, req.path === "/admin/login"),
+					await this.authService.login(values, admin),
 				);
 			}
 			const destinations = {
 				register: "/login?registered=1",
-				login: req.path === "/admin/login" ? "/admin" : "/products",
+				login: admin ? "/admin" : "/products",
 				"forgot-password": "/forgot-password?sent=1",
 				"reset-password": "/login?reset=1",
 			};
@@ -118,7 +119,7 @@ export class AuthController {
 			const rejected =
 				error instanceof BackendApiError && [400, 401].includes(error.status);
 			res.status(rejected ? error.status : 503).render(page, {
-				admin: req.path === "/admin/login",
+				admin,
 				values: safeValues,
 				error: rejected
 					? error.message
