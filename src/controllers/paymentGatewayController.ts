@@ -1,16 +1,33 @@
 import type { Request, Response } from "express";
 import type { PaymentGatewayService } from "../services/paymentGatewayService";
+import type { BasketService, BasketRequestCredentials } from "../services/basketService";
 
 export class PaymentGatewayController {
-	constructor(private readonly paymentGatewayService: PaymentGatewayService) {}
+	constructor(
+		private readonly paymentGatewayService: PaymentGatewayService,
+		private readonly basketService: BasketService,
+	) {}
 
-	async show(_req: Request, res: Response): Promise<void> {
+	async show(req: Request, res: Response): Promise<void> {
 		try {
-			const products = await this.paymentGatewayService.getProducts();
-			res.render("payment_gateway", { products });
+			const authorization = req.get("authorization");
+			const cookie = req.get("cookie");
+			const credentials: BasketRequestCredentials = {
+				...(authorization ? { authorization } : {}),
+				...(cookie ? { cookie } : {}),
+			};
+
+			let hasItems = false;
+			if (authorization || cookie) {
+				const basket = await this.basketService.getBasket(credentials);
+				hasItems = basket && basket.items.length > 0;
+			}
+
+			res.render("payment_gateway", { hasItems });
 		} catch {
 			res.status(503).render("payment_gateway", {
-				error: "Products are temporarily unavailable. Please try again.",
+				error: "Basket is temporarily unavailable. Please try again.",
+				hasItems: false,
 			});
 		}
 	}
