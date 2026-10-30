@@ -1,9 +1,11 @@
 import type { Request, Response } from "express";
 import { BackendApiError } from "../backendApi";
 import type {
+	Basket,
 	BasketRequestCredentials,
 	BasketService,
 } from "../services/basketService";
+import type { SessionService } from "../services/sessionService";
 import { isValidProductId } from "./productController";
 
 const MAX_ITEM_QUANTITY = 99;
@@ -26,7 +28,10 @@ const readCredentials = (req: Request): BasketRequestCredentials => {
 };
 
 export class BasketController {
-	constructor(private readonly basketService: BasketService) {}
+	constructor(
+		private readonly basketService: BasketService,
+		private readonly sessions: SessionService,
+	) {}
 
 	async addItem(req: Request, res: Response): Promise<void> {
 		const body = (req.body ?? {}) as Record<string, unknown>;
@@ -84,10 +89,6 @@ export class BasketController {
 	async getBasket(req: Request, res: Response): Promise<void> {
 		const authorization = req.get("authorization");
 		const cookie = req.get("cookie");
-		const credentials: BasketRequestCredentials = {
-			...(authorization ? { authorization } : {}),
-			...(cookie ? { cookie } : {}),
-		};
 		if (!authorization && !cookie) {
 			res.status(401).render("basket", {
 				error: "Please log in to view your basket.",
@@ -98,7 +99,7 @@ export class BasketController {
 		}
 
 		try {
-			const basket = await this.basketService.getBasket(credentials);
+			const basket = await this.sessions.request<Basket>("/basket", req, res);
 			const items = basket.items.map((item) => ({
 				...item,
 				imageURL: /^https?:\/\//i.test(item.imageURL ?? "")

@@ -10,7 +10,6 @@ import { ProfileController } from "./controllers/profileController";
 import { createAdminRoutes } from "./routes/adminRoutes";
 import { createAuthRoutes } from "./routes/authRoutes";
 import { createBasketRoutes } from "./routes/basketRoutes";
-import { createProductExpandedRoutes } from "./routes/ProductExpandedRoutes";
 import { createPageRoutes } from "./routes/pageRoutes";
 import { createProductRoutes } from "./routes/productRoutes";
 import { createProfileRoutes } from "./routes/profileRoutes";
@@ -38,10 +37,13 @@ export function createApp({
 	const sessions = new SessionService(api);
 	const authController = new AuthController(new AuthService(api), sessions);
 	const adminController = new AdminController(new AdminService(api, sessions));
-	const basketController = new BasketController(new BasketService(sessions));
+	const basketController = new BasketController(
+		new BasketService(api),
+		sessions,
+	);
 	const pageController = new PageController();
 	const productController = new ProductController(new ProductService(api));
-	const profileController = new ProfileController(new ProfileService(api));
+	const profileController = new ProfileController(new ProfileService(sessions));
 
 	nunjucks.configure("src/pages", {
 		autoescape: true,
