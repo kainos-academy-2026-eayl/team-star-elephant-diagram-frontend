@@ -117,7 +117,9 @@ export class AuthController {
 			res.redirect(303, destinations[page]);
 		} catch (error) {
 			const rejected =
-				error instanceof BackendApiError && [400, 401].includes(error.status);
+				error instanceof BackendApiError &&
+				[400, 401, 429].includes(error.status);
+			if (!rejected) console.error("Authentication submission failed", error);
 			res.status(rejected ? error.status : 503).render(page, {
 				admin,
 				values: safeValues,

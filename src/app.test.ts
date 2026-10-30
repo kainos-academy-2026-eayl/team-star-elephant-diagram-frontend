@@ -1139,6 +1139,7 @@ describe("app", () => {
 				.mockResolvedValue(
 					new Response(JSON.stringify({ error }), { status: 400 }),
 				);
+
 			const res = await request(createApp({ fetch: fetchApi }))
 				.post(path)
 				.type("form")
@@ -1154,6 +1155,24 @@ describe("app", () => {
 			expect(res.headers.location).toBeUndefined();
 		},
 	);
+
+	it("shows reset rate-limit errors instead of a service outage", async () => {
+		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					error: "Too many password reset attempts. Please try again later.",
+				}),
+				{ status: 429 },
+			),
+		);
+		const res = await request(createApp({ fetch: fetchApi }))
+			.post("/forgot-password")
+			.type("form")
+			.send({ email: "ada@example.com" });
+		expect(res.status).toBe(429);
+		expect(res.text).toContain("Too many password reset attempts.");
+		expect(res.text).not.toContain("temporarily unavailable");
+	});
 
 	it("loads products from the backend", async () => {
 		const fetchApi = vi
