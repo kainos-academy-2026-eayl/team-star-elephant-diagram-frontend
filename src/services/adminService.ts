@@ -1,3 +1,4 @@
+import type { Request, Response } from "express";
 import type { BackendApi } from "../backendApi";
 import type {
 	BasketDetails,
@@ -19,6 +20,7 @@ import type {
 	AdminUserSummary,
 	AdminUserView,
 } from "../models/adminUser";
+import type { SessionService } from "./sessionService";
 
 export interface AdminDashboard {
 	staff: { name: string };
@@ -129,7 +131,14 @@ const toPaginationView = (
 };
 
 export class AdminService {
-	constructor(private readonly api: BackendApi) {}
+	constructor(
+		private readonly api: BackendApi,
+		private readonly sessions: SessionService,
+	) {}
+
+	getDashboard(req: Request, res: Response): Promise<AdminDashboard> {
+		return this.sessions.request<AdminDashboard>("/admin", req, res);
+	}
 
 	resolveCredentials(
 		authorization?: string,
@@ -174,14 +183,6 @@ export class AdminService {
 		} catch {
 			return false;
 		}
-	}
-
-	getDashboard(credentials: AdminRequestCredentials): Promise<AdminDashboard> {
-		return this.api.request<AdminDashboard>(
-			"/admin",
-			undefined,
-			toHeaders(credentials),
-		);
 	}
 
 	async getUsers(

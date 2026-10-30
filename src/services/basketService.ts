@@ -1,9 +1,5 @@
-import type { BackendApi } from "../backendApi";
-
-export interface BasketRequestCredentials {
-	authorization?: string;
-	cookie?: string;
-}
+import type { Request, Response } from "express";
+import type { SessionService } from "./sessionService";
 
 export interface Basket {
 	items: Array<{
@@ -17,16 +13,9 @@ export interface Basket {
 }
 
 export class BasketService {
-	constructor(private readonly api: BackendApi) {}
+	constructor(private readonly sessions: SessionService) {}
 
-	getBasket(credentials: BasketRequestCredentials): Promise<Basket> {
-		const headers: Record<string, string> = {};
-		if (credentials.authorization) {
-			headers.Authorization = credentials.authorization;
-		}
-		if (credentials.cookie) {
-			headers.Cookie = credentials.cookie;
-		}
-		return this.api.request<Basket>("/basket", undefined, headers);
+	getBasket(req: Request, res: Response): Promise<Basket> {
+		return this.sessions.request<Basket>("/basket", req, res);
 	}
 }

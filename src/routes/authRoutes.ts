@@ -15,11 +15,31 @@ export function createAuthRoutes(authController: AuthController): Router {
 		res.set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
 		next();
 	});
+	router.use(["/login", "/admin/login", "/logout"], (req, res, next) => {
+		res.set("Cache-Control", "no-store");
+		const origin = req.get("origin");
+		if (
+			req.method === "POST" &&
+			origin &&
+			origin !== `https://${req.get("host")}`
+		) {
+			res.sendStatus(403);
+			return;
+		}
+		next();
+	});
+	router.get("/admin/login", (req, res) =>
+		authController.getLogin(req, res, true),
+	);
 	router.get("/login", (req, res) => authController.getLogin(req, res));
 	router.get("/register", (_req, res) => authController.getRegister(res));
+	router.post("/admin/login", authRateLimit, (req, res) =>
+		authController.postLogin(req, res, true),
+	);
 	router.post("/login", authRateLimit, (req, res) =>
 		authController.postLogin(req, res),
 	);
+	router.post("/logout", (req, res) => authController.logout(req, res));
 	router.post("/register", authRateLimit, (req, res) =>
 		authController.postRegister(req, res),
 	);

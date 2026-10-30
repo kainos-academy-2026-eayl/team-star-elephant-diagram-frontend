@@ -18,6 +18,7 @@ import { AuthService } from "./services/authService";
 import { BasketService } from "./services/basketService";
 import { ProductService } from "./services/productService";
 import { ProfileService } from "./services/profileService";
+import { SessionService } from "./services/sessionService";
 
 export function createApp({
 	apiBaseUrl = process.env.API_BASE_URL ?? "http://localhost:3001",
@@ -33,12 +34,13 @@ export function createApp({
 		app.set("trust proxy", trustedProxy);
 	}
 	const api = new BackendApi(apiBaseUrl, fetchApi);
-	const authController = new AuthController(new AuthService(api));
-	const adminController = new AdminController(new AdminService(api));
-	const basketController = new BasketController(new BasketService(api));
+	const sessions = new SessionService(api);
+	const authController = new AuthController(new AuthService(api), sessions);
+	const adminController = new AdminController(new AdminService(api, sessions));
+	const basketController = new BasketController(new BasketService(sessions));
 	const pageController = new PageController();
 	const productController = new ProductController(new ProductService(api));
-	const profileController = new ProfileController(new ProfileService(api));
+	const profileController = new ProfileController(new ProfileService(sessions));
 
 	nunjucks.configure("src/pages", {
 		autoescape: true,

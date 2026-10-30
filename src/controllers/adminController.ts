@@ -16,14 +16,8 @@ export class AdminController {
 	constructor(private readonly adminService: AdminService) {}
 
 	async getDashboard(req: Request, res: Response): Promise<void> {
-		const credentials = this.getCredentials(req);
-		if (!credentials) {
-			res.sendStatus(401);
-			return;
-		}
-
 		try {
-			const dashboard = await this.adminService.getDashboard(credentials);
+			const dashboard = await this.adminService.getDashboard(req, res);
 			res.render("admin", dashboard);
 		} catch (error) {
 			if (isAuthError(error)) {

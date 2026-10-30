@@ -4,6 +4,13 @@ import { describe, expect, it, vi } from "vitest";
 import { createApp } from "./app";
 
 const app = createApp();
+const loginResponse = () =>
+	new Response(JSON.stringify({ accessToken: "access-one", expiresIn: 900 }), {
+		headers: {
+			"Set-Cookie":
+				"refreshToken=refresh-one; Max-Age=604800; Path=/; HttpOnly; Secure; SameSite=Strict",
+		},
+	});
 
 describe("app", () => {
 	it("GET /health returns ok", async () => {
@@ -69,7 +76,7 @@ describe("app", () => {
 		expect(fetchApi).not.toHaveBeenCalled();
 	});
 
-	it("loads admin dashboard data with a browser session cookie", async () => {
+	it("forwards the browser access cookie as an admin Authorization header", async () => {
 		const dashboard = {
 			staff: { name: "Staff member" },
 			sections: [],
@@ -86,12 +93,12 @@ describe("app", () => {
 			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 		)
 			.get("/admin")
-			.set("Cookie", "session=staff-session");
+			.set("Cookie", "accessToken=staff-access");
 
 		expect(res.status).toBe(200);
 		expect(res.text).toContain("Staff member");
 		expect(fetchApi.mock.calls[0]?.[1]?.headers).toMatchObject({
-			Cookie: "session=staff-session",
+			Authorization: "Bearer staff-access",
 		});
 	});
 
@@ -105,7 +112,7 @@ describe("app", () => {
 			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 		)
 			.get("/admin")
-			.set("Cookie", "session=customer-session");
+			.set("Cookie", "accessToken=customer-access");
 
 		expect(res.status).toBe(403);
 		expect(res.text).not.toContain("New registrations");
@@ -149,7 +156,7 @@ describe("app", () => {
 			.mockResolvedValue(new Response(JSON.stringify(dashboard)));
 		const res = await request(createApp({ fetch: fetchApi }))
 			.get("/admin")
-			.set("Cookie", "session=staff-session");
+			.set("Cookie", "accessToken=staff-access");
 
 		expect(res.text).toContain('<a href="/admin" class="active"');
 		expect(res.text).toContain('<a href="/admin/baskets">Baskets</a>');
@@ -850,7 +857,6 @@ describe("app", () => {
 		expect(fetchApi.mock.calls[0]?.[1]?.headers).toEqual({
 			"Content-Type": "application/json",
 			Authorization: ["Bearer", "test-token"].join(" "),
-			Cookie: "session=customer-session",
 		});
 	});
 
@@ -881,16 +887,9 @@ describe("app", () => {
 		};
 		const fetchApi = vi
 			.fn<typeof fetch>()
-			.mockResolvedValueOnce(
-				new Response(JSON.stringify({ status: "ok" }), {
-					headers: {
-						"Set-Cookie":
-							"session=customer-session; Domain=backend.local; Path=/; HttpOnly; SameSite=Strict",
-					},
-				}),
-			)
+			.mockResolvedValueOnce(loginResponse())
 			.mockResolvedValueOnce(new Response(JSON.stringify(basket)));
-		const client = request.agent(
+		const client = request(
 			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 		);
 
@@ -898,16 +897,21 @@ describe("app", () => {
 			.post("/login")
 			.type("form")
 			.send({ email: "ada@example.com", password: "correct-horse" });
-		const basketResponse = await client.get("/basket");
+		const basketResponse = await client
+			.get("/basket")
+			.set("Cookie", "accessToken=access-one; refreshToken=refresh-one");
 
 		expect(login.status).toBe(303);
-		expect(login.headers["set-cookie"]).toEqual([
-			"session=customer-session; Path=/; HttpOnly; SameSite=Lax",
-		]);
+		expect(login.headers["set-cookie"]).toHaveLength(2);
+		for (const cookie of login.headers["set-cookie"] ?? []) {
+			expect(cookie).toContain("HttpOnly");
+			expect(cookie).toContain("Secure");
+			expect(cookie).toContain("SameSite=Strict");
+		}
 		expect(basketResponse.status).toBe(200);
 		expect(basketResponse.text).toContain("Green tea");
 		expect(fetchApi.mock.calls[1]?.[1]?.headers).toMatchObject({
-			Cookie: "session=customer-session",
+			Authorization: "Bearer access-one",
 		});
 	});
 
@@ -1022,7 +1026,11 @@ describe("app", () => {
 		async (page, values, location) => {
 			const fetchApi = vi
 				.fn<typeof fetch>()
-				.mockResolvedValue(new Response(JSON.stringify({ status: "ok" })));
+				.mockResolvedValue(
+					page === "login"
+						? loginResponse()
+						: new Response(JSON.stringify({ status: "ok" })),
+				);
 			const res = await request(
 				createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 			)
@@ -1191,7 +1199,9 @@ describe("app", () => {
 			.mockResolvedValue(new Response(JSON.stringify(profile)));
 		const res = await request(
 			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
-		).get("/profile");
+		)
+			.get("/profile")
+			.set("Cookie", "accessToken=customer-access");
 
 		expect(res.status).toBe(200);
 		expect(res.text).toContain("Ada Lovelace");
@@ -1207,7 +1217,9 @@ describe("app", () => {
 		const fetchApi = vi
 			.fn<typeof fetch>()
 			.mockRejectedValue(new Error("Connection refused"));
-		const res = await request(createApp({ fetch: fetchApi })).get("/profile");
+		const res = await request(createApp({ fetch: fetchApi }))
+			.get("/profile")
+			.set("Cookie", "accessToken=customer-access");
 
 		expect(res.status).toBe(503);
 		expect(res.text).toContain("Your profile is temporarily unavailable.");
