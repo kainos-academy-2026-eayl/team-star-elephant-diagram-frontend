@@ -65,9 +65,9 @@
 								<p>{{ product.category }} · {{ product.formattedPrice }}</p>
 							</div>
 							<div class="field payment-quantity">
-								<label for="quantity-{{ product.prod_id }}">Quantity</label>
-								<input type="hidden" name="productId" value="{{ product.prod_id }}">
-								<input type="number" id="quantity-{{ product.prod_id }}" name="quantity" min="0" max="99" value="0" required>
+								<label for="quantity-{{ product.productId }}">Quantity</label>
+								<input type="hidden" name="productId" value="{{ product.productId }}">
+								<input type="number" id="quantity-{{ product.productId }}" name="quantity" min="0" max="99" value="0" required>
 							</div>
 						</li>
 						{% endfor %}

@@ -15,7 +15,10 @@ export class PaymentGatewayController {
 
 			let hasItems = false;
 			if (authorization || cookie) {
-				const basket = await this.basketService.getBasket(req, res);
+				const basket = await this.basketService.getBasket({
+					...(authorization ? { authorization } : {}),
+					...(cookie ? { cookie } : {}),
+				});
 				hasItems = basket && basket.items.length > 0;
 			}
 

@@ -132,7 +132,7 @@ export class PaymentGatewayService {
 		products: CheckoutProduct[],
 	): SimulatedPaymentResult {
 		const productsById = new Map(
-			products.map((product) => [product.prod_id, product]),
+			products.map((product) => [product.productId, product]),
 		);
 		const items = selections.map(({ productId, quantity }) => {
 			const product = productsById.get(productId);
@@ -141,10 +141,15 @@ export class PaymentGatewayService {
 					"Selected product is no longer available.",
 				);
 			}
-			if (!Number.isSafeInteger(product.price) || product.price < 0) {
+			const unitPriceInPence = Math.round(product.price * 100);
+			if (
+				!Number.isFinite(product.price) ||
+				product.price < 0 ||
+				!Number.isSafeInteger(unitPriceInPence)
+			) {
 				throw new Error("Selected product has an invalid price.");
 			}
-			const subtotalInPence = product.price * quantity;
+			const subtotalInPence = unitPriceInPence * quantity;
 			if (!Number.isSafeInteger(subtotalInPence)) {
 				throw new Error("Order total is too large.");
 			}

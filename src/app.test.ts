@@ -1199,11 +1199,11 @@ describe("app", () => {
 			new Response(
 				JSON.stringify([
 					{
-						prod_id: 7,
+						productId: 7,
 						name: "Green tea",
 						category: "Food & Drink",
 						description: "Fresh tea",
-						price: 1299,
+						price: 12.99,
 						imageURL: "",
 					},
 				]),
@@ -1228,19 +1228,19 @@ describe("app", () => {
 			new Response(
 				JSON.stringify([
 					{
-						prod_id: 7,
+						productId: 7,
 						name: "Green tea",
 						category: "Food & Drink",
 						description: "Fresh tea",
-						price: 1299,
+						price: 12.99,
 						imageURL: "",
 					},
 					{
-						prod_id: 8,
+						productId: 8,
 						name: "Coffee",
 						category: "Food & Drink",
 						description: "Roasted beans",
-						price: 500,
+						price: 5,
 						imageURL: "",
 					},
 				]),
