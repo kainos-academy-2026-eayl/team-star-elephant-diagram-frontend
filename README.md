@@ -44,6 +44,10 @@ For local development, enable `PASSWORD_RESET_DELIVERY=console` and set
 latest migration. Request a reset and open the link printed in the backend
 console. Tokens expire after 15 minutes and can only be used once. Email delivery
 and profile-page password changes are not implemented yet.
+Only the newest requested link works. A successful reset updates the stored
+password and revokes the customer's existing refresh sessions; access tokens
+already issued can remain valid until their 15-minute expiry. Console delivery
+is rejected in production, and requests fail explicitly if delivery is disabled.
 The catalogue loads stored products from the backend, with search and category
 filtering. An empty database displays an empty catalogue. Product prices are
 returned in pence and formatted as GBP, and `imageURL` supports HTTP(S) images.
