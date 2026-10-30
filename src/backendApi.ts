@@ -16,7 +16,7 @@ export class BackendApi {
 
 	async request<Result>(
 		path: string,
-		body?: Record<string, string>,
+		body?: Record<string, string | number>,
 		headers: Record<string, string> = {},
 	): Promise<Result> {
 		const { result } = await this.requestWithResponse<Result>(
@@ -29,7 +29,7 @@ export class BackendApi {
 
 	async requestWithResponse<Result>(
 		path: string,
-		body?: Record<string, string>,
+		body?: Record<string, string | number>,
 		headers: Record<string, string> = {},
 	): Promise<{ result: Result; cookies: string[] }> {
 		const response = await this.fetchApi(new URL(path, this.baseUrl), {

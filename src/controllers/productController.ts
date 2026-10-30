@@ -2,15 +2,33 @@ import type { Request, Response } from "express";
 import { BackendApiError } from "../backendApi";
 import type { ProductService } from "../services/productService";
 
+const BASKET_MESSAGES: Record<string, { type: "error"; text: string }> = {
+	invalid: { type: "error", text: "Please choose a valid quantity." },
+	limit: {
+		type: "error",
+		text: "Your basket already holds the maximum quantity of this product.",
+	},
+	notfound: { type: "error", text: "This product is no longer available." },
+	unavailable: {
+		type: "error",
+		text: "Your basket is temporarily unavailable. Please try again.",
+	},
+};
+
+export const isValidProductId = (value: unknown): value is string =>
+	typeof value === "string" &&
+	/^[1-9]\d*$/.test(value) &&
+	Number.isSafeInteger(Number(value));
+
 export class ProductController {
 	constructor(private readonly productService: ProductService) {}
 
 	async getProduct(
-		req: Request<{ prodId: string }>,
+		req: Request<{ productId: string }>,
 		res: Response,
 	): Promise<void> {
-		const { prodId } = req.params;
-		if (!/^[1-9]\d*$/.test(prodId) || !Number.isSafeInteger(Number(prodId))) {
+		const { productId } = req.params;
+		if (!isValidProductId(productId)) {
 			res.status(400).render("product_expanded", {
 				error: "Invalid product ID.",
 			});
@@ -18,9 +36,15 @@ export class ProductController {
 		}
 
 		try {
-			const product = await this.productService.getProduct(Number(prodId));
+			const product = await this.productService.getProduct(Number(productId));
+			if (product.productId !== Number(productId)) {
+				throw new Error("Backend returned a different product");
+			}
+			const status =
+				typeof req.query.basket === "string" ? req.query.basket : "";
 			res.render("product_expanded", {
 				product,
+				basketMessage: BASKET_MESSAGES[status],
 			});
 		} catch (error) {
 			if (error instanceof BackendApiError && error.status === 404) {
@@ -45,7 +69,7 @@ export class ProductController {
 			const filtered = products.filter(
 				(product) =>
 					(!category || product.category === category) &&
-					`${product.name} ${product.description}`
+					`${product.name} ${product.category} ${product.description}`
 						.toLowerCase()
 						.includes(query.toLowerCase()),
 			);

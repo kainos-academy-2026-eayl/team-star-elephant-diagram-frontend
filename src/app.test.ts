@@ -828,7 +828,7 @@ describe("app", () => {
 		const basket = {
 			items: [
 				{
-					id: 1,
+					productId: 1,
 					productName: "Green tea",
 					quantity: 2,
 					unitPrice: 3.5,
@@ -877,7 +877,7 @@ describe("app", () => {
 		const basket = {
 			items: [
 				{
-					id: 1,
+					productId: 1,
 					productName: "Green tea",
 					quantity: 1,
 					unitPrice: 3.5,
@@ -1230,19 +1230,19 @@ describe("app", () => {
 	it("renders real products and filters search and category", async () => {
 		const products = [
 			{
-				prod_id: 1,
+				productId: 7,
 				name: "Green tea",
 				category: "Food & Drink",
 				description: "Fresh tea",
-				price: 1299,
+				price: 12.99,
 				imageURL: "https://example.com/tea.jpg",
 			},
 			{
-				prod_id: 2,
+				productId: 2,
 				name: "Coffee",
 				category: "Other",
 				description: "Roasted beans",
-				price: 500,
+				price: 5,
 				imageURL: "",
 			},
 		];
@@ -1254,23 +1254,83 @@ describe("app", () => {
 			.query({ q: "tea", category: "Food & Drink" });
 		expect(res.status).toBe(200);
 		expect(res.text).toContain("Green tea");
-		expect(res.text).toContain('href="/products/1"');
+		expect(res.text).toContain('href="/products/7"');
+		expect(res.text).not.toContain('href="/products/"');
+		expect(res.text).not.toContain("undefined");
 		expect(res.text).toContain("£12.99");
 		expect(res.text).toContain('src="https://example.com/tea.jpg"');
 		expect(res.text).not.toContain("Coffee");
 		expect(res.text).toContain("Food%20%26%20Drink");
 	});
 
-	it("loads an expanded product by prodId", async () => {
+	it("displays backend prices in pounds without dividing by 100", async () => {
+		const products = [
+			{
+				productId: 1,
+				name: "CoreBook 14 Essential",
+				category: "Laptops",
+				description: "Laptop",
+				price: 349.99,
+				imageURL: "",
+			},
+			{
+				productId: 2,
+				name: "Big monitor",
+				category: "Monitors",
+				description: "Monitor",
+				price: 1249,
+				imageURL: "",
+			},
+		];
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(new Response(JSON.stringify(products)));
+		const res = await request(createApp({ fetch: fetchApi })).get("/products");
+
+		expect(res.text).toContain("£349.99");
+		expect(res.text).toContain("£1,249.00");
+		expect(res.text).not.toContain("£3.50");
+	});
+
+	it("shows a short description preview on catalogue cards", async () => {
+		const description = `${"Long words ".repeat(30)}END-OF-DESCRIPTION`;
+		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
+			new Response(
+				JSON.stringify([
+					{
+						productId: 3,
+						name: "Wordy",
+						category: "Other",
+						description,
+						price: 1,
+						imageURL: "",
+					},
+				]),
+			),
+		);
+		const res = await request(createApp({ fetch: fetchApi })).get("/products");
+		const preview = res.text.match(
+			/class="product-card__description"[^>]*>([^<]*)</,
+		)?.[1];
+
+		expect(preview).toBeDefined();
+		expect(preview?.length).toBeLessThanOrEqual(111);
+		expect(preview?.endsWith("…")).toBe(true);
+		expect(preview).not.toContain("END-OF-DESCRIPTION");
+		expect(res.text).toContain('href="/products/3"');
+	});
+
+	it("loads an expanded product by productId", async () => {
 		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
 			new Response(
 				JSON.stringify({
-					prod_id: 42,
+					productId: 42,
 					name: "Green tea",
 					category: "Food & Drink",
 					description: "Fresh tea",
-					price: 1299,
+					price: 12.99,
 					imageURL: "https://example.com/tea.jpg",
+					inventory: { quantity: 30 },
 				}),
 			),
 		);
@@ -1279,23 +1339,206 @@ describe("app", () => {
 		).get("/products/42");
 
 		expect(res.status).toBe(200);
+		expect(fetchApi).toHaveBeenCalledTimes(1);
 		expect(String(fetchApi.mock.calls[0]?.[0])).toBe(
 			"http://backend:4000/products/42",
 		);
+		expect(res.headers["content-type"]).toContain("text/html");
 		expect(res.text).toContain("Green tea");
 		expect(res.text).toContain("Fresh tea");
+		expect(res.text).toContain("Food &amp; Drink");
 		expect(res.text).toContain("£12.99");
 		expect(res.text).toContain('src="https://example.com/tea.jpg"');
+		expect(res.text).toContain('action="/basket" method="post"');
 		expect(res.text).toContain('name="productId" value="42"');
+		expect(res.text).toMatch(/name="quantity"[^>]*max="30"/);
+		expect(res.text).toContain("In stock");
+		expect(res.text).not.toMatch(/<button[^>]*disabled/);
 		expect(res.text).toContain('href="/styles.css"');
+	});
+
+	it.each([
+		[{ quantity: 0 }, "Out of stock", true, 'max="1"'],
+		[null, "Out of stock", true, 'max="1"'],
+		[{ quantity: 3 }, "Only 3 left in stock", false, 'max="3"'],
+		[{ quantity: 500 }, "In stock", false, 'max="99"'],
+	])(
+		"renders stock state for inventory %j",
+		async (inventory, message, disabled, max) => {
+			const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
+				new Response(
+					JSON.stringify({
+						productId: 5,
+						name: "Mouse",
+						category: "Mice",
+						description: "Clicky",
+						price: 19.99,
+						imageURL: "",
+						inventory,
+					}),
+				),
+			);
+			const res = await request(createApp({ fetch: fetchApi })).get(
+				"/products/5",
+			);
+
+			expect(res.status).toBe(200);
+			expect(res.text).toContain(message);
+			expect(res.text).toContain(max);
+			expect(/<button[^>]*disabled/.test(res.text)).toBe(disabled);
+			expect(/name="quantity"[^>]*disabled/.test(res.text)).toBe(disabled);
+		},
+	);
+
+	it("uses a collapsible full description on the product page", async () => {
+		const description = `${"Detail ".repeat(40)}END`;
+		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					productId: 9,
+					name: "Laptop",
+					category: "Laptops",
+					description,
+					price: 1,
+					imageURL: "",
+					inventory: { quantity: 1 },
+				}),
+			),
+		);
+		const res = await request(createApp({ fetch: fetchApi })).get(
+			"/products/9",
+		);
+
+		expect(res.text).toContain('<details class="product-detail__description">');
+		expect(res.text).toContain("Read full description");
+		expect(res.text).toContain(description);
+	});
+
+	it("does not display a different product than the one requested", async () => {
+		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					productId: 1,
+					name: "Wrong product",
+					category: "Other",
+					description: "Nope",
+					price: 1,
+					imageURL: "",
+					inventory: { quantity: 1 },
+				}),
+			),
+		);
+		const res = await request(createApp({ fetch: fetchApi })).get(
+			"/products/2",
+		);
+
+		expect(res.status).toBe(503);
+		expect(res.text).not.toContain("Wrong product");
+	});
+
+	it("adds a product to the basket and relays the basket cookie", async () => {
+		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
+			new Response(JSON.stringify({ items: [], subtotal: 0 }), {
+				headers: {
+					"Set-Cookie":
+						"basketId=0b7e0c5e-4a8f-4f43-9a2e-3c1f2f6a9d11; Max-Age=604800; Path=/; HttpOnly; SameSite=Lax",
+				},
+			}),
+		);
+		const res = await request(
+			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
+		)
+			.post("/basket")
+			.set("Cookie", "session=abc")
+			.type("form")
+			.send({ productId: "42", quantity: "3" });
+
+		expect(res.status).toBe(303);
+		expect(res.headers.location).toBe("/basket");
+		expect(String(fetchApi.mock.calls[0]?.[0])).toBe(
+			"http://backend:4000/basket",
+		);
+		const init = fetchApi.mock.calls[0]?.[1];
+		expect(init?.method).toBe("POST");
+		expect(JSON.parse(String(init?.body))).toEqual({
+			productId: 42,
+			quantity: 3,
+		});
+		expect(init?.headers).toMatchObject({ Cookie: "session=abc" });
+		expect(res.headers["set-cookie"]).toEqual([
+			"basketId=0b7e0c5e-4a8f-4f43-9a2e-3c1f2f6a9d11; Path=/; Max-Age=604800; HttpOnly; SameSite=Lax",
+		]);
+	});
+
+	it.each([
+		[{ productId: "42", quantity: "0" }, "/products/42?basket=invalid"],
+		[{ productId: "42", quantity: "100" }, "/products/42?basket=invalid"],
+		[{ productId: "42", quantity: "1.5" }, "/products/42?basket=invalid"],
+		[{ productId: "abc", quantity: "1" }, "/products"],
+	])(
+		"rejects invalid add-to-basket input %j without calling the backend",
+		async (form, location) => {
+			const fetchApi = vi.fn<typeof fetch>();
+			const res = await request(createApp({ fetch: fetchApi }))
+				.post("/basket")
+				.type("form")
+				.send(form);
+
+			expect(res.status).toBe(303);
+			expect(res.headers.location).toBe(location);
+			expect(fetchApi).not.toHaveBeenCalled();
+		},
+	);
+
+	it.each([
+		[404, "Product not found", "notfound"],
+		[400, "Quantity cannot exceed 99", "limit"],
+		[500, "Internal server error", "unavailable"],
+	])(
+		"returns to the product page when the backend responds %i",
+		async (status, error, code) => {
+			const fetchApi = vi
+				.fn<typeof fetch>()
+				.mockResolvedValue(new Response(JSON.stringify({ error }), { status }));
+			const res = await request(createApp({ fetch: fetchApi }))
+				.post("/basket")
+				.type("form")
+				.send({ productId: "42", quantity: "1" });
+
+			expect(res.status).toBe(303);
+			expect(res.headers.location).toBe(`/products/42?basket=${code}`);
+		},
+	);
+
+	it("shows add-to-basket errors on the product page", async () => {
+		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					productId: 42,
+					name: "Green tea",
+					category: "Food & Drink",
+					description: "Fresh tea",
+					price: 12.99,
+					imageURL: "",
+					inventory: { quantity: 30 },
+				}),
+			),
+		);
+		const res = await request(createApp({ fetch: fetchApi })).get(
+			"/products/42?basket=limit",
+		);
+
+		expect(res.text).toContain(
+			"Your basket already holds the maximum quantity of this product.",
+		);
 	});
 
 	it.each(["abc", "0", "-1", "1.5", "9007199254740992"])(
 		"rejects invalid product ID %s without calling the backend",
-		async (prodId) => {
+		async (productId) => {
 			const fetchApi = vi.fn<typeof fetch>();
 			const res = await request(createApp({ fetch: fetchApi })).get(
-				`/products/${prodId}`,
+				`/products/${productId}`,
 			);
 
 			expect(res.status).toBe(400);
