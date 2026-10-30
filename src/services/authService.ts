@@ -1,4 +1,5 @@
 import type { BackendApi } from "../backendApi";
+import type { LoginResponse } from "./sessionService";
 
 export class AuthService {
 	constructor(private readonly api: BackendApi) {}
@@ -7,12 +8,11 @@ export class AuthService {
 		await this.api.request("/register", details);
 	}
 
-	async login(details: Record<string, string>): Promise<string[]> {
-		const { cookies } = await this.api.requestWithResponse<unknown>(
-			"/login",
+	async login(details: Record<string, string>, admin = false) {
+		return this.api.requestWithResponse<LoginResponse>(
+			admin ? "/admin/login" : "/login",
 			details,
 		);
-		return cookies;
 	}
 
 	async forgotPassword(details: Record<string, string>): Promise<void> {
