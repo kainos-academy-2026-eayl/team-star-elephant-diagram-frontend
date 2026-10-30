@@ -18,10 +18,12 @@ export function createAuthRoutes(authController: AuthController): Router {
 	router.use(["/login", "/admin/login", "/logout"], (req, res, next) => {
 		res.set("Cache-Control", "no-store");
 		const origin = req.get("origin");
+		const host = req.get("host");
 		if (
 			req.method === "POST" &&
 			origin &&
-			origin !== `https://${req.get("host")}`
+			origin !== `https://${host}` &&
+			origin !== `http://${host}`
 		) {
 			res.sendStatus(403);
 			return;
