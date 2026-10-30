@@ -9,9 +9,6 @@ export function createProductRoutes(
 	router.get("/products", (req, res) =>
 		productController.getProducts(req, res),
 	);
-	router.get("/products/:prodId", (req, res) =>
-		productController.getProduct(req, res),
-	);
 
 	return router;
 }

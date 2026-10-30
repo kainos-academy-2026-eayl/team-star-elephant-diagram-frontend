@@ -11,17 +11,29 @@ export class ProductExpandedController {
 		req: Request<{ id: string }>,
 		res: Response,
 	): Promise<void> {
+		const productId = req.params.id;
+		if (
+			!/^[1-9]\d*$/.test(productId) ||
+			!Number.isSafeInteger(Number(productId))
+		) {
+			res.status(400).render("product_expanded", {
+				error: "Invalid product ID.",
+			});
+			return;
+		}
+
 		try {
-			const productId = req.params.id;
-			const productExpanded =
+			const product =
 				await this.productExpandedService.getProductExpanded(productId);
-			res.json(productExpanded);
+			res.render("product_expanded", { product });
 		} catch (error) {
-			if (error instanceof BackendApiError) {
-				res.status(error.status).json({ message: error.message });
-			} else {
-				res.status(500).json({ message: "Internal server error" });
+			if (error instanceof BackendApiError && error.status === 404) {
+				res.status(404).render("product_expanded");
+				return;
 			}
+			res.status(503).render("product_expanded", {
+				error: "Product is temporarily unavailable. Please try again.",
+			});
 		}
 	}
 }
