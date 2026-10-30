@@ -9,28 +9,8 @@
 </head>
 
 <body>
-    <header class="navbar">
-        <a href="/admin" class="navbar-brand">Admin</a>
-
-        <input type="checkbox" id="menu-toggle" class="menu-toggle">
-        <label for="menu-toggle" class="menu-button">
-            <span>Menu</span>
-            <span class="menu-arrow"></span>
-        </label>
-
-        <nav class="dropdown">
-            <ul class="category-links">
-                <li><a href="/admin" class="active">Dashboard</a></li>
-                {% for section in sections %}
-                <li><span class="unavailable-link" aria-disabled="true">{{ section.label }} (Unavailable)</span></li>
-                {% endfor %}
-            </ul>
-
-            <div class="dropdown-actions">
-                <span class="staff-name">{{ staff.name }}</span>
-            </div>
-        </nav>
-    </header>
+    {% set activeNav = "dashboard" %}
+    {% include "partials/admin-nav.njk" %}
 
     <div class="search-bar">
         <div class="admin-search-unavailable" aria-disabled="true">Search is unavailable.</div>

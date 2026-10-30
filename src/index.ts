@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { createApp } from "./app";
+import { createServer } from "./server";
 
 if (!process.env.PORT) {
 	throw new Error("PORT environment variable is not set");
@@ -21,8 +22,9 @@ const app = createApp();
 // app.use('/', ...)
 
 // Keep everything below this comment at the bottom of the file
-const server = app.listen(PORT, HOST, () => {
-	console.log(`Listening on http://${HOST}:${PORT}`);
+const { server, protocol } = createServer(app);
+server.listen(PORT, HOST, () => {
+	console.log(`Listening on ${protocol}://localhost:${PORT}`);
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

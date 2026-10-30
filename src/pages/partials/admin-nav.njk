@@ -1,0 +1,27 @@
+<header class="navbar">
+    <a href="/admin" class="navbar-brand">Admin</a>
+
+    <input type="checkbox" id="menu-toggle" class="menu-toggle">
+    <label for="menu-toggle" class="menu-button">
+        <span>Menu</span>
+        <span class="menu-arrow"></span>
+    </label>
+
+    <nav class="dropdown">
+        <ul class="category-links">
+            <li><a href="/admin"{% if activeNav == "dashboard" %} class="active" aria-current="page"{% endif %}>Dashboard</a></li>
+            <li><a href="/admin/users"{% if activeNav == "users" %} class="active" aria-current="page"{% endif %}>Users</a></li>
+            <li><a href="/admin/baskets"{% if activeNav == "baskets" %} class="active" aria-current="page"{% endif %}>Baskets</a></li>
+            {% for section in sections %}
+            {% if section.label | lower not in ["users", "baskets"] %}
+            <li><span class="unavailable-link" aria-disabled="true">{{ section.label }} (Unavailable)</span></li>
+            {% endif %}
+            {% endfor %}
+        </ul>
+
+        <div class="dropdown-actions">
+            <span class="staff-name">{{ staff.name if staff else "" }}</span>
+            <form action="/logout" method="post"><button type="submit">Log out</button></form>
+        </div>
+    </nav>
+</header>
