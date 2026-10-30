@@ -46,9 +46,9 @@ export function createApp({
 	const productController = new ProductController(productService);
 	const paymentGatewayController = new PaymentGatewayController(
 		new PaymentGatewayService(productService),
-		new BasketService(api),
+		new BasketService(sessions),
 	);
-	const profileController = new ProfileController(new ProfileService(api));
+	const profileController = new ProfileController(new ProfileService(sessions));
 
 	nunjucks.configure("src/pages", {
 		autoescape: true,

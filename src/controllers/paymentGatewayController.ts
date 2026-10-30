@@ -1,8 +1,5 @@
 import type { Request, Response } from "express";
-import type {
-	BasketRequestCredentials,
-	BasketService,
-} from "../services/basketService";
+import type { BasketService } from "../services/basketService";
 import type { PaymentGatewayService } from "../services/paymentGatewayService";
 
 export class PaymentGatewayController {
@@ -15,14 +12,10 @@ export class PaymentGatewayController {
 		try {
 			const authorization = req.get("authorization");
 			const cookie = req.get("cookie");
-			const credentials: BasketRequestCredentials = {
-				...(authorization ? { authorization } : {}),
-				...(cookie ? { cookie } : {}),
-			};
 
 			let hasItems = false;
 			if (authorization || cookie) {
-				const basket = await this.basketService.getBasket(credentials);
+				const basket = await this.basketService.getBasket(req, res);
 				hasItems = basket && basket.items.length > 0;
 			}
 
