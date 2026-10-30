@@ -5,17 +5,20 @@ import { AdminController } from "./controllers/adminController";
 import { AuthController } from "./controllers/authController";
 import { BasketController } from "./controllers/basketController";
 import { PageController } from "./controllers/pageController";
+import { PaymentGatewayController } from "./controllers/paymentGatewayController";
 import { ProductController } from "./controllers/productController";
 import { ProfileController } from "./controllers/profileController";
 import { createAdminRoutes } from "./routes/adminRoutes";
 import { createAuthRoutes } from "./routes/authRoutes";
 import { createBasketRoutes } from "./routes/basketRoutes";
 import { createPageRoutes } from "./routes/pageRoutes";
+import { createPaymentGatewayRoutes } from "./routes/paymentGatewayRoutes";
 import { createProductRoutes } from "./routes/productRoutes";
 import { createProfileRoutes } from "./routes/profileRoutes";
 import { AdminService } from "./services/adminService";
 import { AuthService } from "./services/authService";
 import { BasketService } from "./services/basketService";
+import { PaymentGatewayService } from "./services/paymentGatewayService";
 import { ProductService } from "./services/productService";
 import { ProfileService } from "./services/profileService";
 import { SessionService } from "./services/sessionService";
@@ -42,7 +45,12 @@ export function createApp({
 		sessions,
 	);
 	const pageController = new PageController();
-	const productController = new ProductController(new ProductService(api));
+	const productService = new ProductService(api);
+	const productController = new ProductController(productService);
+	const paymentGatewayController = new PaymentGatewayController(
+		new PaymentGatewayService(productService),
+		new BasketService(api),
+	);
 	const profileController = new ProfileController(new ProfileService(sessions));
 
 	nunjucks.configure("src/pages", {
@@ -54,6 +62,7 @@ export function createApp({
 
 	app.use(express.static("src/pages"));
 	app.use(express.static("src/styles"));
+	app.use(express.json({ limit: "100kb" }));
 	app.use(express.urlencoded({ extended: false, limit: "100kb" }));
 
 	app.use(createPageRoutes(pageController));
@@ -61,6 +70,7 @@ export function createApp({
 	app.use(createAuthRoutes(authController));
 	app.use(createBasketRoutes(basketController));
 	app.use(createProductRoutes(productController));
+	app.use(createPaymentGatewayRoutes(paymentGatewayController));
 	app.use(createProfileRoutes(profileController));
 
 	return app;

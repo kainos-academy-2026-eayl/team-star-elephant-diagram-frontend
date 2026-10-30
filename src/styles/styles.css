@@ -838,6 +838,106 @@ ul {
 	margin-top: 1.25rem;
 }
 
+.payment-layout {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 320px;
+	gap: 1.5rem;
+	align-items: start;
+}
+
+.payment-card {
+	padding: 1.5rem;
+	background: var(--surface);
+	border-radius: var(--radius);
+	box-shadow: 0 4px 16px rgba(29, 36, 51, 0.08);
+}
+
+.payment-card h2 {
+	margin-bottom: 0.25rem;
+	font-size: 1.25rem;
+}
+
+.payment-intro {
+	margin-bottom: 1.25rem;
+	color: var(--muted);
+}
+
+.payment-notice {
+	margin-bottom: 1.25rem;
+	padding: 0.75rem 0.875rem;
+	color: #72520a;
+	background: #fff7df;
+	border: 1px solid #ead89e;
+	border-radius: var(--radius);
+	font-size: 0.9rem;
+}
+
+.payment-form {
+	display: flex;
+	flex-direction: column;
+	gap: 1.25rem;
+}
+
+.payment-product-list,
+.payment-order-list {
+	list-style: none;
+	padding: 0;
+}
+
+.payment-product-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+}
+
+.payment-product,
+.payment-order-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: 0.9rem;
+	background: var(--bg);
+	border-radius: var(--radius);
+}
+
+.payment-product h3 {
+	font-size: 1rem;
+}
+
+.payment-product p {
+	color: var(--muted);
+	font-size: 0.9rem;
+}
+
+.payment-quantity {
+	flex: 0 0 7rem;
+}
+
+.payment-quantity input {
+	width: 100%;
+	padding: 0.5rem;
+	font: inherit;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+}
+
+.payment-notice--error {
+	color: #a12b2b;
+	background: #fdecec;
+	border-color: #f3c2c2;
+}
+
+.payment-back {
+	margin-top: 1.25rem;
+}
+
+.payment-order-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
 .basket-state {
 	padding: 3rem 1.5rem;
 	text-align: center;
@@ -865,16 +965,30 @@ ul {
 }
 
 [hidden] {
-	display: none !important;
+	display: none;
 }
 
 @media (max-width: 800px) {
 	.basket-layout {
 		grid-template-columns: 1fr;
 	}
+
+	.payment-layout {
+		grid-template-columns: 1fr;
+	}
 }
 
 @media (max-width: 30rem) {
+	.payment-product {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+
+	.payment-quantity {
+		width: 100%;
+		flex-basis: auto;
+	}
+
 	.basket-item {
 		grid-template-columns: 72px 1fr;
 	}

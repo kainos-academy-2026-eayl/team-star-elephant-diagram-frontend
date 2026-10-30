@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Payment Gateway</title>
+	<link rel="stylesheet" href="/styles.css" />
+</head>
+
+<body>
+	<nav class="navbar">
+		<a href="/products" class="navbar-brand">Products</a>
+
+		<input type="checkbox" id="menu-toggle" class="menu-toggle" />
+		<label for="menu-toggle" class="menu-button">
+			<span>Menu</span>
+			<span class="menu-arrow"></span>
+		</label>
+
+		<div class="dropdown">
+			<ul class="category-links">
+				<li><a href="/products">All products</a></li>
+			</ul>
+
+			<div class="dropdown-actions">
+				<a href="/login" class="action-button">Account</a>
+			</div>
+		</div>
+		<a href="/basket" class="action-button navbar-basket">Basket <span class="basket-count">0</span></a>
+	</nav>
+
+	<main class="container">
+		<h1 class="section-heading">Payment Gateway</h1>
+
+		<div class="payment-layout">
+			<section class="payment-card" aria-labelledby="checkout-heading">
+				{% if paymentResult %}
+				<h2 id="checkout-heading">Payment</h2>
+				<p class="payment-intro"></p>
+				<div class="payment-notice" role="status">
+					Payment successful. Payment was processed.
+				</div>
+				<ul class="payment-order-list">
+					{% for item in paymentResult.items %}
+					<li class="payment-order-item">
+						<span>{{ item.name }} × {{ item.quantity }}</span>
+						<span>{{ item.formattedSubtotal }}</span>
+					</li>
+					{% endfor %}
+				</ul>
+				{% else %}
+				<h2 id="checkout-heading">Choose your products</h2>
+				<p class="payment-intro">Select quantities for checkout. Enter payment details.</p>
+				{% if error %}
+				<div class="payment-notice payment-notice--error" role="alert">{{ error }}</div>
+				{% endif %}
+				{% if products and products.length %}
+				<form class="payment-form" action="/payment_gateway" method="post">
+					<ul class="payment-product-list">
+						{% for product in products %}
+						<li class="payment-product">
+							<div>
+								<h3>{{ product.name }}</h3>
+								<p>{{ product.category }} · {{ product.formattedPrice }}</p>
+							</div>
+							<div class="field payment-quantity">
+								<label for="quantity-{{ product.productId }}">Quantity</label>
+								<input type="hidden" name="productId" value="{{ product.productId }}">
+								<input type="number" id="quantity-{{ product.productId }}" name="quantity" min="0" max="99" value="0" required>
+							</div>
+						</li>
+						{% endfor %}
+					</ul>
+					<button type="submit" class="btn btn--primary">Simulate payment</button>
+				</form>
+				{% else %}
+				<p class="payment-intro">No products are currently available.</p>
+				{% endif %}
+				{% endif %}
+			</section>
+
+			<aside class="basket-summary" aria-labelledby="summary-heading">
+				<h2 id="summary-heading">Order summary</h2>
+				{% if paymentResult %}
+				<div class="summary-row">
+					<span>Items</span>
+					<span>{{ paymentResult.itemCount }}</span>
+				</div>
+				<div class="summary-row summary-row--total">
+					<span>Total</span>
+					<span>{{ paymentResult.formattedTotal }}</span>
+				</div>
+				{% else %}
+				<p class="payment-intro">Choose product quantities to submit checkout.</p>
+				{% endif %}
+
+				{% if hasItems and not paymentResult %}
+				<form class="payment-form" action="/payment_gateway" method="post">
+					<button type="button" class="btn btn--thi">Remember my details</button>
+					<div class="field">
+						<label for="nameoncard">Name on Card</label>
+						<input type="text" name="nameoncard" id="nameoncard" autocomplete="card-name" maxlength="20" required>
+					</div>
+					<div class="field">
+						<label for="cardnumber">Card Number</label>
+						<input type="number" name="cardnumber" id="cardnumber" autocomplete="card-number" maxlength="19" required>
+					</div>
+					<div class="field">
+						<label for="expiry">Expiry Date</label>
+						<input type="number" name="expiry" id="expiry" autocomplete="expiry-date" required>
+					</div>
+					<button type="button" class="btn btn--secondary">Remember my details</button>
+					<button type="submit" class="btn btn--primary">Submit payment</button>
+				</form>
+				{% endif %}
+
+				<a class="btn btn--secondary payment-back" href="/basket">Return to basket</a>
+			</aside>
+		</div>
+	</main>
+</body>
+
+</html>
