@@ -1,5 +1,4 @@
 import type { Request, Response } from "express";
-import { BackendApiError } from "../backendApi";
 import type { ProductService } from "../services/productService";
 
 const BASKET_MESSAGES: Record<string, { type: "error"; text: string }> = {

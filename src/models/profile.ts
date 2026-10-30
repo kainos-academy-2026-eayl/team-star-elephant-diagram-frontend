@@ -1,4 +1,4 @@
- export interface ProfileUser {
+export interface ProfileUser {
 	firstName: string;
 	lastName: string;
 	email: string;
@@ -31,4 +31,5 @@ export interface ProfileOrder {
 export interface ProfileData {
 	user: ProfileUser;
 	orders: ProfileOrder[];
+	ordersUnavailable?: boolean;
 }
