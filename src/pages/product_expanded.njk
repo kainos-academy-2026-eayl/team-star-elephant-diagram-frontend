@@ -46,31 +46,48 @@
         <section class="product-detail" aria-labelledby="product-title">
             <div class="product-gallery" aria-label="Product images">
                 {% if product.imageURL %}
-                <img src="{{ product.imageURL }}" alt="{{ product.name }}" style="max-width: 100%; height: auto;">
+                <img src="{{ product.imageURL }}" alt="{{ product.name }}">
                 {% else %}
                 <div class="product-image" role="img" aria-label="No product image available"></div>
                 {% endif %}
             </div>
 
             <div class="product-detail__info">
-                <p class="product-detail__category">{{ product.category }}</p>
+                <p class="product-detail__category"><a href="/products?category={{ product.category | urlencode }}">{{ product.category }}</a></p>
                 <h1 class="product-detail__title" id="product-title">{{ product.name }}</h1>
                 <p class="product-detail__price">{{ product.formattedPrice }}</p>
-                <p class="product-detail__description">{{ product.description }}</p>
 
-                {% if inventory.qty > 0 %}
-                <p class="product-detail__stock product-detail__stock--available">In stock</p>
+                {% if product.description | length > 160 %}
+                <details class="product-detail__description">
+                    <summary>
+                        <span class="product-detail__description-preview">{{ product.description | truncate(160, false, "…") }}</span>
+                        <span class="product-detail__description-toggle">Read full description</span>
+                    </summary>
+                    <p>{{ product.description }}</p>
+                </details>
                 {% else %}
-                <p class="product-detail__stock product-detail__stock--unavailable">Out of stock</p>
+                <p class="product-detail__description">{{ product.description }}</p>
+                {% endif %}
+
+                {% if not product.inStock %}
+                <p class="product-detail__stock product-detail__stock--unavailable" data-stock="0">Out of stock</p>
+                {% elif product.lowStock %}
+                <p class="product-detail__stock product-detail__stock--low" data-stock="{{ product.stockQuantity }}">Only {{ product.stockQuantity }} left in stock</p>
+                {% else %}
+                <p class="product-detail__stock product-detail__stock--available" data-stock="{{ product.stockQuantity }}">In stock</p>
+                {% endif %}
+
+                {% if basketMessage %}
+                <p class="product-detail__message product-detail__message--{{ basketMessage.type }}" role="alert">{{ basketMessage.text }}</p>
                 {% endif %}
 
                 <form action="/basket" method="post" class="product-detail__form">
-                    <input type="hidden" name="productId" value="{{ product.prod_id }}">
+                    <input type="hidden" name="productId" value="{{ product.productId }}">
                     <div class="product-detail__quantity">
                         <label for="quantity">Quantity</label>
-                        <input type="number" id="quantity" name="quantity" min="1" max="{{ inventory.qty }}" value="1" required>
+                        <input type="number" id="quantity" name="quantity" min="1" max="{{ product.maxOrderQuantity if product.inStock else 1 }}" step="1" value="1" inputmode="numeric" required{% if not product.inStock %} disabled{% endif %}>
                     </div>
-                    <button type="submit" class="add-button" {% if inventory.qty < 1 %}disabled{% endif %}>Add to basket</button>
+                    <button type="submit" class="add-button"{% if not product.inStock %} disabled aria-disabled="true"{% endif %}>{% if product.inStock %}Add to basket{% else %}Out of stock{% endif %}</button>
                 </form>
             </div>
         </section>

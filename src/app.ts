@@ -40,7 +40,10 @@ export function createApp({
 	const sessions = new SessionService(api);
 	const authController = new AuthController(new AuthService(api), sessions);
 	const adminController = new AdminController(new AdminService(api, sessions));
-	const basketController = new BasketController(new BasketService(sessions));
+	const basketController = new BasketController(
+		new BasketService(api),
+		sessions,
+	);
 	const pageController = new PageController();
 	const productService = new ProductService(api);
 	const productController = new ProductController(productService);

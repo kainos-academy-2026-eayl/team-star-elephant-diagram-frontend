@@ -46,17 +46,19 @@ console. Tokens expire after 15 minutes and can only be used once. Email deliver
 and profile-page password changes are not implemented yet.
 The catalogue loads stored products from the backend, with search and category
 filtering. An empty database displays an empty catalogue. Product prices are
-returned in pence and formatted as GBP, and `imageURL` supports HTTP(S) images.
-Select a product to open `/products/:prodId`, which renders the expanded product
-page using `GET /products/:prodId` on the backend. Product IDs must be positive
-safe integers. Invalid IDs return 400, missing products return 404, and backend
-failures display an unavailable message with status 503.
-The `/payment_gateway` checkout page loads selectable products from the backend
-`Product` table. Its `POST /payment_gateway` endpoint accepts product IDs and
-quantities, verifies each item and calculates totals from backend product prices
-(in pence).
-Payment request validation, product lookup, and simulation are handled by
-`PaymentGatewayService`; the controller only handles HTTP responses and rendering.
+returned by the backend in pounds (e.g. `349.99`) and formatted as GBP without
+conversion, and `imageURL` supports HTTP(S) images. Catalogue cards show a
+shortened description; the full text is on the product page.
+Select a product to open `/products/:productId`, which renders the expanded
+product page using `GET /products/:productId` on the backend, including stock
+from `inventory.quantity`. Product IDs must be positive safe integers. Invalid
+IDs return 400, missing products return 404, and backend failures display an
+unavailable message with status 503.
+
+The product page's Add to basket form posts `productId` and `quantity` (1–99,
+capped by stock) to the frontend's `POST /basket`, which forwards them as JSON to
+the backend's `POST /basket`, relays the `basketId` cookie, and redirects to
+`/basket`. Errors return to the product page with a message.
 
 API calls run on the frontend server, not in the browser, so CORS is not needed.
 Backend requests time out after five seconds and show an unavailable message.
