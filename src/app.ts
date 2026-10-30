@@ -46,7 +46,7 @@ export function createApp({
 	const productExpandedController = new ProductExpandedController(
 		new ProductExpandedService(api),
 	);
-	const profileController = new ProfileController(new ProfileService(api));
+	const profileController = new ProfileController(new ProfileService(sessions));
 
 	nunjucks.configure("src/pages", {
 		autoescape: true,
