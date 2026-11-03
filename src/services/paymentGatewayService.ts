@@ -1,193 +1,153 @@
-import type { ProductService } from "./productService";
+export interface PaymentFormData {
+	nameOnCard: string;
+	cardNumber: string;
+	expiry: string;
+	cvc: string;
+}
 
-type PaymentSelection = { productId: number; quantity: number };
-type CheckoutProduct = Awaited<
-	ReturnType<ProductService["getProducts"]>
->[number];
+export interface ShippingAddressData {
+	fullName: string;
+	addressLine1: string;
+	addressLine2?: string;
+	city: string;
+	postcode: string;
+	country: string;
+}
 
-export interface SimulatedPaymentResult {
-	items: Array<{
-		name: string;
-		quantity: number;
-		formattedSubtotal: string;
-	}>;
-	itemCount: number;
-	formattedTotal: string;
+export interface PaymentSubmissionData {
+	payment: PaymentFormData;
+	shipping: ShippingAddressData;
+}
+
+export interface PaymentSuccessResult {
+	status: string;
+	message: string;
 }
 
 type PaymentSubmissionResult =
-	| { outcome: "success"; paymentResult: SimulatedPaymentResult }
-	| { outcome: "invalid"; products: CheckoutProduct[]; error: string }
+	| { outcome: "success"; paymentResult: PaymentSuccessResult }
+	| { outcome: "invalid"; error: string }
 	| { outcome: "unavailable"; error: string };
 
-class PaymentGatewayValidationError extends Error {}
+class PaymentValidationError extends Error {}
 
 export class PaymentGatewayService {
-	constructor(private readonly productService: ProductService) {}
-
-	getProducts(): Promise<CheckoutProduct[]> {
-		return this.productService.getProducts();
-	}
+	constructor() {}
 
 	async submit(body: unknown): Promise<PaymentSubmissionResult> {
-		let products: CheckoutProduct[];
 		try {
-			products = await this.getProducts();
-		} catch {
-			return {
-				outcome: "unavailable",
-				error: "Products are temporarily unavailable. Please try again.",
-			};
-		}
+			const validatedData = this.validatePaymentData(body);
+			if (!validatedData) {
+				return {
+					outcome: "invalid",
+					error: "Please fill in all required payment and shipping fields.",
+				};
+			}
 
-		const selections = this.parsePaymentSelection(body);
-		if (!selections) {
-			return {
-				outcome: "invalid",
-				products,
-				error: "Select at least one product and enter a valid quantity.",
-			};
-		}
-
-		try {
 			return {
 				outcome: "success",
-				paymentResult: this.simulatePayment(selections, products),
+				paymentResult: {
+					status: "processing",
+					message: "Payment is being processed. Please do not refresh the page.",
+				},
 			};
 		} catch (error) {
-			if (error instanceof PaymentGatewayValidationError) {
-				return { outcome: "invalid", products, error: error.message };
+			if (error instanceof PaymentValidationError) {
+				return { outcome: "invalid", error: error.message };
 			}
 			return {
 				outcome: "unavailable",
-				error: "Checkout is temporarily unavailable. Please try again.",
+				error: "Payment processing is temporarily unavailable. Please try again.",
 			};
 		}
 	}
 
-	private getRepeatedFields(value: unknown): string[] | null {
-		if (typeof value === "string") {
-			return [value];
+	private validatePaymentData(body: unknown): boolean {
+		if (!body || typeof body !== "object") {
+			return false;
 		}
+
+		const data = body as Record<string, unknown>;
+
+		// Validate payment fields
+		const nameOnCard = data.nameOnCard;
+		const cardNumber = data.cardNumber;
+		const expiry = data.expiry;
+		const cvc = data.cvc;
+
 		if (
-			Array.isArray(value) &&
-			value.every((item): item is string => typeof item === "string")
+			typeof nameOnCard !== "string" ||
+			nameOnCard.trim().length === 0 ||
+			nameOnCard.length > 50
 		) {
-			return value;
+			throw new PaymentValidationError("Please enter a valid name on card.");
 		}
-		return null;
-	}
 
-	private parsePaymentSelection(body: unknown): PaymentSelection[] | null {
 		if (
-			!body ||
-			typeof body !== "object" ||
-			!("productId" in body) ||
-			!("quantity" in body)
+			typeof cardNumber !== "string" ||
+			!/^\d{13,19}$/.test(cardNumber.replace(/\s/g, ""))
 		) {
-			return null;
+			throw new PaymentValidationError("Please enter a valid card number.");
 		}
-		const productIds = this.getRepeatedFields(body.productId);
-		const quantities = this.getRepeatedFields(body.quantity);
+
 		if (
-			!productIds ||
-			!quantities ||
-			productIds.length !== quantities.length ||
-			productIds.length === 0
+			typeof expiry !== "string" ||
+			!/^\d{2}\/\d{2}$/.test(expiry.trim())
 		) {
-			return null;
+			throw new PaymentValidationError("Please enter a valid expiry date (MM/YY).");
 		}
 
-		const selections: PaymentSelection[] = [];
-		const seenProductIds = new Set<number>();
-		for (const [index, productIdValue] of productIds.entries()) {
-			if (!/^[1-9]\d*$/.test(productIdValue)) {
-				return null;
-			}
-			const productId = Number(productIdValue);
-			const quantityValue = quantities[index];
-			if (
-				!Number.isSafeInteger(productId) ||
-				seenProductIds.has(productId) ||
-				quantityValue === undefined ||
-				!/^(?:0|[1-9]\d*)$/.test(quantityValue)
-			) {
-				return null;
-			}
-			const quantity = Number(quantityValue);
-			if (!Number.isSafeInteger(quantity) || quantity > 99) {
-				return null;
-			}
-			seenProductIds.add(productId);
-			if (quantity > 0) {
-				selections.push({ productId, quantity });
-			}
+		if (typeof cvc !== "string" || !/^\d{3,4}$/.test(cvc.trim())) {
+			throw new PaymentValidationError("Please enter a valid security code.");
 		}
 
-		return selections.length > 0 ? selections : null;
-	}
+		// Validate shipping address fields
+		const fullName = data.fullName;
+		const addressLine1 = data.addressLine1;
+		const city = data.city;
+		const postcode = data.postcode;
+		const country = data.country;
 
-	private simulatePayment(
-		selections: PaymentSelection[],
-		products: CheckoutProduct[],
-	): SimulatedPaymentResult {
-		const productsById = new Map(
-			products.map((product) => [product.productId, product]),
-		);
-		const items = selections.map(({ productId, quantity }) => {
-			const product = productsById.get(productId);
-			if (!product) {
-				throw new PaymentGatewayValidationError(
-					"Selected product is no longer available.",
-				);
-			}
-			const unitPriceInPence = Math.round(product.price * 100);
-			if (
-				!Number.isFinite(product.price) ||
-				product.price < 0 ||
-				!Number.isSafeInteger(unitPriceInPence)
-			) {
-				throw new Error("Selected product has an invalid price.");
-			}
-			const subtotalInPence = unitPriceInPence * quantity;
-			if (!Number.isSafeInteger(subtotalInPence)) {
-				throw new Error("Order total is too large.");
-			}
-
-			return {
-				name: product.name,
-				quantity,
-				subtotalInPence,
-				formattedSubtotal: this.formatPrice(subtotalInPence),
-			};
-		});
-		const itemCount = items.reduce((total, item) => total + item.quantity, 0);
-		if (!Number.isSafeInteger(itemCount)) {
-			throw new Error("Order quantity is too large.");
-		}
-		const totalInPence = items.reduce(
-			(total, item) => total + item.subtotalInPence,
-			0,
-		);
-		if (!Number.isSafeInteger(totalInPence)) {
-			throw new Error("Order total is too large.");
+		if (
+			typeof fullName !== "string" ||
+			fullName.trim().length === 0 ||
+			fullName.length > 100
+		) {
+			throw new PaymentValidationError("Please enter a valid full name.");
 		}
 
-		return {
-			items: items.map(({ name, quantity, formattedSubtotal }) => ({
-				name,
-				quantity,
-				formattedSubtotal,
-			})),
-			itemCount,
-			formattedTotal: this.formatPrice(totalInPence),
-		};
-	}
+		if (
+			typeof addressLine1 !== "string" ||
+			addressLine1.trim().length === 0 ||
+			addressLine1.length > 100
+		) {
+			throw new PaymentValidationError("Please enter a valid street address.");
+		}
 
-	private formatPrice(amountInPence: number): string {
-		return new Intl.NumberFormat("en-GB", {
-			style: "currency",
-			currency: "GBP",
-		}).format(amountInPence / 100);
+		if (
+			typeof city !== "string" ||
+			city.trim().length === 0 ||
+			city.length > 50
+		) {
+			throw new PaymentValidationError("Please enter a valid city.");
+		}
+
+		if (
+			typeof postcode !== "string" ||
+			postcode.trim().length === 0 ||
+			postcode.length > 20
+		) {
+			throw new PaymentValidationError("Please enter a valid postcode.");
+		}
+
+		if (
+			typeof country !== "string" ||
+			country.trim().length === 0 ||
+			country.length > 50
+		) {
+			throw new PaymentValidationError("Please enter a valid country.");
+		}
+
+		return true;
 	}
 }
