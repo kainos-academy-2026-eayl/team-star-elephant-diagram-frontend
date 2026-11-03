@@ -252,6 +252,7 @@ export class AdminService {
 			req,
 			res,
 			{},
+			{},
 		);
 		return STATUS_UPDATES[action];
 	}
