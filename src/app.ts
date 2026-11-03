@@ -52,7 +52,7 @@ export function createApp({
 	const productController = new ProductController(productService);
 	const checkoutController = new CheckoutController(
 		new CheckoutService(),
-		new BasketService(api),
+		sessions,
 	);
 	const paymentGatewayController = new PaymentGatewayController(
 		new PaymentGatewayService(),
