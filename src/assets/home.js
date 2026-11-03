@@ -4,10 +4,12 @@
 	const overlay = document.getElementById("menu-overlay");
 	const openButton = document.getElementById("menu-open");
 	const closeButton = document.getElementById("menu-close");
+	const background = document.querySelectorAll(".site-header, main");
 
 	const setMenu = (open) => {
 		body.classList.toggle("menu-open", open);
 		menu.toggleAttribute("inert", !open);
+		for (const region of background) region.toggleAttribute("inert", open);
 		menu.setAttribute("aria-hidden", String(!open));
 		openButton.setAttribute("aria-expanded", String(open));
 		if (open) {
