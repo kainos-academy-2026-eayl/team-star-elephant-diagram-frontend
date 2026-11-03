@@ -175,6 +175,25 @@ describe("persistent authentication", () => {
 		expect(rejected).toHaveBeenCalledTimes(2);
 	});
 
+	it("persists refreshed credentials when a staff retry fails with a non-401 response", async () => {
+		const api = vi
+			.fn<typeof fetch>()
+			.mockResolvedValueOnce(credentials())
+			.mockResolvedValueOnce(response({ error: "Not found" }, 404));
+		const result = await request(createApp({ fetch: api }))
+			.get("/admin/users/999")
+			.set("Cookie", "refreshToken=current-refresh");
+
+		expect(result.status).toBe(404);
+		expect(result.headers["set-cookie"]).toHaveLength(2);
+		expect(String(result.headers["set-cookie"])).toContain(
+			"accessToken=new-access",
+		);
+		expect(String(result.headers["set-cookie"])).toContain(
+			"refreshToken=new-refresh",
+		);
+	});
+
 	it("offers a working separate admin login", async () => {
 		const api = vi.fn<typeof fetch>().mockResolvedValueOnce(credentials());
 		const app = createApp({ fetch: api });

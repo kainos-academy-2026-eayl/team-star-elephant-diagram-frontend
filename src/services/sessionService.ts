@@ -127,8 +127,11 @@ export class SessionService {
 				if (!operation.invalidated) this.establish(res, credentials);
 				throw new CustomerSessionError();
 			}
-			if (error instanceof BackendApiError && error.status === 401)
+			if (error instanceof BackendApiError && error.status === 401) {
 				this.clear(res);
+			} else if (credentials && !operation.invalidated) {
+				this.establish(res, credentials);
+			}
 			throw error;
 		} finally {
 			operation.users -= 1;
