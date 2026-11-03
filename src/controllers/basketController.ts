@@ -18,13 +18,26 @@ const formatPrice = (amount: number): string =>
 		currency: "GBP",
 	}).format(amount);
 
-const readCredentials = (req: Request): BasketRequestCredentials => {
-	const authorization = req.get("authorization");
-	const cookie = req.get("cookie");
-	return {
-		...(authorization ? { authorization } : {}),
-		...(cookie ? { cookie } : {}),
-	};
+const readCookie = (req: Request, name: string): string | undefined => {
+	const value = (req.get("cookie") ?? "")
+		.split(";")
+		.map((part) => part.trim())
+		.find((part) => part.startsWith(`${name}=`))
+		?.slice(name.length + 1);
+	return value && /^[A-Za-z0-9._-]+$/.test(value) ? value : undefined;
+};
+
+const readAuthorization = (req: Request): string | undefined => {
+	const accessToken = readCookie(req, "accessToken");
+	return (
+		req.get("authorization") ??
+		(accessToken ? `Bearer ${accessToken}` : undefined)
+	);
+};
+
+const basketCookieHeader = (req: Request): string | undefined => {
+	const basketId = readCookie(req, BASKET_COOKIE);
+	return basketId ? `${BASKET_COOKIE}=${basketId}` : undefined;
 };
 
 export class BasketController {
@@ -34,6 +47,11 @@ export class BasketController {
 	) {}
 
 	async addItem(req: Request, res: Response): Promise<void> {
+		const authorization = readAuthorization(req);
+		if (!authorization) {
+			res.redirect(303, "/login");
+			return;
+		}
 		const body = (req.body ?? {}) as Record<string, unknown>;
 		const productId = body.productId;
 		if (!isValidProductId(productId)) {
@@ -56,10 +74,15 @@ export class BasketController {
 		}
 
 		try {
+			const cookie = basketCookieHeader(req);
+			const credentials: BasketRequestCredentials = {
+				authorization,
+				...(cookie ? { cookie } : {}),
+			};
 			const { cookies } = await this.basketService.addItem(
 				Number(productId),
 				quantity,
-				readCredentials(req),
+				credentials,
 			);
 			for (const setCookie of cookies) {
 				const pair = setCookie.split(";", 1)[0]?.trim() ?? "";
@@ -72,6 +95,10 @@ export class BasketController {
 			}
 			res.redirect(303, "/basket");
 		} catch (error) {
+			if (error instanceof BackendApiError && error.status === 401) {
+				res.redirect(303, "/login");
+				return;
+			}
 			const status =
 				error instanceof BackendApiError
 					? error.status === 404
@@ -99,7 +126,13 @@ export class BasketController {
 		}
 
 		try {
-			const basket = await this.sessions.request<Basket>("/basket", req, res);
+			const basketCookie = basketCookieHeader(req);
+			const basket = await this.sessions.request<Basket>(
+				"/basket",
+				req,
+				res,
+				basketCookie ? { Cookie: basketCookie } : {},
+			);
 			const items = basket.items.map((item) => ({
 				...item,
 				imageURL: /^https?:\/\//i.test(item.imageURL ?? "")

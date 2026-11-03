@@ -915,6 +915,30 @@ describe("app", () => {
 		});
 	});
 
+	it("forwards only the basket cookie when loading an authenticated customer's basket", async () => {
+		const basketId = "8e0dcfff-1528-4ec6-9820-b8c9a6732000";
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(
+				new Response(JSON.stringify({ items: [], subtotal: 0 })),
+			);
+		const res = await request(
+			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
+		)
+			.get("/basket")
+			.set(
+				"Cookie",
+				`accessToken=access-one; refreshToken=refresh-one; basketId=${basketId}`,
+			);
+
+		expect(res.status).toBe(200);
+		expect(fetchApi.mock.calls[0]?.[1]?.headers).toEqual({
+			"Content-Type": "application/json",
+			Authorization: ["Bearer", "access-one"].join(" "),
+			Cookie: `basketId=${basketId}`,
+		});
+	});
+
 	it("handles rejected basket credentials as unauthenticated", async () => {
 		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
 			new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -1565,7 +1589,10 @@ describe("app", () => {
 			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 		)
 			.post("/basket")
-			.set("Cookie", "session=abc")
+			.set(
+				"Cookie",
+				"session=abc; accessToken=access-one; basketId=0b7e0c5e-4a8f-4f43-9a2e-3c1f2f6a9d11",
+			)
 			.type("form")
 			.send({ productId: "42", quantity: "3" });
 
@@ -1580,7 +1607,11 @@ describe("app", () => {
 			productId: 42,
 			quantity: 3,
 		});
-		expect(init?.headers).toMatchObject({ Cookie: "session=abc" });
+		expect(init?.headers).toEqual({
+			"Content-Type": "application/json",
+			Authorization: ["Bearer", "access-one"].join(" "),
+			Cookie: "basketId=0b7e0c5e-4a8f-4f43-9a2e-3c1f2f6a9d11",
+		});
 		expect(res.headers["set-cookie"]).toEqual([
 			"basketId=0b7e0c5e-4a8f-4f43-9a2e-3c1f2f6a9d11; Path=/; Max-Age=604800; HttpOnly; SameSite=Lax",
 		]);
@@ -1597,6 +1628,7 @@ describe("app", () => {
 			const fetchApi = vi.fn<typeof fetch>();
 			const res = await request(createApp({ fetch: fetchApi }))
 				.post("/basket")
+				.set("Cookie", "accessToken=access-one")
 				.type("form")
 				.send(form);
 
@@ -1605,6 +1637,35 @@ describe("app", () => {
 			expect(fetchApi).not.toHaveBeenCalled();
 		},
 	);
+
+	it("sends logged-out users to login instead of adding to the basket", async () => {
+		const fetchApi = vi.fn<typeof fetch>();
+		const res = await request(createApp({ fetch: fetchApi }))
+			.post("/basket")
+			.set("Cookie", "basketId=0b7e0c5e-4a8f-4f43-9a2e-3c1f2f6a9d11")
+			.type("form")
+			.send({ productId: "42", quantity: "1" });
+
+		expect(res.status).toBe(303);
+		expect(res.headers.location).toBe("/login");
+		expect(fetchApi).not.toHaveBeenCalled();
+	});
+
+	it("sends users to login when the backend rejects their session", async () => {
+		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
+			new Response(JSON.stringify({ error: "Authentication required" }), {
+				status: 401,
+			}),
+		);
+		const res = await request(createApp({ fetch: fetchApi }))
+			.post("/basket")
+			.set("Cookie", "accessToken=expired")
+			.type("form")
+			.send({ productId: "42", quantity: "1" });
+
+		expect(res.status).toBe(303);
+		expect(res.headers.location).toBe("/login");
+	});
 
 	it.each([
 		[404, "Product not found", "notfound"],
@@ -1618,6 +1679,7 @@ describe("app", () => {
 				.mockResolvedValue(new Response(JSON.stringify({ error }), { status }));
 			const res = await request(createApp({ fetch: fetchApi }))
 				.post("/basket")
+				.set("Cookie", "accessToken=access-one")
 				.type("form")
 				.send({ productId: "42", quantity: "1" });
 
