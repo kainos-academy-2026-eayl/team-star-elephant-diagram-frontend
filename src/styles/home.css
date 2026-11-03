@@ -58,9 +58,9 @@ body.home.menu-open {
 /* Header */
 .site-header {
 	display: grid;
-	grid-template-columns: 1fr minmax(0, 26rem) 1fr;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 26rem) minmax(0, 1fr);
 	align-items: center;
-	gap: 2rem;
+	gap: 1rem;
 	padding: 0.5rem 1rem;
 	background: var(--sed-purple);
 	border-bottom: 3px solid var(--sed-gold);
@@ -361,11 +361,6 @@ body.home.menu-open {
 	font-size: 0.9rem;
 	font-weight: 500;
 	cursor: pointer;
-	list-style: none;
-}
-
-.menu-item::-webkit-details-marker {
-	display: none;
 }
 
 .menu-item:hover {
@@ -375,34 +370,6 @@ body.home.menu-open {
 .menu-item.is-current {
 	background: var(--sed-purple-soft);
 	font-weight: 700;
-}
-
-.menu-item__chevron {
-	display: flex;
-	margin-left: auto;
-	transition: transform 0.2s;
-}
-
-.menu-item__chevron .icon {
-	width: 18px;
-	height: 18px;
-}
-
-.menu-group[open] .menu-item__chevron {
-	transform: rotate(180deg);
-}
-
-.menu-group__links a {
-	display: block;
-	padding: 0.45rem 0.75rem 0.45rem 3.05rem;
-	border-radius: 8px;
-	font-size: 0.85rem;
-	color: var(--sed-muted);
-}
-
-.menu-group__links a:hover {
-	background: var(--sed-purple-soft);
-	color: var(--sed-text);
 }
 
 .menu-section {
@@ -501,7 +468,7 @@ body.home.menu-open {
 }
 
 /* Responsive */
-@media (max-width: 720px) {
+@media (max-width: 860px) {
 	.site-header {
 		grid-template-columns: 1fr auto;
 		gap: 0.5rem 1rem;
@@ -511,7 +478,9 @@ body.home.menu-open {
 		grid-row: 2;
 		grid-column: 1 / -1;
 	}
+}
 
+@media (max-width: 720px) {
 	.tile--small {
 		grid-column: span 6;
 	}

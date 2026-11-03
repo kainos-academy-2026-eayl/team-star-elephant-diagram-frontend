@@ -42,37 +42,12 @@ const largeTiles = [
 	},
 ];
 
-const menuGroups = [
-	{
-		label: "Shop All",
-		icon: "grid",
-		href: PLACEHOLDER_HREF,
-		linkLabel: "Browse all products",
-	},
-	{
-		label: "Winter Shop",
-		icon: "snowflake",
-		href: PLACEHOLDER_HREF,
-		linkLabel: "Browse Winter Shop",
-	},
-	{
-		label: "Electronics Shop",
-		icon: "headphones",
-		href: PLACEHOLDER_HREF,
-		linkLabel: "Browse Electronics Shop",
-	},
-	{
-		label: "Home & Living",
-		icon: "house",
-		href: PLACEHOLDER_HREF,
-		linkLabel: "Browse Home & Living",
-	},
-	{
-		label: "Fashion",
-		icon: "hanger",
-		href: PLACEHOLDER_HREF,
-		linkLabel: "Browse Fashion",
-	},
+const menuCategories = [
+	{ label: "Shop All", icon: "grid", href: PLACEHOLDER_HREF },
+	{ label: "Winter Shop", icon: "snowflake", href: PLACEHOLDER_HREF },
+	{ label: "Electronics Shop", icon: "headphones", href: PLACEHOLDER_HREF },
+	{ label: "Home & Living", icon: "house", href: PLACEHOLDER_HREF },
+	{ label: "Fashion", icon: "hanger", href: PLACEHOLDER_HREF },
 ];
 
 export class PageController {
@@ -81,6 +56,6 @@ export class PageController {
 	}
 
 	home(res: Response): void {
-		res.render("home", { slides, smallTiles, largeTiles, menuGroups });
+		res.render("home", { slides, smallTiles, largeTiles, menuCategories });
 	}
 }
