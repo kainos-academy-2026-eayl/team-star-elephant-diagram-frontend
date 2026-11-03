@@ -53,6 +53,7 @@ export class SessionService {
 		path: string,
 		req: Request,
 		res: Response,
+		headers: Record<string, string> = {},
 	): Promise<Result> {
 		res.set("Cache-Control", "no-store");
 		const authorization = req.get("authorization");
@@ -60,6 +61,7 @@ export class SessionService {
 		if (authorization || access) {
 			try {
 				return await this.api.request<Result>(path, undefined, {
+					...headers,
 					Authorization: authorization ?? `Bearer ${access}`,
 				});
 			} catch (error) {
@@ -88,6 +90,7 @@ export class SessionService {
 		try {
 			const credentials = await operation.promise;
 			const result = await this.api.request<Result>(path, undefined, {
+				...headers,
 				Authorization: `Bearer ${credentials.result.accessToken}`,
 			});
 			if (!operation.invalidated) this.establish(res, credentials);
