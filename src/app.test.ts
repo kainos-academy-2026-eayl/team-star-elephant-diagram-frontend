@@ -222,7 +222,7 @@ describe("app", () => {
 				createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 			)
 				.get("/admin/baskets")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain("Active baskets");
@@ -238,12 +238,13 @@ describe("app", () => {
 			expect(res.text).toContain(
 				'<a href="/admin/baskets" class="active" aria-current="page">Baskets</a>',
 			);
+			expect(res.headers["cache-control"]).toBe("no-store");
 			expect(String(fetchApi.mock.calls[0]?.[0])).toBe(
 				"http://backend:4000/admin/baskets",
 			);
 		});
 
-		it("forwards staff credentials when loading baskets", async () => {
+		it("forwards only the staff access token when loading baskets", async () => {
 			const fetchApi = vi
 				.fn<typeof fetch>()
 				.mockResolvedValueOnce(jsonResponse({ baskets: basketSummaries }))
@@ -253,36 +254,38 @@ describe("app", () => {
 			);
 			const expectedHeaders = {
 				"Content-Type": "application/json",
-				Authorization: ["Bearer", "test-token"].join(" "),
-				Cookie: "session=staff-session",
+				Authorization: ["Bearer", "staff-access"].join(" "),
 			};
 
 			await client
 				.get("/admin/baskets")
-				.set("Authorization", ["Bearer", "test-token"].join(" "))
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access; session=unrelated");
 			await client
 				.get("/admin/baskets/123")
-				.set("Authorization", ["Bearer", "test-token"].join(" "))
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access; session=unrelated");
 
 			expect(fetchApi.mock.calls[0]?.[1]?.headers).toEqual(expectedHeaders);
 			expect(fetchApi.mock.calls[1]?.[1]?.headers).toEqual(expectedHeaders);
 		});
 
-		it("filters baskets by search term", async () => {
+		it("sends the basket search term to the backend", async () => {
 			const fetchApi = vi
 				.fn<typeof fetch>()
-				.mockResolvedValue(jsonResponse({ baskets: basketSummaries }));
-			const res = await request(createApp({ fetch: fetchApi }))
+				.mockResolvedValue(jsonResponse({ baskets: [basketSummaries[1]] }));
+			const res = await request(
+				createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
+			)
 				.get("/admin/baskets")
-				.query({ q: "ADA@example" })
-				.set("Cookie", "session=staff-session");
+				.query({ q: "  lovelace ada  " })
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain("Ada Lovelace");
 			expect(res.text).not.toContain("John Smith");
-			expect(res.text).toContain('value="ADA@example"');
+			expect(res.text).toContain('value="lovelace ada"');
+			expect(String(fetchApi.mock.calls[0]?.[0])).toBe(
+				"http://backend:4000/admin/baskets?search=lovelace+ada",
+			);
 		});
 
 		it("renders an empty state when there are no active baskets", async () => {
@@ -291,7 +294,7 @@ describe("app", () => {
 				.mockResolvedValue(jsonResponse({ baskets: [] }));
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/baskets")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain("There are no active baskets.");
@@ -301,11 +304,11 @@ describe("app", () => {
 		it("renders a no-results state when the search matches nothing", async () => {
 			const fetchApi = vi
 				.fn<typeof fetch>()
-				.mockResolvedValue(jsonResponse({ baskets: basketSummaries }));
+				.mockResolvedValue(jsonResponse({ baskets: [] }));
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/baskets")
 				.query({ q: "<script>" })
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain("No baskets match");
@@ -321,7 +324,7 @@ describe("app", () => {
 				createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 			)
 				.get("/admin/baskets/123")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain("Basket #123");
@@ -338,6 +341,7 @@ describe("app", () => {
 			expect(res.text).toContain(
 				'href="/admin/baskets" class="admin-back-link"',
 			);
+			expect(res.headers["cache-control"]).toBe("no-store");
 			expect(String(fetchApi.mock.calls[0]?.[0])).toBe(
 				"http://backend:4000/admin/baskets/123",
 			);
@@ -351,7 +355,7 @@ describe("app", () => {
 			);
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/baskets/123")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain("This basket is empty.");
@@ -366,7 +370,7 @@ describe("app", () => {
 				const fetchApi = vi.fn<typeof fetch>();
 				const res = await request(createApp({ fetch: fetchApi }))
 					.get(`/admin/baskets/${id}`)
-					.set("Cookie", "session=staff-session");
+					.set("Cookie", "accessToken=staff-access");
 
 				expect(res.status).toBe(404);
 				expect(res.text).toContain("Basket not found");
@@ -377,14 +381,20 @@ describe("app", () => {
 		it("caps the basket search term at 100 characters", async () => {
 			const fetchApi = vi
 				.fn<typeof fetch>()
-				.mockResolvedValue(jsonResponse({ baskets: basketSummaries }));
+				.mockResolvedValue(jsonResponse({ baskets: [] }));
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/baskets")
 				.query({ q: "x".repeat(150) })
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.text).toContain(`value="${"x".repeat(100)}"`);
 			expect(res.text).not.toContain("x".repeat(101));
+			expect(String(fetchApi.mock.calls[0]?.[0])).toContain(
+				`search=${"x".repeat(100)}`,
+			);
+			expect(String(fetchApi.mock.calls[0]?.[0])).not.toContain(
+				"x".repeat(101),
+			);
 		});
 
 		it("shows a not found page when the basket does not exist", async () => {
@@ -393,41 +403,157 @@ describe("app", () => {
 				.mockResolvedValue(jsonResponse({ error: "Not found" }, 404));
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/baskets/999")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.status).toBe(404);
 			expect(res.text).toContain("Basket not found");
 		});
 
-		it.each(["/admin/baskets", "/admin/baskets/123"])(
-			"requires staff credentials before requesting %s",
-			async (path) => {
+		it.each([
+			["/admin/baskets", "/admin/login?returnTo=%2Fadmin%2Fbaskets"],
+			["/admin/baskets/123", "/admin/login?returnTo=%2Fadmin%2Fbaskets%2F123"],
+			[
+				"/admin/baskets?q=ada",
+				"/admin/login?returnTo=%2Fadmin%2Fbaskets%3Fq%3Dada",
+			],
+		])(
+			"redirects to the admin login without a session for %s",
+			async (path, location) => {
 				const fetchApi = vi.fn<typeof fetch>();
 				const res = await request(createApp({ fetch: fetchApi })).get(path);
 
-				expect(res.status).toBe(401);
+				expect(res.status).toBe(303);
+				expect(res.headers.location).toBe(location);
 				expect(fetchApi).not.toHaveBeenCalled();
 			},
 		);
 
-		it.each([
-			["/admin/baskets", 401],
-			["/admin/baskets", 403],
-			["/admin/baskets/123", 401],
-			["/admin/baskets/123", 403],
-		])(
-			"does not render %s when the backend responds %i",
-			async (path, status) => {
-				const fetchApi = vi
-					.fn<typeof fetch>()
-					.mockResolvedValue(jsonResponse({ error: "Denied" }, status));
+		it.each(["/admin/baskets", "/admin/baskets/123"])(
+			"ignores unrelated browser cookies and redirects to the admin login for %s",
+			async (path) => {
+				const fetchApi = vi.fn<typeof fetch>();
 				const res = await request(createApp({ fetch: fetchApi }))
 					.get(path)
-					.set("Cookie", "session=customer-session");
+					.set("Cookie", "session=staff-session");
 
-				expect(res.status).toBe(status);
+				expect(res.status).toBe(303);
+				expect(res.headers.location).toBe(
+					`/admin/login?returnTo=${encodeURIComponent(path)}`,
+				);
+				expect(fetchApi).not.toHaveBeenCalled();
+			},
+		);
+
+		it.each(["/admin/baskets", "/admin/baskets/123"])(
+			"redirects to the admin login when the session has expired for %s",
+			async (path) => {
+				const fetchApi = vi
+					.fn<typeof fetch>()
+					.mockResolvedValueOnce(jsonResponse({ error: "Expired" }, 401))
+					.mockResolvedValueOnce(
+						jsonResponse({ error: "Expired refresh" }, 401),
+					);
+				const res = await request(createApp({ fetch: fetchApi }))
+					.get(path)
+					.set(
+						"Cookie",
+						"accessToken=expired-access; refreshToken=expired-refresh",
+					);
+
+				expect(res.status).toBe(303);
+				expect(res.headers.location).toBe(
+					`/admin/login?reason=expired&returnTo=${encodeURIComponent(path)}`,
+				);
+				expect(res.text).not.toContain("Unauthorized");
+				expect(res.headers["set-cookie"]).toHaveLength(2);
+				expect(fetchApi).toHaveBeenCalledTimes(2);
+			},
+		);
+
+		it.each(["/admin/baskets", "/admin/baskets/123"])(
+			"sends staff without permission for %s to the admin login",
+			async (path) => {
+				const fetchApi = vi
+					.fn<typeof fetch>()
+					.mockResolvedValue(jsonResponse({ error: "Denied" }, 403));
+				const res = await request(createApp({ fetch: fetchApi }))
+					.get(path)
+					.set("Cookie", "accessToken=staff-access");
+
+				expect(res.status).toBe(303);
+				expect(res.headers.location).toBe("/admin/login?reason=forbidden");
 				expect(res.text).not.toContain("Active baskets");
 				expect(res.text).not.toContain("Basket contents");
+			},
+		);
+
+		it("refreshes an expired access token and keeps the baskets pages working", async () => {
+			const fetchApi = vi
+				.fn<typeof fetch>()
+				.mockResolvedValueOnce(jsonResponse({ error: "Expired" }, 401))
+				.mockResolvedValueOnce(loginResponse())
+				.mockResolvedValueOnce(jsonResponse({ baskets: basketSummaries }))
+				.mockResolvedValueOnce(jsonResponse({ basket: basketDetails }));
+			const app = createApp({
+				apiBaseUrl: "http://backend:4000",
+				fetch: fetchApi,
+			});
+			const res = await request(app)
+				.get("/admin/baskets")
+				.set(
+					"Cookie",
+					"accessToken=expired-access; refreshToken=current-refresh",
+				);
+
+			expect(res.status).toBe(200);
+			expect(res.text).toContain("John Smith");
+			expect(String(fetchApi.mock.calls[1]?.[0])).toBe(
+				"http://backend:4000/auth/refresh",
+			);
+			expect(fetchApi.mock.calls[2]?.[1]?.headers).toMatchObject({
+				Authorization: ["Bearer", "access-one"].join(" "),
+			});
+			const cookies = res.headers["set-cookie"] as unknown as string[];
+			expect(cookies.some((c) => c.startsWith("accessToken=access-one"))).toBe(
+				true,
+			);
+			expect(
+				cookies.some((c) => c.startsWith("refreshToken=refresh-one")),
+			).toBe(true);
+
+			const details = await request(app)
+				.get("/admin/baskets/123")
+				.set("Cookie", "accessToken=access-one; refreshToken=refresh-one");
+			expect(details.status).toBe(200);
+			expect(details.text).toContain("Basket #123");
+			expect(fetchApi.mock.calls[3]?.[1]?.headers).toMatchObject({
+				Authorization: ["Bearer", "access-one"].join(" "),
+			});
+			expect(fetchApi).toHaveBeenCalledTimes(4);
+		});
+
+		it.each(["/admin/baskets", "/admin/baskets/123"])(
+			"sends a logged-in customer from %s back to the shop without logging them out",
+			async (path) => {
+				const customerToken = [
+					"e30",
+					Buffer.from(
+						JSON.stringify({ kind: "customer", tokenUse: "access" }),
+					).toString("base64url"),
+					"signature",
+				].join(".");
+				const fetchApi = vi.fn<typeof fetch>();
+				const res = await request(createApp({ fetch: fetchApi }))
+					.get(path)
+					.set(
+						"Cookie",
+						`accessToken=${customerToken}; refreshToken=customer-refresh`,
+					);
+
+				expect(res.status).toBe(303);
+				expect(res.headers.location).toBe("/products");
+				expect(res.headers["set-cookie"]).toBeUndefined();
+				expect(fetchApi).not.toHaveBeenCalled();
 			},
 		);
 

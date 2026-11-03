@@ -1,10 +1,7 @@
 import type { Request, Response } from "express";
 import { BackendApiError } from "../backendApi";
 import type { AdminUserStatusAction } from "../models/adminUser";
-import type {
-	AdminRequestCredentials,
-	AdminService,
-} from "../services/adminService";
+import type { AdminService } from "../services/adminService";
 import {
 	CustomerSessionError,
 	SessionExpiredError,
@@ -145,19 +142,16 @@ export class AdminController {
 	}
 
 	async getBaskets(req: Request, res: Response): Promise<void> {
-		const credentials = this.getCredentials(req);
-		if (!credentials) {
-			res.sendStatus(401);
+		if (this.redirectCustomer(req, res)) {
 			return;
 		}
 		const search = this.adminService.normaliseSearch(req.query.q);
 
 		try {
-			const baskets = await this.adminService.getBaskets(credentials, search);
+			const baskets = await this.adminService.getBaskets(req, res, search);
 			res.render("admin-baskets", { search, baskets });
 		} catch (error) {
-			if (isAuthError(error)) {
-				res.sendStatus(error.status);
+			if (redirectToAdminLogin(error, req, res)) {
 				return;
 			}
 			res.status(503).render("admin-baskets", {
@@ -169,9 +163,7 @@ export class AdminController {
 	}
 
 	async getBasketDetails(req: Request, res: Response): Promise<void> {
-		const credentials = this.getCredentials(req);
-		if (!credentials) {
-			res.sendStatus(401);
+		if (this.redirectCustomer(req, res)) {
 			return;
 		}
 		const id = String(req.params.id ?? "");
@@ -181,11 +173,10 @@ export class AdminController {
 		}
 
 		try {
-			const basket = await this.adminService.getBasketById(credentials, id);
+			const basket = await this.adminService.getBasketById(req, res, id);
 			res.render("admin-basket-details", { basket, basketId: id });
 		} catch (error) {
-			if (isAuthError(error)) {
-				res.sendStatus(error.status);
+			if (redirectToAdminLogin(error, req, res)) {
 				return;
 			}
 			if (isNotFound(error)) {
@@ -251,13 +242,6 @@ export class AdminController {
 		}
 		res.redirect(303, CUSTOMER_HOME_PATH);
 		return true;
-	}
-
-	private getCredentials(req: Request): AdminRequestCredentials | undefined {
-		return this.adminService.resolveCredentials(
-			req.get("authorization"),
-			req.get("cookie"),
-		);
 	}
 
 	private renderUserNotFound(res: Response): void {
