@@ -15,6 +15,8 @@
 
         {% if registered %}<p role="status">Account created. You can now log in.</p>{% endif %}
         {% if passwordReset %}<p role="status">Password reset. You can now log in with your new password.</p>{% endif %}
+        {% if admin and sessionExpired %}<p role="status">Your session has expired. Please log in again.</p>{% endif %}
+        {% if admin and forbidden %}<p role="alert">You need a staff account to access that page.</p>{% endif %}
         {% if error %}
         <div role="alert">
             <p>{{ error }}</p>
@@ -25,6 +27,7 @@
         {% endif %}
 
         <form class="login__form" action="{% if admin %}/admin/login{% else %}/login{% endif %}" method="post">
+            {% if admin and returnTo %}<input type="hidden" name="returnTo" value="{{ returnTo }}">{% endif %}
             <div class="field">
                 <label for="email">Email</label>
                 <input type="email" name="email" id="email" autocomplete="email" value="{{ values.email }}" required>

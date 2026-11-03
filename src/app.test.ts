@@ -66,13 +66,14 @@ describe("app", () => {
 		});
 	});
 
-	it("requires staff credentials before requesting the admin dashboard", async () => {
+	it("redirects to the admin login before requesting the admin dashboard without a session", async () => {
 		const fetchApi = vi.fn<typeof fetch>();
 		const res = await request(
 			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 		).get("/admin");
 
-		expect(res.status).toBe(401);
+		expect(res.status).toBe(303);
+		expect(res.headers.location).toBe("/admin/login");
 		expect(fetchApi).not.toHaveBeenCalled();
 	});
 
@@ -102,7 +103,7 @@ describe("app", () => {
 		});
 	});
 
-	it("does not render admin data when the backend rejects staff credentials", async () => {
+	it("sends staff without permission to the admin login with a forbidden reason", async () => {
 		const fetchApi = vi
 			.fn<typeof fetch>()
 			.mockResolvedValue(
@@ -114,7 +115,8 @@ describe("app", () => {
 			.get("/admin")
 			.set("Cookie", "accessToken=customer-access");
 
-		expect(res.status).toBe(403);
+		expect(res.status).toBe(303);
+		expect(res.headers.location).toBe("/admin/login?reason=forbidden");
 		expect(res.text).not.toContain("New registrations");
 	});
 
@@ -531,7 +533,7 @@ describe("app", () => {
 				createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 			)
 				.get("/admin/users?q=ada%20l&page=2")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain('value="ada l"');
@@ -551,10 +553,10 @@ describe("app", () => {
 
 			const res = await request(app)
 				.get("/admin/users")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 			const searched = await request(app)
 				.get("/admin/users?q=nobody")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain("No user accounts found.");
@@ -570,7 +572,7 @@ describe("app", () => {
 				createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 			)
 				.get("/admin/users/7")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain("Customer information");
@@ -590,8 +592,9 @@ describe("app", () => {
 				"http://backend:4000/admin/users/7",
 			);
 			expect(fetchApi.mock.calls[0]?.[1]?.headers).toMatchObject({
-				Cookie: "session=staff-session",
+				Authorization: ["Bearer", "staff-access"].join(" "),
 			});
+			expect(fetchApi.mock.calls[0]?.[1]?.headers).not.toHaveProperty("Cookie");
 		});
 
 		it("offers reactivation for a suspended user with an empty basket", async () => {
@@ -604,7 +607,7 @@ describe("app", () => {
 			);
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/users/7")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain('action="/admin/users/7/reactivate"');
@@ -614,35 +617,164 @@ describe("app", () => {
 			expect(res.text).toContain("The basket is empty.");
 		});
 
-		it.each(["/admin/users", "/admin/users/7"])(
-			"requires staff credentials before requesting %s",
-			async (path) => {
+		it.each([
+			["/admin/users", "/admin/login?returnTo=%2Fadmin%2Fusers"],
+			["/admin/users/7", "/admin/login?returnTo=%2Fadmin%2Fusers%2F7"],
+			[
+				"/admin/users?q=ada&page=2",
+				"/admin/login?returnTo=%2Fadmin%2Fusers%3Fq%3Dada%26page%3D2",
+			],
+		])(
+			"redirects to the admin login without a session for %s",
+			async (path, location) => {
 				const fetchApi = vi.fn<typeof fetch>();
 				const res = await request(createApp({ fetch: fetchApi })).get(path);
 
-				expect(res.status).toBe(401);
+				expect(res.status).toBe(303);
+				expect(res.headers.location).toBe(location);
 				expect(fetchApi).not.toHaveBeenCalled();
 			},
 		);
 
-		it.each([
-			["/admin/users", 401],
-			["/admin/users", 403],
-			["/admin/users/7", 401],
-			["/admin/users/7", 403],
-		])(
-			"does not render %s when the backend responds %i",
-			async (path, status) => {
-				const fetchApi = vi
-					.fn<typeof fetch>()
-					.mockResolvedValue(jsonResponse({ error: "Denied" }, status));
+		it.each(["/admin/users", "/admin/users/7"])(
+			"ignores unrelated browser cookies and redirects to the admin login for %s",
+			async (path) => {
+				const fetchApi = vi.fn<typeof fetch>();
 				const res = await request(createApp({ fetch: fetchApi }))
 					.get(path)
-					.set("Cookie", "session=customer-session");
+					.set("Cookie", "session=staff-session");
 
-				expect(res.status).toBe(status);
+				expect(res.status).toBe(303);
+				expect(res.headers.location).toBe(
+					`/admin/login?returnTo=${encodeURIComponent(path)}`,
+				);
+				expect(fetchApi).not.toHaveBeenCalled();
+			},
+		);
+
+		it.each(["/admin/users", "/admin/users/7"])(
+			"redirects to the admin login when the session has expired for %s",
+			async (path) => {
+				const fetchApi = vi
+					.fn<typeof fetch>()
+					.mockResolvedValueOnce(jsonResponse({ error: "Expired" }, 401))
+					.mockResolvedValueOnce(
+						jsonResponse({ error: "Expired refresh" }, 401),
+					);
+				const res = await request(createApp({ fetch: fetchApi }))
+					.get(path)
+					.set(
+						"Cookie",
+						"accessToken=expired-access; refreshToken=expired-refresh",
+					);
+
+				expect(res.status).toBe(303);
+				expect(res.headers.location).toBe(
+					`/admin/login?reason=expired&returnTo=${encodeURIComponent(path)}`,
+				);
+				expect(res.text).not.toContain("Unauthorized");
+				expect(res.headers["set-cookie"]).toHaveLength(2);
+				expect(fetchApi).toHaveBeenCalledTimes(2);
+			},
+		);
+
+		it.each(["/admin/users", "/admin/users/7"])(
+			"sends staff without permission for %s to the admin login",
+			async (path) => {
+				const fetchApi = vi
+					.fn<typeof fetch>()
+					.mockResolvedValue(jsonResponse({ error: "Denied" }, 403));
+				const res = await request(createApp({ fetch: fetchApi }))
+					.get(path)
+					.set("Cookie", "accessToken=customer-access");
+
+				expect(res.status).toBe(303);
+				expect(res.headers.location).toBe("/admin/login?reason=forbidden");
 				expect(res.text).not.toContain("User accounts");
 				expect(res.text).not.toContain("Customer information");
+			},
+		);
+
+		it("refreshes an expired access token and keeps the users list working", async () => {
+			const fetchApi = vi
+				.fn<typeof fetch>()
+				.mockResolvedValueOnce(jsonResponse({ error: "Expired" }, 401))
+				.mockResolvedValueOnce(loginResponse())
+				.mockResolvedValueOnce(jsonResponse({ users: [adminUser()] }))
+				.mockResolvedValueOnce(jsonResponse(userDetails()));
+			const app = createApp({
+				apiBaseUrl: "http://backend:4000",
+				fetch: fetchApi,
+			});
+			const res = await request(app)
+				.get("/admin/users")
+				.set(
+					"Cookie",
+					"accessToken=expired-access; refreshToken=current-refresh",
+				);
+
+			expect(res.status).toBe(200);
+			expect(res.text).toContain("Ada Lovelace");
+			expect(String(fetchApi.mock.calls[1]?.[0])).toBe(
+				"http://backend:4000/auth/refresh",
+			);
+			expect(fetchApi.mock.calls[1]?.[1]?.headers).toMatchObject({
+				Cookie: "refreshToken=current-refresh",
+			});
+			expect(fetchApi.mock.calls[2]?.[1]?.headers).toMatchObject({
+				Authorization: ["Bearer", "access-one"].join(" "),
+			});
+			const cookies = res.headers["set-cookie"] as unknown as string[];
+			expect(cookies.some((c) => c.startsWith("accessToken=access-one"))).toBe(
+				true,
+			);
+			expect(
+				cookies.some((c) => c.startsWith("refreshToken=refresh-one")),
+			).toBe(true);
+
+			const details = await request(app)
+				.get("/admin/users/7")
+				.set("Cookie", "accessToken=access-one; refreshToken=refresh-one");
+			expect(details.status).toBe(200);
+			expect(details.text).toContain("Customer information");
+			expect(fetchApi.mock.calls[3]?.[1]?.headers).toMatchObject({
+				Authorization: ["Bearer", "access-one"].join(" "),
+			});
+			expect(fetchApi).toHaveBeenCalledTimes(4);
+		});
+
+		it.each(["suspend", "reactivate"])(
+			"refreshes an expired access token before retrying %s",
+			async (action) => {
+				const fetchApi = vi
+					.fn<typeof fetch>()
+					.mockResolvedValueOnce(jsonResponse({ error: "Expired" }, 401))
+					.mockResolvedValueOnce(loginResponse())
+					.mockResolvedValueOnce(jsonResponse({ user: { id: 7 } }));
+				const res = await request(
+					createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
+				)
+					.post(`/admin/users/7/${action}`)
+					.set("Host", "shop.example")
+					.set("Origin", "http://shop.example")
+					.set(
+						"Cookie",
+						"accessToken=expired-access; refreshToken=current-refresh",
+					);
+
+				expect(res.status).toBe(303);
+				expect(res.headers.location).toMatch(/^\/admin\/users\/7\?updated=/);
+				expect(String(fetchApi.mock.calls[2]?.[0])).toBe(
+					`http://backend:4000/admin/users/7/${action}`,
+				);
+				expect(fetchApi.mock.calls[2]?.[1]?.method).toBe("POST");
+				expect(fetchApi.mock.calls[2]?.[1]?.headers).toMatchObject({
+					Authorization: ["Bearer", "access-one"].join(" "),
+				});
+				expect(fetchApi.mock.calls[2]?.[1]?.headers).not.toHaveProperty(
+					"Cookie",
+				);
+				expect(res.headers["set-cookie"]).toHaveLength(2);
 			},
 		);
 
@@ -669,7 +801,7 @@ describe("app", () => {
 				.mockResolvedValue(jsonResponse({ error: "Not found" }, 404));
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/users/999")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.status).toBe(404);
 			expect(res.text).toContain("User not found");
@@ -679,7 +811,7 @@ describe("app", () => {
 			const fetchApi = vi.fn<typeof fetch>();
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/users/bad.id")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.status).toBe(404);
 			expect(fetchApi).not.toHaveBeenCalled();
@@ -700,7 +832,7 @@ describe("app", () => {
 				.post(`/admin/users/7/${action}`)
 				.set("Host", "shop.example")
 				.set("Origin", "http://shop.example")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.status).toBe(303);
 			expect(res.headers.location).toBe(`/admin/users/7?updated=${updated}`);
@@ -709,8 +841,9 @@ describe("app", () => {
 			);
 			expect(fetchApi.mock.calls[0]?.[1]?.method).toBe("POST");
 			expect(fetchApi.mock.calls[0]?.[1]?.headers).toMatchObject({
-				Cookie: "session=staff-session",
+				Authorization: ["Bearer", "staff-access"].join(" "),
 			});
+			expect(fetchApi.mock.calls[0]?.[1]?.headers).not.toHaveProperty("Cookie");
 		});
 
 		it.each([
@@ -731,7 +864,7 @@ describe("app", () => {
 					.set("Host", "shop.example")
 					.set("Origin", "https://shop.example")
 					.set("X-Forwarded-Proto", "https")
-					.set("Cookie", "session=staff-session");
+					.set("Cookie", "accessToken=staff-access");
 
 				expect(res.status).toBe(303);
 				expect(res.headers.location).toBe(`/admin/users/7?updated=${updated}`);
@@ -747,7 +880,7 @@ describe("app", () => {
 					.post(`/admin/users/7/${action}`)
 					.set("Host", "shop.example")
 					.set("Origin", "https://attacker.example")
-					.set("Cookie", "session=staff-session");
+					.set("Cookie", "accessToken=staff-access");
 
 				expect(res.status).toBe(403);
 				expect(fetchApi).not.toHaveBeenCalled();
@@ -760,7 +893,7 @@ describe("app", () => {
 				const fetchApi = vi.fn<typeof fetch>();
 				const res = await request(createApp({ fetch: fetchApi }))
 					.post(`/admin/users/7/${action}`)
-					.set("Cookie", "session=staff-session");
+					.set("Cookie", "accessToken=staff-access");
 
 				expect(res.status).toBe(403);
 				expect(fetchApi).not.toHaveBeenCalled();
@@ -773,22 +906,26 @@ describe("app", () => {
 				.mockResolvedValue(jsonResponse(userDetails({ status: "suspended" })));
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/users/7?updated=suspended")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.text).toContain("The account has been suspended.");
 		});
 
-		it("requires staff credentials before changing account status", async () => {
+		it("redirects to the admin login before changing account status without a session", async () => {
 			const fetchApi = vi.fn<typeof fetch>();
-			const res = await request(createApp({ fetch: fetchApi })).post(
-				"/admin/users/7/suspend",
-			);
+			const res = await request(createApp({ fetch: fetchApi }))
+				.post("/admin/users/7/suspend")
+				.set("Host", "shop.example")
+				.set("Origin", "http://shop.example");
 
-			expect(res.status).toBe(401);
+			expect(res.status).toBe(303);
+			expect(res.headers.location).toBe(
+				"/admin/login?returnTo=%2Fadmin%2Fusers%2F7",
+			);
 			expect(fetchApi).not.toHaveBeenCalled();
 		});
 
-		it("propagates rejected credentials when changing account status", async () => {
+		it("sends staff without permission to the admin login when changing account status", async () => {
 			const fetchApi = vi
 				.fn<typeof fetch>()
 				.mockResolvedValue(jsonResponse({ error: "Forbidden" }, 403));
@@ -796,9 +933,10 @@ describe("app", () => {
 				.post("/admin/users/7/suspend")
 				.set("Host", "shop.example")
 				.set("Origin", "http://shop.example")
-				.set("Cookie", "session=customer-session");
+				.set("Cookie", "accessToken=customer-access");
 
-			expect(res.status).toBe(403);
+			expect(res.status).toBe(303);
+			expect(res.headers.location).toBe("/admin/login?reason=forbidden");
 		});
 
 		it("reports a failed status change when the backend is unavailable", async () => {
@@ -811,16 +949,192 @@ describe("app", () => {
 				.post("/admin/users/7/suspend")
 				.set("Host", "shop.example")
 				.set("Origin", "http://shop.example")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.status).toBe(303);
 			expect(res.headers.location).toBe("/admin/users/7?actionFailed=1");
 
 			const page = await request(app)
 				.get(String(res.headers.location))
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 			expect(page.text).toContain("could not be updated");
 			expect(page.text).not.toContain("Connection refused");
+		});
+
+		describe("customer sessions on admin pages", () => {
+			const customerToken = [
+				"e30",
+				Buffer.from(
+					JSON.stringify({ kind: "customer", tokenUse: "access" }),
+				).toString("base64url"),
+				"signature",
+			].join(".");
+
+			it.each(["/admin", "/admin/users", "/admin/users/7"])(
+				"sends a logged-in customer from %s back to the shop without logging them out",
+				async (path) => {
+					const fetchApi = vi.fn<typeof fetch>();
+					const res = await request(createApp({ fetch: fetchApi }))
+						.get(path)
+						.set(
+							"Cookie",
+							`accessToken=${customerToken}; refreshToken=customer-refresh`,
+						);
+
+					expect(res.status).toBe(303);
+					expect(res.headers.location).toBe("/products");
+					expect(res.headers["set-cookie"]).toBeUndefined();
+					expect(fetchApi).not.toHaveBeenCalled();
+				},
+			);
+
+			it.each(["suspend", "reactivate"])(
+				"does not let a customer %s accounts or reach the staff login",
+				async (action) => {
+					const fetchApi = vi.fn<typeof fetch>();
+					const res = await request(createApp({ fetch: fetchApi }))
+						.post(`/admin/users/7/${action}`)
+						.set("Host", "shop.example")
+						.set("Origin", "http://shop.example")
+						.set("Cookie", `accessToken=${customerToken}`);
+
+					expect(res.status).toBe(303);
+					expect(res.headers.location).toBe("/products");
+					expect(fetchApi).not.toHaveBeenCalled();
+				},
+			);
+		});
+
+		describe("admin login return path", () => {
+			it("keeps the requested admin page through the login form", async () => {
+				const form = await request(createApp()).get(
+					"/admin/login?reason=expired&returnTo=%2Fadmin%2Fusers%3Fq%3Dada%26page%3D2",
+				);
+
+				expect(form.text).toContain(
+					"Your session has expired. Please log in again.",
+				);
+				expect(form.text).toContain(
+					'<input type="hidden" name="returnTo" value="/admin/users?q=ada&amp;page=2">',
+				);
+			});
+
+			it("explains forbidden access on the admin login", async () => {
+				const form = await request(createApp()).get(
+					"/admin/login?reason=forbidden",
+				);
+
+				expect(form.text).toContain(
+					"You need a staff account to access that page.",
+				);
+				expect(form.text).not.toContain("Your session has expired.");
+			});
+
+			it("shows no reason message for an unknown reason", async () => {
+				const form = await request(createApp()).get(
+					"/admin/login?reason=%3Cscript%3E",
+				);
+
+				expect(form.text).not.toContain("Your session has expired.");
+				expect(form.text).not.toContain("You need a staff account");
+				expect(form.text).not.toContain("<script>");
+			});
+
+			it("drops unsafe return paths from the admin login form", async () => {
+				const form = await request(createApp()).get(
+					"/admin/login?returnTo=https%3A%2F%2Fevil.example",
+				);
+
+				expect(form.text).not.toContain('name="returnTo"');
+			});
+
+			it("returns the admin to the requested page after logging in", async () => {
+				const fetchApi = vi
+					.fn<typeof fetch>()
+					.mockResolvedValueOnce(loginResponse());
+				const res = await request(createApp({ fetch: fetchApi }))
+					.post("/admin/login")
+					.type("form")
+					.send({
+						email: "admin@example.com",
+						password: "correct-horse",
+						returnTo: "/admin/users?q=ada&page=2",
+					});
+
+				expect(res.status).toBe(303);
+				expect(res.headers.location).toBe("/admin/users?q=ada&page=2");
+				expect(JSON.parse(String(fetchApi.mock.calls[0]?.[1]?.body))).toEqual({
+					email: "admin@example.com",
+					password: "correct-horse",
+				});
+			});
+
+			it.each([
+				"https://evil.example",
+				"//evil.example",
+				"/admin/login",
+				"/products",
+			])(
+				"ignores the unsafe return path %s after logging in",
+				async (returnTo) => {
+					const fetchApi = vi
+						.fn<typeof fetch>()
+						.mockResolvedValueOnce(loginResponse());
+					const res = await request(createApp({ fetch: fetchApi }))
+						.post("/admin/login")
+						.type("form")
+						.send({
+							email: "admin@example.com",
+							password: "correct-horse",
+							returnTo,
+						});
+
+					expect(res.status).toBe(303);
+					expect(res.headers.location).toBe("/admin");
+				},
+			);
+
+			it("keeps the return path when an admin login fails", async () => {
+				const fetchApi = vi
+					.fn<typeof fetch>()
+					.mockResolvedValueOnce(
+						jsonResponse({ error: "Invalid email or password" }, 401),
+					);
+				const res = await request(createApp({ fetch: fetchApi }))
+					.post("/admin/login")
+					.type("form")
+					.send({
+						email: "admin@example.com",
+						password: "wrong",
+						returnTo: "/admin/users/7",
+					});
+
+				expect(res.status).toBe(401);
+				expect(res.text).toContain(
+					'<input type="hidden" name="returnTo" value="/admin/users/7">',
+				);
+			});
+
+			it("leaves the customer login unchanged", async () => {
+				const form = await request(createApp()).get(
+					"/login?reason=expired&returnTo=%2Fadmin%2Fusers",
+				);
+				expect(form.text).not.toContain('name="returnTo"');
+				expect(form.text).not.toContain("Your session has expired.");
+
+				const fetchApi = vi
+					.fn<typeof fetch>()
+					.mockResolvedValueOnce(loginResponse());
+				const res = await request(createApp({ fetch: fetchApi }))
+					.post("/login")
+					.type("form")
+					.send({
+						email: "ada@example.com",
+						password: "correct-horse",
+						returnTo: "/admin/users",
+					});
+				expect(res.headers.location).toBe("/products");
+			});
 		});
 	});
 

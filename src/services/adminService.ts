@@ -140,6 +140,10 @@ export class AdminService {
 		return this.sessions.request<AdminDashboard>("/admin", req, res);
 	}
 
+	isCustomerSession(req: Request): boolean {
+		return this.sessions.accessTokenKind(req) === "customer";
+	}
+
 	resolveCredentials(
 		authorization?: string,
 		cookie?: string,
@@ -186,7 +190,8 @@ export class AdminService {
 	}
 
 	async getUsers(
-		credentials: AdminRequestCredentials,
+		req: Request,
+		res: Response,
 		query: AdminUserListQuery = {},
 	): Promise<AdminUserListView> {
 		const search = query.search ?? "";
@@ -198,10 +203,10 @@ export class AdminService {
 			params.set("page", String(query.page));
 		}
 		const queryString = params.toString();
-		const result = await this.api.request<AdminUserListResponse>(
+		const result = await this.sessions.request<AdminUserListResponse>(
 			`/admin/users${queryString ? `?${queryString}` : ""}`,
-			undefined,
-			toHeaders(credentials),
+			req,
+			res,
 		);
 		const pagination = toPaginationView(result, search);
 		return {
@@ -211,13 +216,14 @@ export class AdminService {
 	}
 
 	async getUserById(
-		credentials: AdminRequestCredentials,
+		req: Request,
+		res: Response,
 		id: string,
 	): Promise<AdminUserDetailsView> {
-		const details = await this.api.request<AdminUserDetailsResponse>(
+		const details = await this.sessions.request<AdminUserDetailsResponse>(
 			userPath(id),
-			undefined,
-			toHeaders(credentials),
+			req,
+			res,
 		);
 		return {
 			user: toUserView(details.user),
@@ -235,15 +241,17 @@ export class AdminService {
 	}
 
 	async changeUserStatus(
-		credentials: AdminRequestCredentials,
+		req: Request,
+		res: Response,
 		id: string,
 		action: AdminUserStatusAction,
 	): Promise<AdminUserStatusUpdate> {
 		// BackendApi sends a POST whenever a body is supplied.
-		await this.api.request<AdminUserStatusResponse>(
+		await this.sessions.request<AdminUserStatusResponse>(
 			`${userPath(id)}/${action}`,
+			req,
+			res,
 			{},
-			toHeaders(credentials),
 		);
 		return STATUS_UPDATES[action];
 	}
