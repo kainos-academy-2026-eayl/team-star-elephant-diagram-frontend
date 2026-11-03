@@ -60,14 +60,15 @@ export class SessionService {
 		path: string,
 		req: Request,
 		res: Response,
-		body?: Record<string, string | number>,
+		headers: Record<string, string> = {},
 	): Promise<Result> {
 		res.set("Cache-Control", "no-store");
 		const authorization = req.get("authorization");
 		const access = cookieValue(req, "accessToken");
 		if (authorization || access) {
 			try {
-				return await this.api.request<Result>(path, body, {
+				return await this.api.request<Result>(path, undefined, {
+					...headers,
 					Authorization: authorization ?? `Bearer ${access}`,
 				});
 			} catch (error) {
@@ -94,15 +95,9 @@ export class SessionService {
 		}
 		operation.users += 1;
 		try {
-			let credentials: { result: LoginResponse; cookies: string[] };
-			try {
-				credentials = await operation.promise;
-			} catch (error) {
-				if (error instanceof BackendApiError && error.status === 401)
-					throw new SessionExpiredError(error.message);
-				throw error;
-			}
-			const result = await this.api.request<Result>(path, body, {
+			const credentials = await operation.promise;
+			const result = await this.api.request<Result>(path, undefined, {
+				...headers,
 				Authorization: `Bearer ${credentials.result.accessToken}`,
 			});
 			if (!operation.invalidated) this.establish(res, credentials);
