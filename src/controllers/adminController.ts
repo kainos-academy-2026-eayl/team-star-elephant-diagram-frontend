@@ -5,7 +5,10 @@ import type {
 	AdminRequestCredentials,
 	AdminService,
 } from "../services/adminService";
-import { SessionExpiredError } from "../services/sessionService";
+import {
+	CustomerSessionError,
+	SessionExpiredError,
+} from "../services/sessionService";
 import { safeAdminReturnTo } from "../validators/returnTo";
 
 const isAuthError = (error: unknown): error is BackendApiError =>
@@ -25,6 +28,10 @@ const redirectToAdminLogin = (
 	res: Response,
 	returnTo: string = req.originalUrl,
 ): boolean => {
+	if (error instanceof CustomerSessionError) {
+		res.redirect(303, CUSTOMER_HOME_PATH);
+		return true;
+	}
 	if (!isAuthError(error)) {
 		return false;
 	}

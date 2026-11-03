@@ -30,6 +30,12 @@ export class SessionExpiredError extends BackendApiError {
 	}
 }
 
+export class CustomerSessionError extends BackendApiError {
+	constructor() {
+		super(403, "Customer sessions cannot access staff resources.");
+	}
+}
+
 export class SessionService {
 	private readonly refreshing = new Map<
 		string,
@@ -95,8 +101,8 @@ export class SessionService {
 			this.refreshing.set(refresh, operation);
 		}
 		operation.users += 1;
+		let credentials: { result: LoginResponse; cookies: string[] } | undefined;
 		try {
-			let credentials: { result: LoginResponse; cookies: string[] };
 			try {
 				credentials = await operation.promise;
 			} catch (error) {
@@ -112,6 +118,15 @@ export class SessionService {
 			if (!operation.invalidated) this.establish(res, credentials);
 			return result;
 		} catch (error) {
+			if (
+				error instanceof BackendApiError &&
+				error.status === 403 &&
+				credentials &&
+				this.tokenKind(credentials.result.accessToken) === "customer"
+			) {
+				if (!operation.invalidated) this.establish(res, credentials);
+				throw new CustomerSessionError();
+			}
 			if (error instanceof BackendApiError && error.status === 401)
 				this.clear(res);
 			throw error;
@@ -126,6 +141,10 @@ export class SessionService {
 	accessTokenKind(req: Request): string | undefined {
 		const bearer = /^Bearer\s+(\S+)$/i.exec(req.get("authorization") ?? "");
 		const token = bearer?.[1] ?? cookieValue(req, "accessToken");
+		return this.tokenKind(token);
+	}
+
+	private tokenKind(token: string | undefined): string | undefined {
 		const payload = token?.split(".")[1];
 		if (!payload) return undefined;
 		try {

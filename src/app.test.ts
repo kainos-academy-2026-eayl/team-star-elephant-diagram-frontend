@@ -988,6 +988,47 @@ describe("app", () => {
 				},
 			);
 
+			it("returns a refresh-only customer to the shop with renewed credentials", async () => {
+				const refreshedCustomerToken = [
+					"e30",
+					Buffer.from(
+						JSON.stringify({ kind: "customer", tokenUse: "access" }),
+					).toString("base64url"),
+					"signature",
+				].join(".");
+				const fetchApi = vi
+					.fn<typeof fetch>()
+					.mockResolvedValueOnce(
+						new Response(
+							JSON.stringify({
+								accessToken: refreshedCustomerToken,
+								expiresIn: 900,
+							}),
+							{
+								headers: {
+									"Set-Cookie":
+										"refreshToken=new-customer-refresh; Path=/; HttpOnly; Secure; SameSite=Strict",
+								},
+							},
+						),
+					)
+					.mockResolvedValueOnce(jsonResponse({ error: "Forbidden" }, 403));
+				const res = await request(createApp({ fetch: fetchApi }))
+					.get("/admin")
+					.set("Cookie", "refreshToken=customer-refresh");
+
+				expect(res.status).toBe(303);
+				expect(res.headers.location).toBe("/products");
+				expect(res.headers["set-cookie"]).toHaveLength(2);
+				expect(res.headers["set-cookie"]).toEqual(
+					expect.arrayContaining([
+						expect.stringContaining(`accessToken=${refreshedCustomerToken}`),
+						expect.stringContaining("refreshToken=new-customer-refresh"),
+					]),
+				);
+				expect(fetchApi).toHaveBeenCalledTimes(2);
+			});
+
 			it.each(["suspend", "reactivate"])(
 				"does not let a customer %s accounts or reach the staff login",
 				async (action) => {
