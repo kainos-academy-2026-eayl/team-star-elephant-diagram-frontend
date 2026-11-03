@@ -57,7 +57,8 @@ body.home.menu-open {
 
 /* Header */
 .site-header {
-	display: flex;
+	display: grid;
+	grid-template-columns: 1fr minmax(0, 26rem) 1fr;
 	align-items: center;
 	gap: 2rem;
 	padding: 0.5rem 1rem;
@@ -88,9 +89,6 @@ body.home.menu-open {
 
 .site-search {
 	display: flex;
-	flex: 1;
-	max-width: 26rem;
-	margin: 0 auto 0 1rem;
 	border-radius: 6px;
 	overflow: hidden;
 	background: rgba(255, 255, 255, 0.22);
@@ -133,7 +131,7 @@ body.home.menu-open {
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
-	margin-left: auto;
+	justify-self: end;
 }
 
 .icon-link {
@@ -505,15 +503,13 @@ body.home.menu-open {
 /* Responsive */
 @media (max-width: 720px) {
 	.site-header {
-		flex-wrap: wrap;
+		grid-template-columns: 1fr auto;
 		gap: 0.5rem 1rem;
 	}
 
 	.site-search {
-		order: 3;
-		flex-basis: 100%;
-		max-width: none;
-		margin: 0;
+		grid-row: 2;
+		grid-column: 1 / -1;
 	}
 
 	.tile--small {
