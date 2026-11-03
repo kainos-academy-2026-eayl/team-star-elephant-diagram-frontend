@@ -15,7 +15,7 @@ const currency = new Intl.NumberFormat("en-GB", {
 	currency: "GBP",
 });
 
-// The backend returns prices in pounds (e.g. 349.99), so no pence conversion.
+// The backend returns prices in pounds (e.g. 349.99).
 export const formatPrice = (price: number): string =>
 	currency.format(Number(price));
 

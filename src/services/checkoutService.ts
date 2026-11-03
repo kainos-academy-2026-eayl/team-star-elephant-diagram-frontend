@@ -33,14 +33,12 @@ export class CheckoutService {
 
 	async prepareCheckout(basket: Basket): Promise<CheckoutData> {
 		const items = basket.items.map((item) => {
-			const unitPriceInPence = Math.round(item.unitPrice * 100);
-			const subtotalInPence = unitPriceInPence * item.quantity;
+			const subtotal = item.unitPrice * item.quantity;
 
 			if (
 				!Number.isFinite(item.unitPrice) ||
 				item.unitPrice < 0 ||
-				!Number.isSafeInteger(unitPriceInPence) ||
-				!Number.isSafeInteger(subtotalInPence)
+				!Number.isFinite(subtotal)
 			) {
 				throw new Error("Item has an invalid price.");
 			}
@@ -50,37 +48,34 @@ export class CheckoutService {
 				productName: item.productName,
 				quantity: item.quantity,
 				unitPrice: item.unitPrice,
-				displayUnitPrice: this.formatPrice(unitPriceInPence),
-				subtotal: subtotalInPence / 100,
-				displaySubtotal: this.formatPrice(subtotalInPence),
+				displayUnitPrice: this.formatPrice(item.unitPrice),
+				subtotal,
+				displaySubtotal: this.formatPrice(subtotal),
 			};
 		});
 
 		const itemCount = items.reduce((total, item) => total + item.quantity, 0);
-		const subtotalInPence = items.reduce(
-			(total, item) => total + Math.round(item.unitPrice * 100) * item.quantity,
-			0,
-		);
-		const totalInPence = subtotalInPence;
+		const subtotal = items.reduce((total, item) => total + item.subtotal, 0);
+		const total = subtotal;
 
-		if (!Number.isSafeInteger(itemCount) || !Number.isSafeInteger(totalInPence)) {
+		if (!Number.isFinite(itemCount) || !Number.isFinite(total)) {
 			throw new Error("Order calculation resulted in invalid values.");
 		}
 
 		return {
 			items,
 			itemCount,
-			subtotal: subtotalInPence / 100,
-			displaySubtotal: this.formatPrice(subtotalInPence),
-			total: totalInPence / 100,
-			displayTotal: this.formatPrice(totalInPence),
+			subtotal,
+			displaySubtotal: this.formatPrice(subtotal),
+			total,
+			displayTotal: this.formatPrice(total),
 		};
 	}
 
-	private formatPrice(amountInPence: number): string {
+	private formatPrice(amountInPounds: number): string {
 		return new Intl.NumberFormat("en-GB", {
 			style: "currency",
 			currency: "GBP",
-		}).format(amountInPence / 100);
+		}).format(amountInPounds);
 	}
 }

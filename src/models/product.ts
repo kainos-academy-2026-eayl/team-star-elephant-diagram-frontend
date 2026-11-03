@@ -1,5 +1,5 @@
 // Mirrors the backend API contract (team-star-elephant-diagram-backend/src/models/product.ts).
-// Prices are pounds as decimal numbers (e.g. 349.99), not pence.
+// Prices are in pounds as decimal numbers (e.g. 349.99).
 export interface Product {
 	productId: number;
 	name: string;
