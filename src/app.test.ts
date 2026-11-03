@@ -1238,8 +1238,9 @@ describe("app", () => {
 
 	it("requires authentication to access payment page", async () => {
 		const fetchApi = vi.fn<typeof fetch>();
-		const res = await request(createApp({ fetch: fetchApi }))
-			.get("/payment_gateway");
+		const res = await request(createApp({ fetch: fetchApi })).get(
+			"/payment_gateway",
+		);
 
 		expect(res.status).toBe(401);
 		expect(res.text).toContain("Please log in");

@@ -48,7 +48,8 @@ export class PaymentGatewayService {
 				outcome: "success",
 				paymentResult: {
 					status: "processing",
-					message: "Payment is being processed. Please do not refresh the page.",
+					message:
+						"Payment is being processed. Please do not refresh the page.",
 				},
 			};
 		} catch (error) {
@@ -57,7 +58,8 @@ export class PaymentGatewayService {
 			}
 			return {
 				outcome: "unavailable",
-				error: "Payment processing is temporarily unavailable. Please try again.",
+				error:
+					"Payment processing is temporarily unavailable. Please try again.",
 			};
 		}
 	}
@@ -90,11 +92,10 @@ export class PaymentGatewayService {
 			throw new PaymentValidationError("Please enter a valid card number.");
 		}
 
-		if (
-			typeof expiry !== "string" ||
-			!/^\d{2}\/\d{2}$/.test(expiry.trim())
-		) {
-			throw new PaymentValidationError("Please enter a valid expiry date (MM/YY).");
+		if (typeof expiry !== "string" || !/^\d{2}\/\d{2}$/.test(expiry.trim())) {
+			throw new PaymentValidationError(
+				"Please enter a valid expiry date (MM/YY).",
+			);
 		}
 
 		if (typeof cvc !== "string" || !/^\d{3,4}$/.test(cvc.trim())) {

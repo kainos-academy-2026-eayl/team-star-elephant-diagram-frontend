@@ -29,7 +29,8 @@ export class PaymentGatewayController {
 
 			if (!basket || basket.items.length === 0) {
 				res.status(400).render("payment_gateway", {
-					error: "Your basket is empty. Please add items before proceeding to payment.",
+					error:
+						"Your basket is empty. Please add items before proceeding to payment.",
 					payment: null,
 				});
 				return;

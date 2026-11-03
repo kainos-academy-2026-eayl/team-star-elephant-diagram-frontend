@@ -6,9 +6,7 @@ export function createCheckoutRoutes(
 ): Router {
 	const router = Router();
 
-	router.get("/checkout", (req, res) =>
-		checkoutController.show(req, res),
-	);
+	router.get("/checkout", (req, res) => checkoutController.show(req, res));
 
 	return router;
 }
