@@ -6,6 +6,7 @@
 	"main": "dist/index.js",
 	"scripts": {
 		"dev": "tsx watch src/index.ts",
+		"dev:cert": "node scripts/create-dev-cert.mjs",
 		"build": "npm run typecheck && esbuild src/index.ts --bundle --platform=node --format=esm --target=node22 --packages=external --outfile=dist/index.js --sourcemap",
 		"typecheck": "tsc",
 		"lint": "biome check .",

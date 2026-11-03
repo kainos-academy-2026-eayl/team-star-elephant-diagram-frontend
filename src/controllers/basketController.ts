@@ -1,9 +1,11 @@
 import type { Request, Response } from "express";
 import { BackendApiError } from "../backendApi";
 import type {
+	Basket,
 	BasketRequestCredentials,
 	BasketService,
 } from "../services/basketService";
+import type { SessionService } from "../services/sessionService";
 import { isValidProductId } from "./productController";
 
 const MAX_ITEM_QUANTITY = 99;
@@ -26,7 +28,63 @@ const readCredentials = (req: Request): BasketRequestCredentials => {
 };
 
 export class BasketController {
-	constructor(private readonly basketService: BasketService) {}
+	constructor(
+		private readonly basketService: BasketService,
+		private readonly sessions: SessionService,
+	) {}
+
+	async addItem(req: Request, res: Response): Promise<void> {
+		const body = (req.body ?? {}) as Record<string, unknown>;
+		const productId = body.productId;
+		if (!isValidProductId(productId)) {
+			res.redirect(303, "/products");
+			return;
+		}
+		const productPath = `/products/${productId}`;
+		const quantityText =
+			typeof body.quantity === "string" && body.quantity.trim() !== ""
+				? body.quantity.trim()
+				: "1";
+		const quantity = Number(quantityText);
+		if (
+			!/^\d+$/.test(quantityText) ||
+			quantity < 1 ||
+			quantity > MAX_ITEM_QUANTITY
+		) {
+			res.redirect(303, `${productPath}?basket=invalid`);
+			return;
+		}
+
+		try {
+			const { cookies } = await this.basketService.addItem(
+				Number(productId),
+				quantity,
+				readCredentials(req),
+			);
+			for (const setCookie of cookies) {
+				const pair = setCookie.split(";", 1)[0]?.trim() ?? "";
+				if (pair.startsWith(`${BASKET_COOKIE}=`)) {
+					res.append(
+						"Set-Cookie",
+						`${pair}; Path=/; Max-Age=${BASKET_COOKIE_MAX_AGE_SECONDS}; HttpOnly; SameSite=Lax${process.env.NODE_ENV === "production" ? "; Secure" : ""}`,
+					);
+				}
+			}
+			res.redirect(303, "/basket");
+		} catch (error) {
+			const status =
+				error instanceof BackendApiError
+					? error.status === 404
+						? "notfound"
+						: error.status === 400
+							? /exceed/i.test(error.message)
+								? "limit"
+								: "invalid"
+							: "unavailable"
+					: "unavailable";
+			res.redirect(303, `${productPath}?basket=${status}`);
+		}
+	}
 
 	async addItem(req: Request, res: Response): Promise<void> {
 		const body = (req.body ?? {}) as Record<string, unknown>;
@@ -84,10 +142,6 @@ export class BasketController {
 	async getBasket(req: Request, res: Response): Promise<void> {
 		const authorization = req.get("authorization");
 		const cookie = req.get("cookie");
-		const credentials: BasketRequestCredentials = {
-			...(authorization ? { authorization } : {}),
-			...(cookie ? { cookie } : {}),
-		};
 		if (!authorization && !cookie) {
 			res.status(401).render("basket", {
 				error: "Please log in to view your basket.",
@@ -98,7 +152,7 @@ export class BasketController {
 		}
 
 		try {
-			const basket = await this.basketService.getBasket(credentials);
+			const basket = await this.sessions.request<Basket>("/basket", req, res);
 			const items = basket.items.map((item) => ({
 				...item,
 				imageURL: /^https?:\/\//i.test(item.imageURL ?? "")

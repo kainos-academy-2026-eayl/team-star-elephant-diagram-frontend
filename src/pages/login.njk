@@ -5,12 +5,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="/styles.css">
 </head>
 
 <body>
     <main class="login">
-        <h1 class="login__title">Log in</h1>
+        <h1 class="login__title">{% if admin %}Admin log in{% else %}Log in{% endif %}</h1>
         <p class="login__intro">Welcome back.</p>
 
         {% if registered %}<p role="status">Account created. You can now log in.</p>{% endif %}
@@ -24,7 +24,7 @@
         </div>
         {% endif %}
 
-        <form class="login__form" action="/login" method="post">
+        <form class="login__form" action="{% if admin %}/admin/login{% else %}/login{% endif %}" method="post">
             <div class="field">
                 <label for="email">Email</label>
                 <input type="email" name="email" id="email" autocomplete="email" value="{{ values.email }}" required>
@@ -40,6 +40,7 @@
 
         <p class="login__switch">Don't have an account? <a href="/register">Create one</a></p>
         <p class="login__switch">Forgot your password? <a href="/forgot-password">Reset it</a></p>
+        {% if not admin %}<p class="login__switch"><a href="/admin/login">Staff login</a></p>{% endif %}
     </main>
 </body>
 

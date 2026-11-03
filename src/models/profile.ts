@@ -31,4 +31,5 @@ export interface ProfileOrder {
 export interface ProfileData {
 	user: ProfileUser;
 	orders: ProfileOrder[];
+	ordersUnavailable?: boolean;
 }

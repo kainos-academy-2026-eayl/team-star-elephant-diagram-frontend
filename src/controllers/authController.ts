@@ -1,28 +1,17 @@
 import type { Request, Response } from "express";
 import { BackendApiError } from "../backendApi";
 import type { AuthService } from "../services/authService";
-
-const getSessionCookie = (setCookie: string): string | undefined => {
-	const pair = setCookie.split(";", 1)[0]?.trim();
-	const separator = pair?.indexOf("=") ?? -1;
-	const name = pair?.slice(0, separator) ?? "";
-	const value = pair?.slice(separator + 1) ?? "";
-	if (
-		separator < 1 ||
-		!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name) ||
-		!value ||
-		!/^[\x21\x23-\x2B\x2D-\x3A\x3C-\x5B\x5D-\x7E]+$/.test(value)
-	) {
-		return undefined;
-	}
-	return `${name}=${value}`;
-};
+import type { SessionService } from "../services/sessionService";
 
 export class AuthController {
-	constructor(private readonly authService: AuthService) {}
+	constructor(
+		private readonly authService: AuthService,
+		private readonly sessions: SessionService,
+	) {}
 
-	getLogin(req: Request, res: Response): void {
+	getLogin(req: Request, res: Response, admin = false): void {
 		res.render("login", {
+			admin,
 			registered: req.query.registered === "1",
 			passwordReset: req.query.reset === "1",
 		});
@@ -32,8 +21,18 @@ export class AuthController {
 		res.render("register");
 	}
 
-	async postLogin(req: Request, res: Response): Promise<void> {
-		await this.submit("login", req, res);
+	async postLogin(req: Request, res: Response, admin = false): Promise<void> {
+		await this.submit("login", req, res, admin);
+	}
+
+	async logout(req: Request, res: Response): Promise<void> {
+		try {
+			await this.sessions.logout(req, res);
+			res.redirect(303, "/login");
+		} catch (error) {
+			console.error("Logout failed", error);
+			res.status(503).send("Logout failed. Please try again.");
+		}
 	}
 
 	async postRegister(req: Request, res: Response): Promise<void> {
@@ -68,6 +67,7 @@ export class AuthController {
 		page: "login" | "register" | "forgot-password" | "reset-password",
 		req: Request,
 		res: Response,
+		admin = false,
 	): Promise<void> {
 		const fields =
 			page === "register"
@@ -96,7 +96,6 @@ export class AuthController {
 		}
 
 		try {
-			let sessionCookies: string[] = [];
 			if (page === "register") {
 				await this.authService.register(values);
 			} else if (page === "forgot-password") {
@@ -104,20 +103,14 @@ export class AuthController {
 			} else if (page === "reset-password") {
 				await this.authService.resetPassword(values);
 			} else {
-				sessionCookies = await this.authService.login(values);
-			}
-			for (const setCookie of sessionCookies) {
-				const cookie = getSessionCookie(setCookie);
-				if (cookie) {
-					res.append(
-						"Set-Cookie",
-						`${cookie}; Path=/; HttpOnly; SameSite=Lax${process.env.NODE_ENV === "production" ? "; Secure" : ""}`,
-					);
-				}
+				this.sessions.establish(
+					res,
+					await this.authService.login(values, admin),
+				);
 			}
 			const destinations = {
 				register: "/login?registered=1",
-				login: "/products",
+				login: admin ? "/admin" : "/products",
 				"forgot-password": "/forgot-password?sent=1",
 				"reset-password": "/login?reset=1",
 			};
@@ -126,6 +119,7 @@ export class AuthController {
 			const rejected =
 				error instanceof BackendApiError && [400, 401].includes(error.status);
 			res.status(rejected ? error.status : 503).render(page, {
+				admin,
 				values: safeValues,
 				error: rejected
 					? error.message

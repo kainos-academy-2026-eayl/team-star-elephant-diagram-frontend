@@ -42,6 +42,7 @@
 
     <main class="container">
         <h1 class="section-heading">My Account</h1>
+        <form action="/logout" method="post"><button type="submit">Log out</button></form>
 
         <section class="profile-card">
             <h2>Your details</h2>
@@ -90,7 +91,9 @@
         <p class="error-message" role="alert">{{ error }}</p>
         {% endif %}
 
-        {% if orders and orders.length %}
+        {% if ordersUnavailable %}
+        <p role="status">Order history is not implemented yet.</p>
+        {% elif orders and orders.length %}
         <section class="order-list">
             {% for order in orders %}
             <article class="order-card">
