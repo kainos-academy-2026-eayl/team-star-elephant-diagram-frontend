@@ -174,7 +174,7 @@ export class AdminController {
 
 		try {
 			const basket = await this.adminService.getBasketById(req, res, id);
-			res.render("admin-basket-details", { basket, basketId: id });
+			res.render("partials/admin-basket-details", { basket, basketId: id });
 		} catch (error) {
 			if (redirectToAdminLogin(error, req, res)) {
 				return;
@@ -183,7 +183,7 @@ export class AdminController {
 				this.renderBasketNotFound(res);
 				return;
 			}
-			res.status(503).render("admin-basket-details", {
+			res.status(503).render("partials/admin-basket-details", {
 				basketId: id,
 				error: "Basket details are temporarily unavailable. Please try again.",
 			});
@@ -249,6 +249,6 @@ export class AdminController {
 	}
 
 	private renderBasketNotFound(res: Response): void {
-		res.status(404).render("admin-basket-details", { notFound: true });
+		res.status(404).render("partials/admin-basket-details", { notFound: true });
 	}
 }
