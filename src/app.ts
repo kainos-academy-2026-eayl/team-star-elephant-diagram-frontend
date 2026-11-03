@@ -62,6 +62,7 @@ export function createApp({
 
 	app.use(express.static("src/pages"));
 	app.use(express.static("src/styles"));
+	app.use(express.static("src/assets"));
 	app.use(express.json({ limit: "100kb" }));
 	app.use(express.urlencoded({ extended: false, limit: "100kb" }));
 

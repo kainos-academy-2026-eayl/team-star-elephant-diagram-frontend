@@ -20,6 +20,25 @@ describe("app", () => {
 		expect(res.body.status).toBe("ok");
 	});
 
+	it("GET / renders the homepage with the burger menu", async () => {
+		const res = await request(app).get("/");
+
+		expect(res.status).toBe(200);
+		expect(res.text).toContain("SEDSHED");
+		expect(res.text).toContain('id="site-menu"');
+		expect(res.text).toContain('id="menu-overlay"');
+		expect(res.text).toContain("Electronics Shop");
+	});
+
+	it.each(["/home.css", "/home.js", "/images/home/slide.png"])(
+		"serves the homepage asset %s",
+		async (path) => {
+			const res = await request(app).get(path);
+
+			expect(res.status).toBe(200);
+		},
+	);
+
 	it.each([
 		["/login", "Log in"],
 		["/register", "Create your account"],
