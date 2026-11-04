@@ -90,11 +90,13 @@ the proxy's IP address or CIDR (comma-separated for multiple proxies) so HTTPS
 origin checks use the forwarded protocol. Only trust the actual proxy addresses
 and prevent untrusted clients from connecting directly to the frontend.
 
-Admin basket viewing (`/admin/baskets`, `/admin/baskets/:id`) forwards the same
-staff headers to backend `GET /admin/baskets` (`{ baskets }`) and
-`GET /admin/baskets/:id` (`{ basket }`). Basket search is filtered on the
-frontend by basket ID, customer name or email. These backend endpoints are not
-implemented yet; see `src/models/adminBasket.ts` for the expected shapes.
+Admin basket viewing (`/admin/baskets`, `/admin/baskets/:id`) uses the same
+staff session handling as user management (access-token cookie, automatic
+refresh, admin-login redirects with `returnTo`, customers sent to `/products`)
+and calls backend `GET /admin/baskets?search=` (`{ baskets }`) and
+`GET /admin/baskets/:id` (`{ basket }`). The `q` search term (max 100
+characters) is passed to the backend, which matches basket ID, customer name or
+email. See `src/models/adminBasket.ts` for the response shapes.
 
 ## Continuous integration
 
