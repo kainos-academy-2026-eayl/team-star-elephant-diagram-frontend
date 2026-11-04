@@ -53,6 +53,30 @@ describe("products", () => {
 		expect(res.text).toContain("Food%20%26%20Drink");
 	});
 
+	it("allows same-site image paths but drops unsafe image URLs", async () => {
+		const products = [
+			["/images/TeamB-tshirt-front.png", 1],
+			["//evil.example/x.png", 2],
+			["/\\evil.example/x.png", 3],
+			["javascript:alert(1)", 4],
+		].map(([imageURL, productId]) => ({
+			productId,
+			name: `Product ${productId}`,
+			category: "Other",
+			description: "Item",
+			price: 1,
+			imageURL,
+		}));
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(new Response(JSON.stringify(products)));
+		const res = await request(createApp({ fetch: fetchApi })).get("/products");
+
+		expect(res.text).toContain('src="/images/TeamB-tshirt-front.png"');
+		expect(res.text).not.toContain("evil.example");
+		expect(res.text).not.toContain("javascript:");
+	});
+
 	it("displays backend prices in pounds without dividing by 100", async () => {
 		const products = [
 			{
