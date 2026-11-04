@@ -117,6 +117,103 @@ describe("products", () => {
 		},
 	);
 
+	describe("cart badge", () => {
+		const basketId = "8e0dcfff-1528-4ec6-9820-b8c9a6732000";
+		const product = {
+			productId: 1,
+			name: "Mug",
+			category: "Other",
+			description: "A mug",
+			price: 5,
+			imageURL: "",
+		};
+		const basketOf = (...quantities: number[]) =>
+			JSON.stringify({
+				items: quantities.map((quantity, index) => ({
+					productId: index + 1,
+					productName: "Item",
+					quantity,
+					unitPrice: 1,
+				})),
+				subtotal: 1,
+			});
+		const backend = (basket: () => Response, products?: () => Response) =>
+			vi
+				.fn<typeof fetch>()
+				.mockImplementation(async (input) =>
+					String(input).endsWith("/basket")
+						? basket()
+						: (products?.() ?? new Response(JSON.stringify([product]))),
+				);
+
+		it("shows no badge and skips the basket request when logged out", async () => {
+			const fetchApi = backend(() => new Response(basketOf(2)));
+			const res = await request(createApp({ fetch: fetchApi })).get(
+				"/products",
+			);
+
+			expect(res.status).toBe(200);
+			expect(res.text).not.toContain("cart-link__badge");
+			expect(fetchApi).toHaveBeenCalledTimes(1);
+		});
+
+		it("shows the total basket quantity on the cart icon and in the menu", async () => {
+			const fetchApi = backend(() => new Response(basketOf(2, 3)));
+			const res = await request(
+				createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
+			)
+				.get("/products")
+				.set("Cookie", `accessToken=access-one; basketId=${basketId}`);
+
+			expect(res.status).toBe(200);
+			expect(res.text).toMatch(/class="cart-link__badge"[^>]*>5</);
+			expect(res.text).toContain('aria-label="Basket, 5 items"');
+			expect(res.text).toContain('class="menu-item__badge">5<');
+			const basketCall = fetchApi.mock.calls.find(([url]) =>
+				String(url).endsWith("/basket"),
+			);
+			expect(basketCall?.[1]?.headers).toMatchObject({
+				Authorization: ["Bearer", "access-one"].join(" "),
+				Cookie: `basketId=${basketId}`,
+			});
+		});
+
+		it("caps large quantities at 99+", async () => {
+			const fetchApi = backend(() => new Response(basketOf(120)));
+			const res = await request(createApp({ fetch: fetchApi }))
+				.get("/products")
+				.set("Cookie", "accessToken=access-one");
+
+			expect(res.text).toMatch(/class="cart-link__badge"[^>]*>99\+</);
+			expect(res.text).toContain('aria-label="Basket, 120 items"');
+		});
+
+		it("still renders the catalogue without a badge when the basket is unavailable", async () => {
+			const fetchApi = backend(() => new Response("{}", { status: 503 }));
+			const res = await request(createApp({ fetch: fetchApi }))
+				.get("/products")
+				.set("Cookie", "accessToken=access-one");
+
+			expect(res.status).toBe(200);
+			expect(res.text).toContain("Mug");
+			expect(res.text).not.toContain("cart-link__badge");
+		});
+
+		it("keeps the badge on the unavailable page when products fail", async () => {
+			const fetchApi = backend(
+				() => new Response(basketOf(4)),
+				() => new Response("{}", { status: 503 }),
+			);
+			const res = await request(createApp({ fetch: fetchApi }))
+				.get("/products")
+				.set("Cookie", "accessToken=access-one");
+
+			expect(res.status).toBe(503);
+			expect(res.text).toContain("Products are temporarily unavailable.");
+			expect(res.text).toMatch(/class="cart-link__badge"[^>]*>4</);
+		});
+	});
+
 	it("allows same-site image paths but drops unsafe image URLs", async () => {
 		const products = [
 			["/images/TeamB-tshirt-front.png", 1],

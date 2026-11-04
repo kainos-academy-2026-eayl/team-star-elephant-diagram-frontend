@@ -1,7 +1,6 @@
 import type { Request, Response } from "express";
-import type { Basket } from "../services/basketService";
 import type { SessionService } from "../services/sessionService";
-import { basketCookieHeader } from "./basketController";
+import { getCartCount } from "./cartCount";
 
 // Placeholder hrefs until category pages exist
 const PLACEHOLDER_HREF = "/products";
@@ -53,28 +52,12 @@ export class PageController {
 	}
 
 	async home(req: Request, res: Response): Promise<void> {
-		const cartCount = await this.cartCount(req, res);
+		const cartCount = await getCartCount(this.sessions, req, res);
 		res.render("home", {
 			slides,
 			smallTiles,
 			largeTiles,
 			cartCount,
 		});
-	}
-
-	// The badge is decorative, so a missing session or backend failure just hides it.
-	private async cartCount(req: Request, res: Response): Promise<number> {
-		try {
-			const basketCookie = basketCookieHeader(req);
-			const basket = await this.sessions.request<Basket>(
-				"/basket",
-				req,
-				res,
-				basketCookie ? { Cookie: basketCookie } : {},
-			);
-			return basket.items.reduce((count, item) => count + item.quantity, 0);
-		} catch {
-			return 0;
-		}
 	}
 }

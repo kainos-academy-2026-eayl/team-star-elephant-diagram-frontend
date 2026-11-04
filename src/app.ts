@@ -50,7 +50,7 @@ export function createApp({
 	);
 	const pageController = new PageController(sessions);
 	const productService = new ProductService(api);
-	const productController = new ProductController(productService);
+	const productController = new ProductController(productService, sessions);
 	const checkoutController = new CheckoutController(
 		new CheckoutService(),
 		sessions,
