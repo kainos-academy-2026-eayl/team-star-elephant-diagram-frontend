@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import type { BackendApi } from "../backendApi";
 import type {
 	BasketDetails,
 	BasketDetailsResponse,
@@ -40,12 +41,31 @@ export interface AdminDashboard {
 	}>;
 }
 
+export interface AdminRequestCredentials {
+	authorization?: string;
+	cookie?: string;
+}
+
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+const BEARER_PATTERN = /^Bearer\s+\S+$/i;
 const MAX_SEARCH_LENGTH = 100;
 
 const STATUS_UPDATES: Record<AdminUserStatusAction, AdminUserStatusUpdate> = {
 	suspend: "suspended",
 	reactivate: "reactivated",
+};
+
+const toHeaders = (
+	credentials: AdminRequestCredentials,
+): Record<string, string> => {
+	const headers: Record<string, string> = {};
+	if (credentials.authorization) {
+		headers.Authorization = credentials.authorization;
+	}
+	if (credentials.cookie) {
+		headers.Cookie = credentials.cookie;
+	}
+	return headers;
 };
 
 const basketPath = (id: string): string =>
@@ -111,7 +131,10 @@ const toPaginationView = (
 };
 
 export class AdminService {
-	constructor(private readonly sessions: SessionService) {}
+	constructor(
+		private readonly api: BackendApi,
+		private readonly sessions: SessionService,
+	) {}
 
 	getDashboard(req: Request, res: Response): Promise<AdminDashboard> {
 		return this.sessions.request<AdminDashboard>("/admin", req, res);
@@ -119,6 +142,21 @@ export class AdminService {
 
 	isCustomerSession(req: Request): boolean {
 		return this.sessions.accessTokenKind(req) === "customer";
+	}
+
+	resolveCredentials(
+		authorization?: string,
+		cookie?: string,
+	): AdminRequestCredentials | undefined {
+		const credentials: AdminRequestCredentials = {
+			...(authorization && BEARER_PATTERN.test(authorization)
+				? { authorization }
+				: {}),
+			...(cookie ? { cookie } : {}),
+		};
+		return credentials.authorization || credentials.cookie
+			? credentials
+			: undefined;
 	}
 
 	normaliseSearch(value: unknown): string {
@@ -223,37 +261,39 @@ export class AdminService {
 		return value === "suspended" || value === "reactivated" ? value : undefined;
 	}
 
-	// The backend performs the (multi-term) search, so results are rendered as returned.
 	async getBaskets(
-		req: Request,
-		res: Response,
+		credentials: AdminRequestCredentials,
 		search = "",
 	): Promise<BasketSummaryView[]> {
-		const params = new URLSearchParams();
-		if (search) {
-			params.set("search", search);
-		}
-		const queryString = params.toString();
-		const { baskets } = await this.sessions.request<BasketListResponse>(
-			`/admin/baskets${queryString ? `?${queryString}` : ""}`,
-			req,
-			res,
+		const { baskets } = await this.api.request<BasketListResponse>(
+			"/admin/baskets",
+			undefined,
+			toHeaders(credentials),
 		);
-		return (baskets ?? []).map((basket: BasketSummary) => ({
-			...basket,
-			detailsHref: basketPath(String(basket.basketId)),
-		}));
+		const normalisedSearch = search.trim().toLowerCase();
+		return (baskets ?? [])
+			.filter(
+				(basket: BasketSummary) =>
+					!normalisedSearch ||
+					[basket.basketId, basket.customerName, basket.customerEmail]
+						.join(" ")
+						.toLowerCase()
+						.includes(normalisedSearch),
+			)
+			.map((basket) => ({
+				...basket,
+				detailsHref: basketPath(String(basket.basketId)),
+			}));
 	}
 
 	async getBasketById(
-		req: Request,
-		res: Response,
+		credentials: AdminRequestCredentials,
 		id: string,
 	): Promise<BasketDetails> {
-		const { basket } = await this.sessions.request<BasketDetailsResponse>(
+		const { basket } = await this.api.request<BasketDetailsResponse>(
 			basketPath(id),
-			req,
-			res,
+			undefined,
+			toHeaders(credentials),
 		);
 		return basket;
 	}

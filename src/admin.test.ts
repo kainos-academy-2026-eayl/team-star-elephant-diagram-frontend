@@ -193,7 +193,7 @@ describe("admin", () => {
 				createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 			)
 				.get("/admin/baskets")
-				.set("Cookie", "accessToken=staff-access");
+				.set("Cookie", "session=staff-session");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain("Active baskets");
@@ -224,15 +224,18 @@ describe("admin", () => {
 			);
 			const expectedHeaders = {
 				"Content-Type": "application/json",
-				Authorization: ["Bearer", "staff-access"].join(" "),
+				Authorization: ["Bearer", "test-token"].join(" "),
+				Cookie: "session=staff-session",
 			};
 
 			await client
 				.get("/admin/baskets")
-				.set("Cookie", "accessToken=staff-access");
+				.set("Authorization", ["Bearer", "test-token"].join(" "))
+				.set("Cookie", "session=staff-session");
 			await client
 				.get("/admin/baskets/123")
-				.set("Cookie", "accessToken=staff-access");
+				.set("Authorization", ["Bearer", "test-token"].join(" "))
+				.set("Cookie", "session=staff-session");
 
 			expect(fetchApi.mock.calls[0]?.[1]?.headers).toEqual(expectedHeaders);
 			expect(fetchApi.mock.calls[1]?.[1]?.headers).toEqual(expectedHeaders);
@@ -241,11 +244,11 @@ describe("admin", () => {
 		it("filters baskets by search term", async () => {
 			const fetchApi = vi
 				.fn<typeof fetch>()
-				.mockResolvedValue(jsonResponse({ baskets: [basketSummaries[1]] }));
+				.mockResolvedValue(jsonResponse({ baskets: basketSummaries }));
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/baskets")
 				.query({ q: "ADA@example" })
-				.set("Cookie", "accessToken=staff-access");
+				.set("Cookie", "session=staff-session");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain("Ada Lovelace");
@@ -259,7 +262,7 @@ describe("admin", () => {
 				.mockResolvedValue(jsonResponse({ baskets: [] }));
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/baskets")
-				.set("Cookie", "accessToken=staff-access");
+				.set("Cookie", "session=staff-session");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain("There are no active baskets.");
@@ -269,11 +272,11 @@ describe("admin", () => {
 		it("renders a no-results state when the search matches nothing", async () => {
 			const fetchApi = vi
 				.fn<typeof fetch>()
-				.mockResolvedValue(jsonResponse({ baskets: [] }));
+				.mockResolvedValue(jsonResponse({ baskets: basketSummaries }));
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/baskets")
 				.query({ q: "<script>" })
-				.set("Cookie", "accessToken=staff-access");
+				.set("Cookie", "session=staff-session");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain("No baskets match");
@@ -289,7 +292,7 @@ describe("admin", () => {
 				createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 			)
 				.get("/admin/baskets/123")
-				.set("Cookie", "accessToken=staff-access");
+				.set("Cookie", "session=staff-session");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain("Basket #123");
@@ -319,7 +322,7 @@ describe("admin", () => {
 			);
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/baskets/123")
-				.set("Cookie", "accessToken=staff-access");
+				.set("Cookie", "session=staff-session");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain("This basket is empty.");
@@ -334,7 +337,7 @@ describe("admin", () => {
 				const fetchApi = vi.fn<typeof fetch>();
 				const res = await request(createApp({ fetch: fetchApi }))
 					.get(`/admin/baskets/${id}`)
-					.set("Cookie", "accessToken=staff-access");
+					.set("Cookie", "session=staff-session");
 
 				expect(res.status).toBe(404);
 				expect(res.text).toContain("Basket not found");
@@ -349,7 +352,7 @@ describe("admin", () => {
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/baskets")
 				.query({ q: "x".repeat(150) })
-				.set("Cookie", "accessToken=staff-access");
+				.set("Cookie", "session=staff-session");
 
 			expect(res.text).toContain(`value="${"x".repeat(100)}"`);
 			expect(res.text).not.toContain("x".repeat(101));
@@ -361,7 +364,7 @@ describe("admin", () => {
 				.mockResolvedValue(jsonResponse({ error: "Not found" }, 404));
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/baskets/999")
-				.set("Cookie", "accessToken=staff-access");
+				.set("Cookie", "session=staff-session");
 
 			expect(res.status).toBe(404);
 			expect(res.text).toContain("Basket not found");
@@ -373,10 +376,7 @@ describe("admin", () => {
 				const fetchApi = vi.fn<typeof fetch>();
 				const res = await request(createApp({ fetch: fetchApi })).get(path);
 
-				expect(res.status).toBe(303);
-				expect(res.headers.location).toBe(
-					`/admin/login?returnTo=${encodeURIComponent(path)}`,
-				);
+				expect(res.status).toBe(401);
 				expect(fetchApi).not.toHaveBeenCalled();
 			},
 		);
@@ -394,14 +394,9 @@ describe("admin", () => {
 					.mockResolvedValue(jsonResponse({ error: "Denied" }, status));
 				const res = await request(createApp({ fetch: fetchApi }))
 					.get(path)
-					.set("Cookie", "accessToken=staff-access");
+					.set("Cookie", "session=customer-session");
 
-				expect(res.status).toBe(303);
-				expect(res.headers.location).toBe(
-					status === 403
-						? "/admin/login?reason=forbidden"
-						: `/admin/login?returnTo=${encodeURIComponent(path)}`,
-				);
+				expect(res.status).toBe(status);
 				expect(res.text).not.toContain("Active baskets");
 				expect(res.text).not.toContain("Basket contents");
 			},
@@ -509,7 +504,7 @@ describe("admin", () => {
 				createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 			)
 				.get("/admin/users?q=ada%20l&page=2")
-				.set("Cookie", "accessToken=staff-access");
+				.set("Cookie", "accessToken=staff-session");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain('value="ada l"');
@@ -529,10 +524,10 @@ describe("admin", () => {
 
 			const res = await request(app)
 				.get("/admin/users")
-				.set("Cookie", "accessToken=staff-access");
+				.set("Cookie", "accessToken=staff-session");
 			const searched = await request(app)
 				.get("/admin/users?q=nobody")
-				.set("Cookie", "accessToken=staff-access");
+				.set("Cookie", "accessToken=staff-session");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain("No user accounts found.");
@@ -548,7 +543,7 @@ describe("admin", () => {
 				createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 			)
 				.get("/admin/users/7")
-				.set("Cookie", "accessToken=staff-access");
+				.set("Cookie", "accessToken=staff-session");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain("Customer information");
@@ -568,7 +563,7 @@ describe("admin", () => {
 				"http://backend:4000/admin/users/7",
 			);
 			expect(fetchApi.mock.calls[0]?.[1]?.headers).toMatchObject({
-				Authorization: ["Bearer", "staff-access"].join(" "),
+				Authorization: ["Bearer", "staff-session"].join(" "),
 			});
 		});
 
@@ -582,7 +577,7 @@ describe("admin", () => {
 			);
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/users/7")
-				.set("Cookie", "accessToken=staff-access");
+				.set("Cookie", "accessToken=staff-session");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain('action="/admin/users/7/reactivate"');
@@ -619,7 +614,7 @@ describe("admin", () => {
 					.mockResolvedValue(jsonResponse({ error: "Denied" }, status));
 				const res = await request(createApp({ fetch: fetchApi }))
 					.get(path)
-					.set("Cookie", "accessToken=staff-access");
+					.set("Cookie", "accessToken=customer-session");
 
 				expect(res.status).toBe(303);
 				expect(res.headers.location).toBe(
@@ -655,7 +650,7 @@ describe("admin", () => {
 				.mockResolvedValue(jsonResponse({ error: "Not found" }, 404));
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/users/999")
-				.set("Cookie", "accessToken=staff-access");
+				.set("Cookie", "accessToken=staff-session");
 
 			expect(res.status).toBe(404);
 			expect(res.text).toContain("User not found");
@@ -665,7 +660,7 @@ describe("admin", () => {
 			const fetchApi = vi.fn<typeof fetch>();
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/users/bad.id")
-				.set("Cookie", "accessToken=staff-access");
+				.set("Cookie", "accessToken=staff-session");
 
 			expect(res.status).toBe(404);
 			expect(fetchApi).not.toHaveBeenCalled();
@@ -686,7 +681,7 @@ describe("admin", () => {
 				.post(`/admin/users/7/${action}`)
 				.set("Host", "shop.example")
 				.set("Origin", "http://shop.example")
-				.set("Cookie", "accessToken=staff-access");
+				.set("Cookie", "accessToken=staff-session");
 
 			expect(res.status).toBe(303);
 			expect(res.headers.location).toBe(`/admin/users/7?updated=${updated}`);
@@ -695,7 +690,7 @@ describe("admin", () => {
 			);
 			expect(fetchApi.mock.calls[0]?.[1]?.method).toBe("POST");
 			expect(fetchApi.mock.calls[0]?.[1]?.headers).toMatchObject({
-				Authorization: ["Bearer", "staff-access"].join(" "),
+				Authorization: ["Bearer", "staff-session"].join(" "),
 			});
 		});
 
@@ -717,7 +712,7 @@ describe("admin", () => {
 					.set("Host", "shop.example")
 					.set("Origin", "https://shop.example")
 					.set("X-Forwarded-Proto", "https")
-					.set("Cookie", "accessToken=staff-access");
+					.set("Cookie", "accessToken=staff-session");
 
 				expect(res.status).toBe(303);
 				expect(res.headers.location).toBe(`/admin/users/7?updated=${updated}`);
@@ -733,7 +728,7 @@ describe("admin", () => {
 					.post(`/admin/users/7/${action}`)
 					.set("Host", "shop.example")
 					.set("Origin", "https://attacker.example")
-					.set("Cookie", "accessToken=staff-access");
+					.set("Cookie", "session=staff-session");
 
 				expect(res.status).toBe(403);
 				expect(fetchApi).not.toHaveBeenCalled();
@@ -746,7 +741,7 @@ describe("admin", () => {
 				const fetchApi = vi.fn<typeof fetch>();
 				const res = await request(createApp({ fetch: fetchApi }))
 					.post(`/admin/users/7/${action}`)
-					.set("Cookie", "accessToken=staff-access");
+					.set("Cookie", "session=staff-session");
 
 				expect(res.status).toBe(403);
 				expect(fetchApi).not.toHaveBeenCalled();
@@ -759,7 +754,7 @@ describe("admin", () => {
 				.mockResolvedValue(jsonResponse(userDetails({ status: "suspended" })));
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/users/7?updated=suspended")
-				.set("Cookie", "accessToken=staff-access");
+				.set("Cookie", "accessToken=staff-session");
 
 			expect(res.text).toContain("The account has been suspended.");
 		});
@@ -786,7 +781,7 @@ describe("admin", () => {
 				.post("/admin/users/7/suspend")
 				.set("Host", "shop.example")
 				.set("Origin", "http://shop.example")
-				.set("Cookie", "accessToken=staff-access");
+				.set("Cookie", "accessToken=customer-session");
 
 			expect(res.status).toBe(303);
 			expect(res.headers.location).toBe("/admin/login?reason=forbidden");
@@ -802,14 +797,14 @@ describe("admin", () => {
 				.post("/admin/users/7/suspend")
 				.set("Host", "shop.example")
 				.set("Origin", "http://shop.example")
-				.set("Cookie", "accessToken=staff-access");
+				.set("Cookie", "accessToken=staff-session");
 
 			expect(res.status).toBe(303);
 			expect(res.headers.location).toBe("/admin/users/7?actionFailed=1");
 
 			const page = await request(app)
 				.get(String(res.headers.location))
-				.set("Cookie", "accessToken=staff-access");
+				.set("Cookie", "accessToken=staff-session");
 			expect(page.text).toContain("could not be updated");
 			expect(page.text).not.toContain("Connection refused");
 		});

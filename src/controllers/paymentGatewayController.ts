@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { BackendApiError } from "../backendApi";
 import type { BasketService } from "../services/basketService";
 import type { PaymentGatewayService } from "../services/paymentGatewayService";
 
@@ -11,9 +12,8 @@ export class PaymentGatewayController {
 	async show(req: Request, res: Response): Promise<void> {
 		try {
 			const authorization = req.get("authorization");
-			const cookie = req.get("cookie");
 
-			if (!authorization && !cookie) {
+			if (!authorization) {
 				res.status(401).render("payment_gateway", {
 					error: "Please log in to complete payment.",
 					loginRequired: true,
@@ -23,8 +23,7 @@ export class PaymentGatewayController {
 			}
 
 			const basket = await this.basketService.getBasket({
-				...(authorization ? { authorization } : {}),
-				...(cookie ? { cookie } : {}),
+				authorization,
 			});
 
 			if (!basket || basket.items.length === 0) {
@@ -37,7 +36,15 @@ export class PaymentGatewayController {
 			}
 
 			res.render("payment_gateway", { payment: null, error: null });
-		} catch {
+		} catch (error) {
+			if (error instanceof BackendApiError && error.status === 401) {
+				res.status(401).render("payment_gateway", {
+					error: "Please log in to complete payment.",
+					loginRequired: true,
+					payment: null,
+				});
+				return;
+			}
 			res.status(503).render("payment_gateway", {
 				error: "Payment gateway is temporarily unavailable. Please try again.",
 				payment: null,

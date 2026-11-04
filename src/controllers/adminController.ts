@@ -1,7 +1,10 @@
 import type { Request, Response } from "express";
 import { BackendApiError } from "../backendApi";
 import type { AdminUserStatusAction } from "../models/adminUser";
-import type { AdminService } from "../services/adminService";
+import type {
+	AdminRequestCredentials,
+	AdminService,
+} from "../services/adminService";
 import {
 	CustomerSessionError,
 	SessionExpiredError,
@@ -142,16 +145,19 @@ export class AdminController {
 	}
 
 	async getBaskets(req: Request, res: Response): Promise<void> {
-		if (this.redirectCustomer(req, res)) {
+		const credentials = this.getCredentials(req);
+		if (!credentials) {
+			res.sendStatus(401);
 			return;
 		}
 		const search = this.adminService.normaliseSearch(req.query.q);
 
 		try {
-			const baskets = await this.adminService.getBaskets(req, res, search);
+			const baskets = await this.adminService.getBaskets(credentials, search);
 			res.render("admin-baskets", { search, baskets });
 		} catch (error) {
-			if (redirectToAdminLogin(error, req, res)) {
+			if (isAuthError(error)) {
+				res.sendStatus(error.status);
 				return;
 			}
 			res.status(503).render("admin-baskets", {
@@ -163,7 +169,9 @@ export class AdminController {
 	}
 
 	async getBasketDetails(req: Request, res: Response): Promise<void> {
-		if (this.redirectCustomer(req, res)) {
+		const credentials = this.getCredentials(req);
+		if (!credentials) {
+			res.sendStatus(401);
 			return;
 		}
 		const id = String(req.params.id ?? "");
@@ -173,17 +181,18 @@ export class AdminController {
 		}
 
 		try {
-			const basket = await this.adminService.getBasketById(req, res, id);
-			res.render("partials/admin-basket-details", { basket, basketId: id });
+			const basket = await this.adminService.getBasketById(credentials, id);
+			res.render("admin-basket-details", { basket, basketId: id });
 		} catch (error) {
-			if (redirectToAdminLogin(error, req, res)) {
+			if (isAuthError(error)) {
+				res.sendStatus(error.status);
 				return;
 			}
 			if (isNotFound(error)) {
 				this.renderBasketNotFound(res);
 				return;
 			}
-			res.status(503).render("partials/admin-basket-details", {
+			res.status(503).render("admin-basket-details", {
 				basketId: id,
 				error: "Basket details are temporarily unavailable. Please try again.",
 			});
@@ -244,11 +253,18 @@ export class AdminController {
 		return true;
 	}
 
+	private getCredentials(req: Request): AdminRequestCredentials | undefined {
+		return this.adminService.resolveCredentials(
+			req.get("authorization"),
+			req.get("cookie"),
+		);
+	}
+
 	private renderUserNotFound(res: Response): void {
 		res.status(404).render("admin-user-details", { notFound: true });
 	}
 
 	private renderBasketNotFound(res: Response): void {
-		res.status(404).render("partials/admin-basket-details", { notFound: true });
+		res.status(404).render("admin-basket-details", { notFound: true });
 	}
 }
