@@ -11,12 +11,12 @@ export interface ShippingAddressData {
 	addressLine2?: string;
 	city: string;
 	postcode: string;
-	country: string;
 }
 
 export interface PaymentSubmissionData {
 	payment: PaymentFormData;
 	shipping: ShippingAddressData;
+	useExistingAddress?: boolean;
 }
 
 export interface PaymentSuccessResult {
@@ -36,12 +36,26 @@ export class PaymentGatewayService {
 
 	async submit(body: unknown): Promise<PaymentSubmissionResult> {
 		try {
-			const validatedData = this.validatePaymentData(body);
-			if (!validatedData) {
-				return {
-					outcome: "invalid",
-					error: "Please fill in all required payment and shipping fields.",
-				};
+			const useExisting =
+				(body as Record<string, unknown>).useExistingAddress === "true" ||
+				(body as Record<string, unknown>).useExistingAddress === true;
+
+			if (!useExisting) {
+				const validatedData = this.validatePaymentData(body);
+				if (!validatedData) {
+					return {
+						outcome: "invalid",
+						error: "Please fill in all required payment and shipping fields.",
+					};
+				}
+			} else {
+				// Validate only payment fields when using existing address
+				if (!this.validatePaymentDataOnly(body)) {
+					return {
+						outcome: "invalid",
+						error: "Please fill in all required payment fields.",
+					};
+				}
 			}
 
 			return {
@@ -62,6 +76,46 @@ export class PaymentGatewayService {
 					"Payment processing is temporarily unavailable. Please try again.",
 			};
 		}
+	}
+
+	private validatePaymentDataOnly(body: unknown): boolean {
+		if (!body || typeof body !== "object") {
+			return false;
+		}
+
+		const data = body as Record<string, unknown>;
+
+		const nameOnCard = data.nameOnCard;
+		const cardNumber = data.cardNumber;
+		const expiry = data.expiry;
+		const cvc = data.cvc;
+
+		if (
+			typeof nameOnCard !== "string" ||
+			nameOnCard.trim().length === 0 ||
+			nameOnCard.length > 50
+		) {
+			throw new PaymentValidationError("Please enter a valid name on card.");
+		}
+
+		if (
+			typeof cardNumber !== "string" ||
+			!/^\d{13,19}$/.test(cardNumber.replace(/\s/g, ""))
+		) {
+			throw new PaymentValidationError("Please enter a valid card number.");
+		}
+
+		if (typeof expiry !== "string" || !/^\d{2}\/\d{2}$/.test(expiry.trim())) {
+			throw new PaymentValidationError(
+				"Please enter a valid expiry date (MM/YY).",
+			);
+		}
+
+		if (typeof cvc !== "string" || !/^\d{3,4}$/.test(cvc.trim())) {
+			throw new PaymentValidationError("Please enter a valid security code.");
+		}
+
+		return true;
 	}
 
 	private validatePaymentData(body: unknown): boolean {
@@ -107,7 +161,6 @@ export class PaymentGatewayService {
 		const addressLine1 = data.addressLine1;
 		const city = data.city;
 		const postcode = data.postcode;
-		const country = data.country;
 
 		if (
 			typeof fullName !== "string" ||
@@ -139,14 +192,6 @@ export class PaymentGatewayService {
 			postcode.length > 20
 		) {
 			throw new PaymentValidationError("Please enter a valid postcode.");
-		}
-
-		if (
-			typeof country !== "string" ||
-			country.trim().length === 0 ||
-			country.length > 50
-		) {
-			throw new PaymentValidationError("Please enter a valid country.");
 		}
 
 		return true;
