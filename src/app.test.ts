@@ -139,7 +139,7 @@ describe("app", () => {
 
 		expect(res.status).toBe(200);
 		expect(res.text).toContain('<a href="/admin/users">Users</a>');
-		expect(res.text).toContain("Orders (Unavailable)");
+		expect(res.text).toContain('<a href="/admin/orders">Orders</a>');
 		expect(res.text).not.toContain("Users (Unavailable)");
 	});
 
@@ -163,7 +163,7 @@ describe("app", () => {
 		expect(res.text).toContain('<a href="/admin" class="active"');
 		expect(res.text).toContain('<a href="/admin/baskets">Baskets</a>');
 		expect(res.text).toContain('<a href="/admin/users">Users</a>');
-		expect(res.text).toContain("Orders (Unavailable)");
+		expect(res.text).toContain('<a href="/admin/orders">Orders</a>');
 		expect(res.text).not.toContain("Baskets (Unavailable)");
 	});
 
