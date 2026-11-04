@@ -1,0 +1,847 @@
+/*
+ * Admin portal design layer.
+ * Loaded after styles.css on admin pages only, so it refines the shared
+ * classes for the staff portal without affecting the customer shop.
+ */
+
+:root {
+	--admin-gap: 1.25rem;
+	--admin-shadow:
+		0 1px 2px rgba(29, 36, 51, 0.06), 0 4px 16px rgba(29, 36, 51, 0.06);
+	--admin-focus: 0 0 0 3px rgba(47, 91, 234, 0.35);
+	--admin-success: #1d6b3a;
+	--admin-success-bg: #e8f6ed;
+	--admin-success-border: #b9e2c7;
+	--admin-warning: #7a4b00;
+	--admin-warning-bg: #fff6e0;
+	--admin-warning-border: #f1d79a;
+	--admin-danger: #a12b2b;
+	--admin-danger-dark: #7f2020;
+	--admin-danger-bg: #fdecec;
+	--admin-danger-border: #f3c2c2;
+	--admin-skeleton: #e3e7ef;
+}
+
+/* ---------- Navigation ---------- */
+
+.navbar {
+	align-items: center;
+	min-height: 3.5rem;
+	box-shadow: 0 2px 8px rgba(29, 36, 51, 0.2);
+}
+
+.navbar-brand {
+	align-self: stretch;
+	font-size: 1.2rem;
+	letter-spacing: 0.02em;
+}
+
+.category-links .unavailable-link {
+	font-style: italic;
+	cursor: not-allowed;
+}
+
+.dropdown-actions form {
+	display: flex;
+}
+
+.dropdown-actions button {
+	padding: 0.5rem 0.9rem;
+	font: inherit;
+	font-weight: 600;
+	white-space: nowrap;
+	color: var(--accent);
+	background: transparent;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	cursor: pointer;
+	transition:
+		background-color 0.15s,
+		border-color 0.15s;
+}
+
+.dropdown-actions button:hover {
+	background: var(--bg);
+	border-color: var(--accent);
+}
+
+/* Desktop: show the navigation inline instead of behind the menu toggle. */
+@media (min-width: 1100px) {
+	.menu-toggle,
+	.menu-button {
+		display: none;
+	}
+
+	.dropdown,
+	.menu-toggle:checked ~ .dropdown {
+		position: static;
+		display: flex;
+		flex: 1;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		width: auto;
+		padding: 0 1rem;
+		color: #fff;
+		background: transparent;
+		border: 0;
+		border-radius: 0;
+		box-shadow: none;
+	}
+
+	.category-links {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.35rem 0.25rem;
+		min-width: 0;
+		margin: 0;
+		padding-block: 0.5rem;
+	}
+
+	.category-links a,
+	.category-links .unavailable-link {
+		padding: 0.45rem 0.85rem;
+		font-weight: 600;
+	}
+
+	.category-links a {
+		color: rgba(255, 255, 255, 0.88);
+	}
+
+	.category-links a:hover {
+		color: #fff;
+		background: var(--nav-hover);
+	}
+
+	.category-links a.active {
+		color: #fff;
+		background: var(--accent);
+	}
+
+	.category-links a:focus-visible {
+		outline-color: #fff;
+	}
+
+	.category-links .unavailable-link {
+		padding-inline: 0.55rem;
+		font-size: 0.85rem;
+		font-weight: 500;
+		color: rgba(255, 255, 255, 0.6);
+		white-space: nowrap;
+	}
+
+	.dropdown-actions {
+		flex: 0 1 auto;
+		align-items: center;
+		gap: 0.9rem;
+		padding: 0;
+		border-top: 0;
+	}
+
+	.staff-name {
+		flex: 0 0 auto;
+		max-width: 16rem;
+		color: rgba(255, 255, 255, 0.8);
+	}
+
+	.dropdown-actions button {
+		color: #fff;
+		border-color: rgba(255, 255, 255, 0.4);
+	}
+
+	.dropdown-actions button:hover {
+		background: var(--nav-hover);
+		border-color: rgba(255, 255, 255, 0.8);
+	}
+
+	.dropdown-actions button:focus-visible {
+		outline-color: #fff;
+	}
+}
+
+/* ---------- Page layout ---------- */
+
+.container {
+	padding: 2rem 1.5rem 3rem;
+}
+
+.section-heading {
+	margin: 0 0 1.5rem;
+	padding-bottom: 0.75rem;
+	font-size: 1.75rem;
+	font-weight: 700;
+	letter-spacing: -0.01em;
+}
+
+.admin-welcome {
+	margin: -1rem 0 1.5rem;
+	color: var(--muted);
+}
+
+.admin-back-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	margin-bottom: 0.25rem;
+	padding: 0.25rem 0;
+}
+
+/* The dashboard has no search yet; hide the placeholder bar rather than show an unfinished control. */
+.search-bar:has(.admin-search-unavailable) {
+	display: none;
+}
+
+.search-bar {
+	padding: 1rem 1.5rem;
+}
+
+.search-bar .search-form {
+	max-width: calc(1200px - 3rem);
+	margin: 0 auto;
+}
+
+.search-bar .search-form input {
+	max-width: 560px;
+}
+
+/* ---------- Cards ---------- */
+
+.profile-card,
+.order-card {
+	padding: 1.5rem;
+	border: 1px solid #dde2ea;
+	box-shadow: var(--admin-shadow);
+}
+
+.profile-card h2,
+.order-card h2,
+.activity-grid .order-card h2,
+.admin-card-heading {
+	margin: 0 0 1rem;
+	font-size: 1.15rem;
+	font-weight: 700;
+	line-height: 1.3;
+}
+
+.activity-grid {
+	grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
+	gap: var(--admin-gap);
+	margin-bottom: var(--admin-gap);
+}
+
+.profile-card {
+	margin-bottom: var(--admin-gap);
+}
+
+.admin-details-grid {
+	margin-bottom: var(--admin-gap);
+}
+
+.admin-table-card,
+.admin-users {
+	margin-bottom: var(--admin-gap);
+}
+
+.profile-details {
+	margin-bottom: 0;
+}
+
+.profile-row:last-child {
+	border-bottom: 0;
+}
+
+.profile-row dd {
+	color: var(--text);
+	overflow-wrap: anywhere;
+}
+
+/* Dashboard summary cards */
+.stat-grid {
+	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+	gap: var(--admin-gap);
+	margin-bottom: 2rem;
+}
+
+.stat-card {
+	position: relative;
+	border: 1px solid #dde2ea;
+	border-top: 4px solid var(--accent);
+	box-shadow: var(--admin-shadow);
+	min-height: 7rem;
+}
+
+.stat-card:hover {
+	transform: none;
+	box-shadow: var(--admin-shadow);
+}
+
+.stat-card .product-info {
+	justify-content: space-between;
+	padding: 1rem 1.25rem;
+}
+
+.stat-card .product-info h2 {
+	margin: 0;
+	font-size: 0.85rem;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+.stat-value {
+	margin: 0.5rem 0 0;
+	font-size: 1.9rem;
+	line-height: 1.1;
+	color: var(--text);
+	overflow-wrap: anywhere;
+}
+
+.stat-grid > .order-empty {
+	grid-column: 1 / -1;
+}
+
+.action-button {
+	min-height: 2.5rem;
+	background: var(--surface);
+}
+
+/* Quick actions */
+.quick-actions {
+	gap: 0.75rem;
+	margin-bottom: 1.5rem;
+}
+
+.quick-actions .action-button {
+	padding: 0.55rem 1rem;
+	font-size: 0.95rem;
+}
+
+.action-button.unavailable-action {
+	color: var(--muted);
+	background: transparent;
+	border-style: dashed;
+}
+
+/* ---------- Tables ---------- */
+
+.order-items {
+	font-size: 0.95rem;
+	font-variant-numeric: tabular-nums;
+}
+
+.order-items th:nth-child(n),
+.order-items td:nth-child(n) {
+	text-align: left;
+	vertical-align: middle;
+}
+
+.order-items :is(th, td).admin-numeric,
+.order-items :is(th, td).order-total {
+	text-align: right;
+}
+
+.order-items th,
+.order-items td {
+	padding: 0.75rem 0.75rem;
+	border-bottom: 1px solid #e3e7ee;
+}
+
+.order-items thead th {
+	font-size: 0.8rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--muted);
+	background: #f6f8fb;
+	border-bottom: 1px solid var(--border);
+	white-space: nowrap;
+}
+
+.order-items thead th:first-child {
+	border-top-left-radius: 6px;
+}
+
+.order-items thead th:last-child {
+	border-top-right-radius: 6px;
+}
+
+.order-items tbody tr:hover td:not(.order-empty) {
+	background: #f8f9fc;
+}
+
+.order-items tbody tr:last-child td {
+	border-bottom: 0;
+}
+
+.order-items tfoot th {
+	border-top: 1px solid var(--border);
+}
+
+.order-items.admin-users-table td:last-child {
+	text-align: right;
+}
+
+.activity-grid .order-items th,
+.activity-grid .order-items td {
+	padding-inline: 0.6rem;
+	white-space: nowrap;
+}
+
+/* Status pills */
+.order-status {
+	display: inline-block;
+	padding: 0.15rem 0.65rem;
+	font-size: 0.8rem;
+	line-height: 1.5;
+	color: var(--accent-dark);
+	background: #e6ecfd;
+	border: 1px solid #cdd8fb;
+	white-space: nowrap;
+}
+
+.order-status.status-suspended {
+	color: var(--admin-danger);
+	background: var(--admin-danger-bg);
+	border-color: var(--admin-danger-border);
+}
+
+/* ---------- Buttons ---------- */
+
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.4rem;
+	width: auto;
+	min-height: 2.5rem;
+	padding: 0.6rem 1.2rem;
+}
+
+.btn--primary {
+	margin-top: 0;
+}
+
+.btn--danger {
+	color: #fff;
+	background: var(--admin-danger);
+}
+
+.btn--danger:hover {
+	background: var(--admin-danger-dark);
+}
+
+.admin-view-button {
+	flex: 0 0 auto;
+	min-height: 2.25rem;
+	padding: 0.35rem 0.85rem;
+	font-size: 0.9rem;
+}
+
+.admin-user-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+	margin-top: 1.25rem;
+	padding-top: 1.25rem;
+	border-top: 1px solid var(--border);
+}
+
+.search-form button,
+.btn--primary {
+	min-height: 2.5rem;
+}
+
+button:disabled,
+button[aria-disabled="true"],
+.btn[aria-disabled="true"] {
+	cursor: progress;
+	opacity: 0.7;
+}
+
+/* ---------- Forms ---------- */
+
+.search-form input,
+.search-form select,
+.admin-form input,
+.admin-form select,
+.admin-form textarea {
+	min-height: 2.5rem;
+}
+
+.admin-form {
+	display: grid;
+	gap: 1rem;
+	max-width: 640px;
+}
+
+.admin-form .field {
+	margin: 0;
+}
+
+.admin-form label {
+	font-weight: 600;
+}
+
+.admin-form input,
+.admin-form select,
+.admin-form textarea {
+	width: 100%;
+	padding: 0.6rem 0.875rem;
+	font: inherit;
+	color: var(--text);
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+}
+
+.admin-form :is(input, select, textarea):focus {
+	outline: none;
+	border-color: var(--accent);
+	box-shadow: var(--admin-focus);
+}
+
+.admin-form [aria-invalid="true"] {
+	border-color: var(--admin-danger);
+}
+
+.field-error {
+	margin: 0.25rem 0 0;
+	font-size: 0.875rem;
+	font-weight: 600;
+	color: var(--admin-danger);
+}
+
+.field-hint {
+	margin: 0.25rem 0 0;
+	font-size: 0.875rem;
+	color: var(--muted);
+}
+
+/* ---------- Messages ---------- */
+
+.error-message,
+.success-message,
+.warning-message,
+.info-message {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem 1rem;
+	margin: 0 0 1.5rem;
+	padding: 0.9rem 1.1rem 0.9rem 1rem;
+	border: 1px solid;
+	border-left-width: 5px;
+	border-radius: var(--radius);
+	font-weight: 500;
+}
+
+.error-message {
+	color: var(--admin-danger);
+	background: var(--admin-danger-bg);
+	border-color: var(--admin-danger-border);
+	border-left-color: var(--admin-danger);
+}
+
+.success-message {
+	color: var(--admin-success);
+	background: var(--admin-success-bg);
+	border-color: var(--admin-success-border);
+	border-left-color: var(--admin-success);
+}
+
+.warning-message {
+	color: var(--admin-warning);
+	background: var(--admin-warning-bg);
+	border-color: var(--admin-warning-border);
+	border-left-color: #c98a00;
+}
+
+.info-message {
+	color: var(--accent-dark);
+	background: #eef2fe;
+	border-color: #cdd8fb;
+	border-left-color: var(--accent);
+}
+
+.error-message::before,
+.success-message::before,
+.warning-message::before,
+.info-message::before {
+	display: inline-grid;
+	place-items: center;
+	flex: 0 0 auto;
+	width: 1.5rem;
+	height: 1.5rem;
+	font-size: 0.85rem;
+	font-weight: 700;
+	color: #fff;
+	border-radius: 50%;
+}
+
+.error-message::before {
+	content: "!" / "";
+	background: var(--admin-danger);
+}
+
+.success-message::before {
+	content: "\2713" / "";
+	background: var(--admin-success);
+}
+
+.warning-message::before {
+	content: "!" / "";
+	background: #c98a00;
+}
+
+.info-message::before {
+	content: "i" / "";
+	background: var(--accent);
+}
+
+/* Retry and recovery links inside messages render as buttons. */
+.error-message a,
+.warning-message a {
+	display: inline-flex;
+	align-items: center;
+	min-height: 2.25rem;
+	margin-left: auto;
+	padding: 0.35rem 0.9rem;
+	color: var(--admin-danger);
+	font-weight: 600;
+	text-decoration: none;
+	background: var(--surface);
+	border: 1px solid currentcolor;
+	border-radius: var(--radius);
+}
+
+.warning-message a {
+	color: var(--admin-warning);
+}
+
+.error-message a:hover,
+.warning-message a:hover {
+	background: var(--admin-danger-bg);
+	text-decoration: underline;
+}
+
+/* ---------- Empty states ---------- */
+
+p.order-empty {
+	margin: 0;
+	padding: 2.5rem 1.5rem;
+	text-align: center;
+	color: var(--muted);
+	background: var(--surface);
+	border: 1px dashed var(--border);
+	border-radius: var(--radius);
+}
+
+main > p.order-empty {
+	margin-bottom: 1.5rem;
+}
+
+.order-card p.order-empty,
+.profile-card p.order-empty {
+	padding: 1.5rem 1rem;
+	background: #f8f9fc;
+}
+
+.order-items td.order-empty {
+	padding: 1.75rem 1rem;
+	text-align: center;
+	font-style: italic;
+	color: var(--muted);
+}
+
+p.order-empty a {
+	margin-left: 0.5rem;
+}
+
+/* ---------- Pagination ---------- */
+
+.pagination {
+	margin: 1.5rem 0 0;
+	color: var(--muted);
+	font-weight: 600;
+}
+
+/* ---------- Loading states ---------- */
+
+.admin-progress {
+	position: fixed;
+	inset: 0 0 auto;
+	z-index: 100;
+	height: 3px;
+	overflow: hidden;
+	pointer-events: none;
+	visibility: hidden;
+}
+
+.admin-progress::after {
+	content: "";
+	position: absolute;
+	inset: 0 auto 0 0;
+	width: 40%;
+	background: var(--accent);
+	animation: admin-progress 1.1s ease-in-out infinite;
+}
+
+.admin-loading .admin-progress {
+	visibility: visible;
+}
+
+.admin-loading main {
+	opacity: 0.6;
+	transition: opacity 0.2s 0.15s;
+	pointer-events: none;
+}
+
+/* Skeleton placeholders keep the dashboard layout stable while fresh data loads. */
+.admin-loading .stat-value,
+.admin-loading .activity-grid td:not(.order-empty) {
+	color: transparent;
+	background: linear-gradient(
+		90deg,
+		var(--admin-skeleton) 25%,
+		#f1f3f8 50%,
+		var(--admin-skeleton) 75%
+	);
+	background-size: 200% 100%;
+	background-clip: content-box;
+	border-radius: 6px;
+	animation: admin-shimmer 1.2s linear infinite;
+}
+
+.admin-loading .activity-grid td:not(.order-empty) * {
+	visibility: hidden;
+}
+
+[data-loading-label][aria-disabled="true"]::after {
+	content: "";
+	width: 0.9em;
+	height: 0.9em;
+	margin-left: 0.4rem;
+	border: 2px solid currentcolor;
+	border-right-color: transparent;
+	border-radius: 50%;
+	animation: admin-spin 0.7s linear infinite;
+}
+
+@keyframes admin-progress {
+	from {
+		transform: translateX(-100%);
+	}
+	to {
+		transform: translateX(250%);
+	}
+}
+
+@keyframes admin-shimmer {
+	from {
+		background-position: 200% 0;
+	}
+	to {
+		background-position: -200% 0;
+	}
+}
+
+@keyframes admin-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.admin-progress::after,
+	.admin-loading .stat-value,
+	.admin-loading .activity-grid td,
+	[data-loading-label][aria-disabled="true"]::after {
+		animation: none;
+	}
+
+	.admin-progress::after {
+		width: 100%;
+	}
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 1099px) {
+	.dropdown {
+		width: min(300px, 100vw);
+	}
+
+	.category-links a.active {
+		color: #fff;
+	}
+}
+
+@media (max-width: 700px) {
+	.container {
+		padding: 1.25rem 1rem 2rem;
+	}
+
+	.section-heading {
+		font-size: 1.5rem;
+	}
+
+	.search-bar {
+		padding: 0.75rem 1rem;
+	}
+
+	.profile-card,
+	.order-card {
+		padding: 1.1rem;
+	}
+
+	.stat-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.75rem;
+	}
+
+	.stat-value {
+		font-size: 1.5rem;
+	}
+
+	.error-message a,
+	.warning-message a {
+		margin-left: 0;
+	}
+}
+
+@media (max-width: 30rem) {
+	.stat-card {
+		min-height: 0;
+	}
+
+	.stat-card .product-info {
+		padding: 0.85rem 1rem;
+	}
+
+	.quick-actions .action-button {
+		flex: 1 1 100%;
+	}
+
+	.admin-user-actions .btn {
+		width: 100%;
+	}
+
+	.order-items th,
+	.order-items td {
+		padding: 0.6rem 0.5rem;
+	}
+}
+
+/* ---------- Focus ---------- */
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.action-button:focus-visible {
+	outline: 3px solid var(--accent);
+	outline-offset: 2px;
+}
