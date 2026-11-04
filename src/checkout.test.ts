@@ -83,7 +83,7 @@ describe("checkout", () => {
 			.mockRejectedValue(new Error("Connection refused"));
 		const res = await request(createApp({ fetch: fetchApi }))
 			.get("/payment_gateway")
-			.set("Cookie", "session=test-session");
+			.set("Authorization", "Bearer test-token");
 
 		expect(res.status).toBe(503);
 		expect(res.text).toContain("Payment gateway is temporarily unavailable");
