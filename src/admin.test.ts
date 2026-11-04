@@ -74,7 +74,7 @@ describe("admin", () => {
 		});
 	});
 
-	it("does not render admin data when the backend rejects staff credentials", async () => {
+	it("shows access denied when staff lack dashboard permission", async () => {
 		const fetchApi = vi
 			.fn<typeof fetch>()
 			.mockResolvedValue(
@@ -87,6 +87,8 @@ describe("admin", () => {
 			.set("Cookie", "accessToken=customer-access");
 
 		expect(res.status).toBe(403);
+		expect(res.headers.location).toBeUndefined();
+		expect(res.text).toContain("Access denied");
 		expect(res.text).not.toContain("New registrations");
 	});
 
@@ -886,10 +888,18 @@ describe("admin", () => {
 			expect(fetchApi).not.toHaveBeenCalled();
 		});
 
-		it("propagates rejected credentials when changing account status", async () => {
-			const fetchApi = vi
-				.fn<typeof fetch>()
-				.mockResolvedValue(jsonResponse({ error: "Forbidden" }, 403));
+		it("shows access denied when staff lack permission to change account status", async () => {
+			const fetchApi = vi.fn<typeof fetch>((input) =>
+				Promise.resolve(
+					String(input).endsWith("/admin")
+						? jsonResponse({
+								staff: { name: "Staff member" },
+								sections: [{ label: "Users" }],
+								quickActions: [],
+							})
+						: jsonResponse({ error: "Forbidden" }, 403),
+				),
+			);
 			const res = await request(createApp({ fetch: fetchApi }))
 				.post("/admin/users/7/suspend")
 				.set("Host", "shop.example")
@@ -897,6 +907,8 @@ describe("admin", () => {
 				.set("Cookie", "accessToken=customer-access");
 
 			expect(res.status).toBe(403);
+			expect(res.headers.location).toBeUndefined();
+			expect(res.text).toContain("Access denied");
 		});
 
 		it("reports a failed status change when the backend is unavailable", async () => {
