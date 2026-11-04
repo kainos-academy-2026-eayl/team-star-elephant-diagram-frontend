@@ -21,6 +21,15 @@ export function createAdminRoutes(adminController: AdminController): Router {
 	router.get("/admin/baskets/:id", (req, res) =>
 		adminController.getBasketDetails(req, res),
 	);
+	router.get("/admin/orders", (req, res) =>
+		adminController.getOrders(req, res),
+	);
+	router.get("/admin/orders/:id", (req, res) =>
+		adminController.getOrderDetails(req, res),
+	);
+	router.post("/admin/orders/:id/status", (req, res) =>
+		adminController.postOrderStatus(req, res),
+	);
 
 	return router;
 }

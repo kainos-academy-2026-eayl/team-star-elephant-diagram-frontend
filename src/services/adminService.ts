@@ -6,6 +6,19 @@ import type {
 	BasketSummary,
 	BasketSummaryView,
 } from "../models/adminBasket";
+import {
+	type AdminOrderDetailsResponse,
+	type AdminOrderDetailsView,
+	type AdminOrderListQuery,
+	type AdminOrderListResponse,
+	type AdminOrderListView,
+	type AdminOrderPaginationView,
+	type AdminOrderStatusError,
+	type AdminOrderSummary,
+	type AdminOrderSummaryView,
+	ORDER_STATUSES,
+	type OrderStatus,
+} from "../models/adminOrder";
 import type {
 	AdminUserDetailsResponse,
 	AdminUserDetailsView,
@@ -68,6 +81,7 @@ const DASHBOARD_NAV_ITEM: AdminNavItem = {
 const IMPLEMENTED_SECTION_HREFS = new Map([
 	["users", "/admin/users"],
 	["baskets", "/admin/baskets"],
+	["orders", "/admin/orders"],
 ]);
 
 const toNavKey = (label: string): string =>
@@ -103,6 +117,23 @@ const basketPath = (id: string): string =>
 
 const userPath = (id: string): string =>
 	`/admin/users/${encodeURIComponent(id)}`;
+
+const orderPath = (id: string): string =>
+	`/admin/orders/${encodeURIComponent(id)}`;
+
+// Mirrors backend ROLE_PERMISSIONS for orders:update; used only to hide controls; the backend still enforces RBAC.
+const ORDER_UPDATE_ROLES = new Set(["SuperAdmin", "Admin"]);
+
+const ORDER_STATUS_ERRORS: readonly AdminOrderStatusError[] = [
+	"invalid",
+	"forbidden",
+	"failed",
+];
+
+const formatStatus = (status: string): string => {
+	const value = String(status ?? "").toLowerCase();
+	return value ? value.charAt(0).toUpperCase() + value.slice(1) : "";
+};
 
 const formatPrice = (amount: number): string =>
 	new Intl.NumberFormat("en-GB", {
@@ -148,6 +179,43 @@ const toPaginationView = (
 		}
 		params.set("page", String(page));
 		return `/admin/users?${params.toString()}`;
+	};
+	return {
+		...pagination,
+		previousHref:
+			pagination.page > 1 ? pageHref(pagination.page - 1) : undefined,
+		nextHref:
+			pagination.page < pagination.totalPages
+				? pageHref(pagination.page + 1)
+				: undefined,
+	};
+};
+
+const toOrderSummaryView = (
+	order: AdminOrderSummary,
+): AdminOrderSummaryView => ({
+	...order,
+	detailsHref: orderPath(String(order.orderId)),
+	displayOrderDate: formatDate(order.orderDate),
+	displayTotal: formatPrice(Number(order.totalCost ?? 0)),
+	statusLabel: formatStatus(order.status),
+});
+
+const toOrderPaginationView = (
+	result: AdminOrderListResponse,
+	search: string,
+): AdminOrderPaginationView | undefined => {
+	const pagination = result.pagination;
+	if (!pagination || pagination.totalPages <= 1) {
+		return undefined;
+	}
+	const pageHref = (page: number): string => {
+		const params = new URLSearchParams();
+		if (search) {
+			params.set("q", search);
+		}
+		params.set("page", String(page));
+		return `/admin/orders?${params.toString()}`;
 	};
 	return {
 		...pagination,
@@ -342,5 +410,115 @@ export class AdminService {
 			res,
 		);
 		return basket;
+	}
+
+	getOrderDetailsHref(id: string): string {
+		return orderPath(id);
+	}
+
+	async getOrders(
+		req: Request,
+		res: Response,
+		query: AdminOrderListQuery = {},
+	): Promise<AdminOrderListView> {
+		const search = query.search ?? "";
+		const params = new URLSearchParams();
+		if (search) {
+			params.set("search", search);
+		}
+		if (query.page && query.page > 1) {
+			params.set("page", String(query.page));
+		}
+		const queryString = params.toString();
+		const result = await this.sessions.request<AdminOrderListResponse>(
+			`/admin/orders${queryString ? `?${queryString}` : ""}`,
+			req,
+			res,
+		);
+		const pagination = toOrderPaginationView(result, search);
+		return {
+			orders: (result.orders ?? []).map(toOrderSummaryView),
+			...(pagination ? { pagination } : {}),
+		};
+	}
+
+	async getOrderById(
+		req: Request,
+		res: Response,
+		id: string,
+	): Promise<AdminOrderDetailsView> {
+		// Started together so a token refresh is shared rather than repeated with a rotated refresh token.
+		const [details, role] = await Promise.all([
+			this.sessions.request<AdminOrderDetailsResponse>(orderPath(id), req, res),
+			this.sessions
+				.request<{ role?: unknown }>("/admin/me", req, res)
+				.then((me) => (typeof me.role === "string" ? me.role : undefined))
+				.catch(() => undefined),
+		]);
+		const { order } = details;
+		const address = order.customer.address ?? {};
+		const transitions = (order.allowedTransitions ?? []).filter(
+			(status): status is OrderStatus => this.isOrderStatus(status),
+		);
+		return {
+			order: {
+				...order,
+				detailsHref: orderPath(String(order.orderId)),
+				statusLabel: formatStatus(order.status),
+				displayOrderDate: formatDate(order.orderDate),
+				displayLastUpdated: formatDate(order.lastUpdated),
+				displayOrderTotal: formatPrice(Number(order.orderTotal ?? 0)),
+				addressLines: [
+					address.line1,
+					address.line2,
+					address.city,
+					address.postcode,
+				].filter((line): line is string => Boolean(line?.trim())),
+				items: (order.items ?? []).map((item) => ({
+					...item,
+					displayUnitPrice: formatPrice(Number(item.unitPrice ?? 0)),
+					displayItemTotal: formatPrice(Number(item.itemTotal ?? 0)),
+				})),
+				transitions: transitions.map((value) => ({
+					value,
+					label: formatStatus(value),
+				})),
+			},
+			canUpdateStatus:
+				role !== undefined &&
+				ORDER_UPDATE_ROLES.has(role) &&
+				transitions.length > 0,
+		};
+	}
+
+	async updateOrderStatus(
+		req: Request,
+		res: Response,
+		id: string,
+		status: OrderStatus,
+	): Promise<OrderStatus> {
+		await this.sessions.request<AdminOrderDetailsResponse>(
+			`${orderPath(id)}/status`,
+			req,
+			res,
+			{},
+			{ status },
+		);
+		return status;
+	}
+
+	isOrderStatus(value: unknown): value is OrderStatus {
+		return (
+			typeof value === "string" &&
+			(ORDER_STATUSES as readonly string[]).includes(value)
+		);
+	}
+
+	parseOrderStatusError(value: unknown): AdminOrderStatusError | undefined {
+		return ORDER_STATUS_ERRORS.find((error) => error === value);
+	}
+
+	formatOrderStatus(status: string): string {
+		return formatStatus(status);
 	}
 }
