@@ -88,6 +88,36 @@ export class PaymentGatewayController {
 		const { outcome, ...data } = await this.paymentGatewayService.submit(
 			req.body,
 		);
+
+		// If payment validation was successful and a new address was provided, update it
+		if (
+			outcome === "success" &&
+			req.body.useExistingAddress === "false" &&
+			req.body.addressLine1
+		) {
+			try {
+				const addressData: Record<string, string> = {
+					addressLine1: req.body.addressLine1,
+					city: req.body.city,
+					postcode: req.body.postcode,
+				};
+				if (req.body.addressLine2) {
+					addressData.addressLine2 = req.body.addressLine2;
+				}
+				await this.sessions.request(
+					"/profile/shipping-address",
+					req,
+					res,
+					{},
+					addressData,
+					"PUT",
+				);
+			} catch (error) {
+				console.error("Failed to update shipping address:", error);
+				// Don't fail payment if address update fails, just log the error
+			}
+		}
+
 		const status = { success: 200, invalid: 400, unavailable: 503 }[outcome];
 		res.status(status).render("payment_gateway", data);
 	}

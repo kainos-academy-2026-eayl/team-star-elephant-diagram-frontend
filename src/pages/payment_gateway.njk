@@ -241,7 +241,6 @@
 		const addressLine2Input = document.getElementById('address2');
 		const cityInput = document.getElementById('city');
 		const postcodeInput = document.getElementById('postcode');
-		const paymentForm = document.getElementById('paymentForm');
 
 		addressButtons.forEach(button => {
 			button.addEventListener('click', (e) => {
@@ -276,47 +275,6 @@
 					postcodeInput.setAttribute('required', '');
 				}
 			});
-		});
-
-		paymentForm.addEventListener('submit', async (e) => {
-			if (useExistingInput.value === 'false' && addressLine1Input.value) {
-				e.preventDefault();
-				
-				const authorization = document.cookie
-					.split('; ')
-					.find(row => row.startsWith('accessToken='))
-					?.split('=')[1];
-				
-				if (!authorization) {
-					console.error('No authorization token found');
-					paymentForm.submit();
-					return;
-				}
-
-				try {
-					const response = await fetch('/profile/shipping-address', {
-						method: 'PUT',
-						headers: {
-							'Content-Type': 'application/json',
-							'Authorization': `Bearer ${authorization}`,
-						},
-						body: JSON.stringify({
-							addressLine1: addressLine1Input.value,
-							addressLine2: addressLine2Input.value || undefined,
-							city: cityInput.value,
-							postcode: postcodeInput.value,
-						}),
-					});
-
-					if (!response.ok) {
-						console.error('Failed to update shipping address');
-					}
-				} catch (error) {
-					console.error('Error updating shipping address:', error);
-				}
-
-				paymentForm.submit();
-			}
 		});
 		{% endif %}
 	</script>

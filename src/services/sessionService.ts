@@ -68,6 +68,7 @@ export class SessionService {
 		res: Response,
 		headers: Record<string, string> = {},
 		body?: Record<string, string | number>,
+		method?: string,
 	): Promise<Result> {
 		res.set("Cache-Control", "no-store");
 		const authorization = req.get("authorization");
@@ -77,7 +78,7 @@ export class SessionService {
 				return await this.api.request<Result>(path, body, {
 					...headers,
 					Authorization: authorization ?? `Bearer ${access}`,
-				});
+				}, method);
 			} catch (error) {
 				if (!(error instanceof BackendApiError) || error.status !== 401)
 					throw error;
@@ -114,7 +115,7 @@ export class SessionService {
 			const result = await this.api.request<Result>(path, body, {
 				...headers,
 				Authorization: `Bearer ${credentials.result.accessToken}`,
-			});
+			}, method);
 			if (!operation.invalidated) this.establish(res, credentials);
 			return result;
 		} catch (error) {
