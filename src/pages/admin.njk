@@ -22,11 +22,15 @@
 
     <main class="container">
         {% if forbidden %}
-        <h1 class="section-heading">Access denied</h1>
-        <div class="error-message" role="alert">
-            You do not have permission to view this page.
-            <a href="/admin">Return to the dashboard</a>
-        </div>
+        <section class="admin-denied" aria-labelledby="access-denied-title">
+            <p class="admin-denied__code" aria-hidden="true">403</p>
+            <h1 id="access-denied-title" class="admin-denied__title">Access denied</h1>
+            <p class="admin-denied__message" role="alert">You do not have permission to view this page or perform this action.</p>
+            <p class="admin-denied__hint">If you think you should have access, ask a Super Admin to review your role.</p>
+            <div class="admin-denied__actions">
+                <a href="/admin" class="btn btn--primary">Return to the dashboard</a>
+            </div>
+        </section>
         {% else %}
         <h1 class="section-heading">Admin dashboard</h1>
 
