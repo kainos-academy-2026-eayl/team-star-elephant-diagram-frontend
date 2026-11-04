@@ -23,6 +23,8 @@ import type { SessionService } from "./sessionService";
 
 export interface AdminDashboard {
 	staff: { name: string };
+	role?: string;
+	dashboard?: string;
 	sections: Array<{ label: string }>;
 	quickActions: Array<{ label: string }>;
 	cards: Array<{ label: string; value: string }>;
@@ -39,6 +41,45 @@ export interface AdminDashboard {
 		reason: string;
 	}>;
 }
+
+export interface AdminNavItem {
+	key: string;
+	label: string;
+	href: string;
+}
+
+// What the logged-in role may see, derived only from the backend's role-scoped dashboard response.
+export interface AdminAccess {
+	staff: { name: string };
+	role: string;
+	nav: AdminNavItem[];
+	canChangeUserStatus: boolean;
+}
+
+// Backend quick action label granted to roles holding users:suspend.
+const USER_STATUS_QUICK_ACTION = "Suspend or reactivate customers";
+
+const DASHBOARD_NAV_ITEM: AdminNavItem = {
+	key: "dashboard",
+	label: "Dashboard",
+	href: "/admin",
+};
+
+const toNavKey = (label: string): string =>
+	label
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "");
+
+const toNav = (sections: AdminDashboard["sections"]): AdminNavItem[] => [
+	DASHBOARD_NAV_ITEM,
+	...sections
+		.filter((section) => typeof section?.label === "string")
+		.map((section) => ({ key: toNavKey(section.label), label: section.label }))
+		.filter(({ key }) => key && key !== DASHBOARD_NAV_ITEM.key)
+		.map(({ key, label }) => ({ key, label, href: `/admin/${key}` })),
+];
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const MAX_SEARCH_LENGTH = 100;
@@ -113,8 +154,44 @@ const toPaginationView = (
 export class AdminService {
 	constructor(private readonly sessions: SessionService) {}
 
-	getDashboard(req: Request, res: Response): Promise<AdminDashboard> {
-		return this.sessions.request<AdminDashboard>("/admin", req, res);
+	async getDashboard(
+		req: Request,
+		res: Response,
+	): Promise<AdminDashboard & AdminAccess> {
+		const dashboard = await this.sessions.request<AdminDashboard>(
+			"/admin",
+			req,
+			res,
+		);
+		return { ...dashboard, ...this.toAccess(dashboard) };
+	}
+
+	async getAccess(req: Request, res: Response): Promise<AdminAccess> {
+		return this.toAccess(
+			await this.sessions.request<AdminDashboard>("/admin", req, res),
+		);
+	}
+
+	toAccess(dashboard: Partial<AdminDashboard>): AdminAccess {
+		const sections = Array.isArray(dashboard.sections)
+			? dashboard.sections
+			: [];
+		const quickActions = Array.isArray(dashboard.quickActions)
+			? dashboard.quickActions
+			: [];
+		return {
+			staff: { name: dashboard.staff?.name ?? "" },
+			role: dashboard.role ?? "",
+			nav: toNav(sections),
+			canChangeUserStatus: quickActions.some(
+				(action) => action?.label === USER_STATUS_QUICK_ACTION,
+			),
+		};
+	}
+
+	// Used when the role cannot be confirmed: only the dashboard link and no actions.
+	getRestrictedAccess(): AdminAccess {
+		return this.toAccess({});
 	}
 
 	isCustomerSession(req: Request): boolean {
