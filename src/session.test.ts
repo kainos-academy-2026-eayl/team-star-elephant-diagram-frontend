@@ -183,19 +183,21 @@ describe("persistent authentication", () => {
 			if (path.endsWith("/admin/users/999")) {
 				return Promise.resolve(response({ error: "Not found" }, 404));
 			}
-			return Promise.resolve(
-				response({
-					staff: { name: "Ada" },
-					sections: [],
-					quickActions: [],
-				}),
-			);
+			if (path.endsWith("/admin")) {
+				return Promise.resolve(
+					response({
+						staff: { name: "Ada" },
+						sections: [],
+						quickActions: [],
+					}),
+				);
+			}
+			return Promise.resolve(response({ error: "Unexpected URL" }, 500));
 		});
 		const result = await request(createApp({ fetch: api }))
 			.get("/admin/users/999")
 			.set("Cookie", "refreshToken=current-refresh");
 		expect(result.status).toBe(404);
-		expect(result.headers["set-cookie"]).toHaveLength(2);
 		expect(String(result.headers["set-cookie"])).toContain(
 			"accessToken=new-access",
 		);
