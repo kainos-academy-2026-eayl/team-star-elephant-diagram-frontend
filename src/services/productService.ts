@@ -9,9 +9,6 @@ import type {
 export const MAX_ORDER_QUANTITY = 99;
 export const LOW_STOCK_THRESHOLD = 5;
 export const DESCRIPTION_PREVIEW_LENGTH = 110;
-// TEMPORARY: inventory table is empty, so every product is floored to this stock
-// level. Set back to 0 once real inventory data exists.
-const TEMP_STOCK = 50;
 
 const currency = new Intl.NumberFormat("en-GB", {
 	style: "currency",
@@ -60,9 +57,8 @@ export class ProductService {
 			`/products/${productId}`,
 		);
 		const stockQuantity = Math.max(
-			TEMP_STOCK,
-			Math.trunc(Number(product.inventory?.quantity ?? TEMP_STOCK)) ||
-				TEMP_STOCK,
+			0,
+			Math.trunc(Number(product.inventory?.quantity ?? 0)) || 0,
 		);
 		return {
 			productId: product.productId,
