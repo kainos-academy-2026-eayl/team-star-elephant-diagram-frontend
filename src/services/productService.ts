@@ -67,6 +67,9 @@ export class ProductService {
 			description: product.description,
 			price: Number(product.price),
 			imageURL: safeImageURL(product.imageURL),
+			images: (product.images ?? [])
+				.filter((image) => safeImageURL(image.url))
+				.map((image) => ({ url: image.url, altText: image.altText ?? null })),
 			formattedPrice: formatPrice(product.price),
 			stockQuantity,
 			inStock: stockQuantity > 0,

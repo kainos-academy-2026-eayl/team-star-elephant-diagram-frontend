@@ -1570,6 +1570,85 @@ describe("app", () => {
 		expect(res.text).toContain('href="/styles.css"');
 	});
 
+	it("renders every gallery image in order and drops unsafe image URLs", async () => {
+		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					productId: 51,
+					name: "StudioBook 16 Pro",
+					category: "Laptops",
+					description: "A laptop",
+					price: 1299.99,
+					imageURL: "https://example.com/main.jpg",
+					images: [
+						{ url: "https://example.com/front.jpg", altText: "Front view" },
+						{ url: "javascript:alert(1)", altText: "Bad" },
+						{ url: "https://example.com/side.jpg", altText: null },
+					],
+					inventory: { quantity: 20 },
+				}),
+			),
+		);
+		const res = await request(
+			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
+		).get("/products/51");
+
+		expect(res.status).toBe(200);
+		const gallery =
+			res.text.match(
+				/<div class="product-gallery"[\s\S]*?<div class="product-detail__info">/,
+			)?.[0] ?? "";
+		expect(gallery.match(/<img /g)).toHaveLength(2);
+		expect(gallery.indexOf("front.jpg")).toBeLessThan(
+			gallery.indexOf("side.jpg"),
+		);
+		expect(gallery).toContain('alt="Front view"');
+		expect(gallery).toContain('alt="StudioBook 16 Pro"');
+		expect(gallery).not.toContain("javascript:");
+		expect(gallery).not.toContain("main.jpg");
+
+		expect(gallery.match(/class="carousel__radio"/g)).toHaveLength(2);
+		expect(gallery).toMatch(/id="gallery-1"[^>]*checked/);
+		expect(gallery).not.toMatch(/id="gallery-2"[^>]*checked/);
+		expect(
+			[
+				...gallery.matchAll(
+					/carousel__arrow--(prev|next)" for="(gallery-\d)"/g,
+				),
+			].map((match) => `${match[1]}:${match[2]}`),
+		).toEqual([
+			"prev:gallery-2",
+			"next:gallery-2",
+			"prev:gallery-1",
+			"next:gallery-1",
+		]);
+		expect(gallery).toContain("1 / 2");
+		expect(gallery).toContain("2 / 2");
+	});
+
+	it("shows a single gallery image without carousel arrows", async () => {
+		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					productId: 52,
+					name: "Solo",
+					category: "Laptops",
+					description: "A laptop",
+					price: 10,
+					imageURL: "https://example.com/main.jpg",
+					images: [{ url: "https://example.com/only.jpg", altText: null }],
+					inventory: { quantity: 1 },
+				}),
+			),
+		);
+		const res = await request(
+			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
+		).get("/products/52");
+
+		expect(res.text).toContain('src="https://example.com/only.jpg"');
+		expect(res.text).not.toContain("carousel__arrow");
+	});
+
 	it.each([
 		[{ quantity: 0 }, "Out of stock", true, 'max="1"'],
 		[null, "Out of stock", true, 'max="1"'],
