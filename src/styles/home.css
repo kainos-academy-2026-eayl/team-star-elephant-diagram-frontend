@@ -147,6 +147,25 @@ body.home {
 	background: rgba(255, 255, 255, 0.15);
 }
 
+.cart-link {
+	position: relative;
+}
+
+.cart-link__badge {
+	position: absolute;
+	top: 0;
+	right: 0;
+	min-width: 1.1rem;
+	padding: 0 0.3rem;
+	border-radius: 999px;
+	background: var(--sed-gold);
+	color: var(--sed-purple-dark);
+	font-size: 0.7rem;
+	font-weight: 800;
+	line-height: 1.1rem;
+	text-align: center;
+}
+
 .icon-link--dark:hover {
 	background: var(--sed-purple-soft);
 }

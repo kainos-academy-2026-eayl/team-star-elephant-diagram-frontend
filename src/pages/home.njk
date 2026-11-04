@@ -22,7 +22,10 @@
         </form>
 
         <div class="site-header__actions">
-            <a href="/basket" class="icon-link" aria-label="Basket">{{ i.icon("cart") }}</a>
+            <a href="/basket" class="icon-link cart-link" aria-label="Basket{% if cartCount %}, {{ cartCount }} {{ 'item' if cartCount == 1 else 'items' }}{% endif %}">
+                {{ i.icon("cart") }}
+                {% if cartCount %}<span class="cart-link__badge" aria-hidden="true">{{ '99+' if cartCount > 99 else cartCount }}</span>{% endif %}
+            </a>
             <button type="button" class="icon-link" command="show-modal" commandfor="site-menu" aria-label="Open menu">{{ i.icon("menu") }}</button>
         </div>
     </header>
@@ -81,7 +84,7 @@
                 <li><a class="menu-item" href="/profile">{{ i.icon("user") }}<span>Account</span></a></li>
                 <li><a class="menu-item" href="/profile">{{ i.icon("box") }}<span>Orders</span></a></li>
                 <li><a class="menu-item" href="/products">{{ i.icon("heart") }}<span>Wishlist</span></a></li>
-                <li><a class="menu-item" href="/basket">{{ i.icon("cart") }}<span>Cart</span>{% if cartCount %}<span class="menu-item__badge">{{ cartCount }}</span>{% endif %}</a></li>
+                <li><a class="menu-item" href="/basket">{{ i.icon("cart") }}<span>Cart</span>{% if cartCount %}<span class="menu-item__badge">{{ '99+' if cartCount > 99 else cartCount }}</span>{% endif %}</a></li>
             </ul>
         </nav>
 

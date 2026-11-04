@@ -47,7 +47,7 @@ export function createApp({
 		new BasketService(api),
 		sessions,
 	);
-	const pageController = new PageController();
+	const pageController = new PageController(sessions);
 	const productService = new ProductService(api);
 	const productController = new ProductController(productService);
 	const checkoutController = new CheckoutController(
