@@ -4,6 +4,7 @@ import { BackendApi } from "./backendApi";
 import { AdminController } from "./controllers/adminController";
 import { AuthController } from "./controllers/authController";
 import { BasketController } from "./controllers/basketController";
+import { CheckoutController } from "./controllers/checkoutController";
 import { PageController } from "./controllers/pageController";
 import { PaymentGatewayController } from "./controllers/paymentGatewayController";
 import { ProductController } from "./controllers/productController";
@@ -11,6 +12,7 @@ import { ProfileController } from "./controllers/profileController";
 import { createAdminRoutes } from "./routes/adminRoutes";
 import { createAuthRoutes } from "./routes/authRoutes";
 import { createBasketRoutes } from "./routes/basketRoutes";
+import { createCheckoutRoutes } from "./routes/checkoutRoutes";
 import { createPageRoutes } from "./routes/pageRoutes";
 import { createPaymentGatewayRoutes } from "./routes/paymentGatewayRoutes";
 import { createProductRoutes } from "./routes/productRoutes";
@@ -18,6 +20,7 @@ import { createProfileRoutes } from "./routes/profileRoutes";
 import { AdminService } from "./services/adminService";
 import { AuthService } from "./services/authService";
 import { BasketService } from "./services/basketService";
+import { CheckoutService } from "./services/checkoutService";
 import { PaymentGatewayService } from "./services/paymentGatewayService";
 import { ProductService } from "./services/productService";
 import { ProfileService } from "./services/profileService";
@@ -47,8 +50,12 @@ export function createApp({
 	const pageController = new PageController();
 	const productService = new ProductService(api);
 	const productController = new ProductController(productService);
+	const checkoutController = new CheckoutController(
+		new CheckoutService(),
+		sessions,
+	);
 	const paymentGatewayController = new PaymentGatewayController(
-		new PaymentGatewayService(productService),
+		new PaymentGatewayService(),
 		new BasketService(api),
 	);
 	const profileController = new ProfileController(new ProfileService(sessions));
@@ -70,6 +77,7 @@ export function createApp({
 	app.use(createAuthRoutes(authController));
 	app.use(createBasketRoutes(basketController));
 	app.use(createProductRoutes(productController));
+	app.use(createCheckoutRoutes(checkoutController));
 	app.use(createPaymentGatewayRoutes(paymentGatewayController));
 	app.use(createProfileRoutes(profileController));
 

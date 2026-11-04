@@ -18,11 +18,13 @@ export class BackendApi {
 		path: string,
 		body?: Record<string, string | number>,
 		headers: Record<string, string> = {},
+		method?: string,
 	): Promise<Result> {
 		const { result } = await this.requestWithResponse<Result>(
 			path,
 			body,
 			headers,
+			method,
 		);
 		return result;
 	}
@@ -31,9 +33,10 @@ export class BackendApi {
 		path: string,
 		body?: Record<string, string | number>,
 		headers: Record<string, string> = {},
+		method: string = body ? "POST" : "GET",
 	): Promise<{ result: Result; cookies: string[] }> {
 		const response = await this.fetchApi(new URL(path, this.baseUrl), {
-			method: body ? "POST" : "GET",
+			method,
 			headers: { "Content-Type": "application/json", ...headers },
 			...(body ? { body: JSON.stringify(body) } : {}),
 			signal: AbortSignal.timeout(5000),
