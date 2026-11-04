@@ -1,6 +1,10 @@
 import type { Request, Response } from "express";
 import { BackendApiError } from "../backendApi";
-import { buildCatalogueView, parseFilters } from "../catalogueFilters";
+import {
+	buildCatalogueView,
+	CATALOGUE_TITLE,
+	parseFilters,
+} from "../catalogueFilters";
 import type { ProductService } from "../services/productService";
 import type { SessionService } from "../services/sessionService";
 import { getCartCount } from "./cartCount";
@@ -77,7 +81,7 @@ export class ProductController {
 			res.status(503).render("product_catalogue", {
 				error: "Products are temporarily unavailable. Please try again.",
 				query: filters.query,
-				title: "Top Picks",
+				title: CATALOGUE_TITLE,
 				cartCount: await cartCount,
 			});
 		}

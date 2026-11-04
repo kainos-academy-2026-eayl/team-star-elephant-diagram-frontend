@@ -117,6 +117,22 @@ describe("products", () => {
 		},
 	);
 
+	it("titles the catalogue Browse Products, or the category when one is selected", async () => {
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockImplementation(async () => new Response("[]"));
+		const app = createApp({ fetch: fetchApi });
+
+		const all = await request(app).get("/products");
+		expect(all.text).toContain(
+			'<h1 class="catalogue__title">Browse Products</h1>',
+		);
+		expect(all.text).not.toContain("Top Picks");
+
+		const one = await request(app).get("/products").query({ category: "Mice" });
+		expect(one.text).toContain('<h1 class="catalogue__title">Mice</h1>');
+	});
+
 	describe("cart badge", () => {
 		const basketId = "8e0dcfff-1528-4ec6-9820-b8c9a6732000";
 		const product = {

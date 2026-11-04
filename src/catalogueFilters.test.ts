@@ -122,8 +122,10 @@ describe("buildCatalogueView", () => {
 
 	it("uses the category as the title only when exactly one is selected", () => {
 		expect(view({ category: "Mice" }).title).toBe("Mice");
-		expect(view({ category: ["Mice", "Laptops"] }).title).toBe("Top Picks");
-		expect(view().title).toBe("Top Picks");
+		expect(view({ category: ["Mice", "Laptops"] }).title).toBe(
+			"Browse Products",
+		);
+		expect(view().title).toBe("Browse Products");
 	});
 
 	it("handles an empty catalogue without a price range", () => {

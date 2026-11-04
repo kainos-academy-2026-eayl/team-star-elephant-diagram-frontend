@@ -1,5 +1,7 @@
 import type { CatalogueProduct } from "./models/product";
 
+export const CATALOGUE_TITLE = "Browse Products";
+
 export interface CatalogueFilters {
 	query: string;
 	categories: string[];
@@ -121,7 +123,7 @@ export function buildCatalogueView(
 		selectedCategories: filters.categories,
 		query: filters.query,
 		title:
-			filters.categories.length === 1 ? filters.categories[0] : "Top Picks",
+			filters.categories.length === 1 ? filters.categories[0] : CATALOGUE_TITLE,
 		price: {
 			min: bounds.min,
 			max: bounds.max,
