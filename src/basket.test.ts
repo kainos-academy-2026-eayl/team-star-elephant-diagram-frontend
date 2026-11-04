@@ -40,6 +40,34 @@ describe("basket", () => {
 		});
 	});
 
+	it("shows same-site product images in the basket but drops unsafe ones", async () => {
+		const basket = {
+			items: [
+				["/images/TeamB-tshirt-front.png", 1],
+				["//evil.example/x.png", 2],
+				["javascript:alert(1)", 3],
+			].map(([imageURL, productId]) => ({
+				productId,
+				productName: `Product ${productId}`,
+				quantity: 1,
+				unitPrice: 1,
+				imageURL,
+			})),
+			subtotal: 3,
+		};
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(new Response(JSON.stringify(basket)));
+		const res = await request(createApp({ fetch: fetchApi }))
+			.get("/basket")
+			.set("Authorization", ["Bearer", "test-token"].join(" "));
+
+		expect(res.status).toBe(200);
+		expect(res.text).toContain('src="/images/TeamB-tshirt-front.png"');
+		expect(res.text).not.toContain("evil.example");
+		expect(res.text).not.toContain("javascript:");
+	});
+
 	it("requires authentication before loading a basket", async () => {
 		const fetchApi = vi.fn<typeof fetch>();
 		const res = await request(

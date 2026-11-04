@@ -5,6 +5,7 @@ import type {
 	BasketRequestCredentials,
 	BasketService,
 } from "../services/basketService";
+import { safeImageURL } from "../services/productService";
 import type { SessionService } from "../services/sessionService";
 import { isValidProductId } from "./productController";
 
@@ -218,9 +219,7 @@ export class BasketController {
 			);
 			const items = basket.items.map((item) => ({
 				...item,
-				imageURL: /^https?:\/\//i.test(item.imageURL ?? "")
-					? item.imageURL
-					: "",
+				imageURL: safeImageURL(item.imageURL),
 				displayUnitPrice: formatPrice(item.unitPrice),
 				displaySubtotal: formatPrice(item.unitPrice * item.quantity),
 			}));

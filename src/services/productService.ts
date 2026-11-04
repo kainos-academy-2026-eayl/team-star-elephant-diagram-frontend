@@ -32,8 +32,9 @@ export const previewDescription = (
 	return `${(lastSpace > 0 ? cut.slice(0, lastSpace) : cut).replace(/[\s,.;:-]+$/, "")}…`;
 };
 
-const safeImageURL = (url: string | undefined): string =>
-	/^https?:\/\//i.test(url ?? "") ? (url as string) : "";
+// Allows absolute http(s) URLs and same-site paths such as /images/x.png, but not protocol-relative //host URLs.
+export const safeImageURL = (url: string | undefined): string =>
+	/^(https?:\/\/|\/(?![/\\]))/i.test(url ?? "") ? (url as string) : "";
 
 export class ProductService {
 	constructor(private readonly api: BackendApi) {}
