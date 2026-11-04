@@ -26,11 +26,12 @@ describe("app", () => {
 		expect(res.status).toBe(200);
 		expect(res.text).toContain("SEDSHED");
 		expect(res.text).toContain('id="site-menu"');
-		expect(res.text).toContain('id="menu-overlay"');
+		expect(res.text).toContain('commandfor="site-menu"');
+		expect(res.text).not.toContain("<script");
 		expect(res.text).toContain("Electronics Shop");
 	});
 
-	it.each(["/home.css", "/home.js", "/images/home/slide.png"])(
+	it.each(["/home.css", "/images/home/slide.png"])(
 		"serves the homepage asset %s",
 		async (path) => {
 			const res = await request(app).get(path);

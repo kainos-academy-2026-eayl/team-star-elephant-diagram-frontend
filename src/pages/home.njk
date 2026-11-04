@@ -23,22 +23,30 @@
 
         <div class="site-header__actions">
             <a href="/basket" class="icon-link" aria-label="Basket">{{ i.icon("cart") }}</a>
-            <button type="button" class="icon-link" id="menu-open" aria-label="Open menu" aria-expanded="false" aria-controls="site-menu">{{ i.icon("menu") }}</button>
+            <button type="button" class="icon-link" command="show-modal" commandfor="site-menu" aria-label="Open menu">{{ i.icon("menu") }}</button>
         </div>
     </header>
 
     <main>
         <section class="carousel" aria-roledescription="carousel" aria-label="Featured">
+            {% set count = slides | length %}
+            {% for slide in slides %}
+            <input type="radio" class="carousel__radio" name="slide" id="slide-{{ loop.index0 }}" aria-label="Show slide {{ loop.index }}">
+            {% endfor %}
             <div class="carousel__track">
                 {% for slide in slides %}
-                <a class="carousel__slide{% if loop.first %} is-active{% endif %}" href="{{ slide.href }}" aria-label="{{ slide.label }}"{% if not loop.first %} aria-hidden="true" tabindex="-1"{% endif %}>
-                    <img src="{{ slide.image }}" alt="{{ slide.label }}">
-                </a>
+                <div class="carousel__slide">
+                    <a href="{{ slide.href }}"><img src="{{ slide.image }}" alt="{{ slide.label }}"></a>
+                    <label class="carousel__arrow carousel__arrow--prev" for="slide-{{ (loop.index0 - 1 + count) % count }}" aria-hidden="true"></label>
+                    <label class="carousel__arrow carousel__arrow--next" for="slide-{{ (loop.index0 + 1) % count }}" aria-hidden="true"></label>
+                </div>
                 {% endfor %}
             </div>
-            <button type="button" class="carousel__arrow carousel__arrow--prev" aria-label="Previous slide"></button>
-            <button type="button" class="carousel__arrow carousel__arrow--next" aria-label="Next slide"></button>
-            <div class="carousel__dots"></div>
+            <div class="carousel__dots">
+                {% for slide in slides %}
+                <label class="carousel__dot" for="slide-{{ loop.index0 }}" aria-hidden="true"></label>
+                {% endfor %}
+            </div>
         </section>
 
         <section class="tiles" aria-label="Shop highlights">
@@ -51,15 +59,13 @@
         </section>
     </main>
 
-    <div class="menu-overlay" id="menu-overlay" hidden></div>
-
-    <aside class="side-menu" id="site-menu" aria-label="Site menu" aria-hidden="true" inert>
+    <dialog class="side-menu" id="site-menu" aria-label="Site menu" closedby="any">
         <div class="side-menu__top">
             <a href="/" class="side-menu__brand">
                 <img src="/images/home/logo-menu.png" alt="" width="56" height="36">
                 <span>Sedshed</span>
             </a>
-            <button type="button" class="icon-link icon-link--dark" id="menu-close" aria-label="Close menu">{{ i.icon("close") }}</button>
+            <button type="button" class="icon-link icon-link--dark" command="close" commandfor="site-menu" aria-label="Close menu" autofocus>{{ i.icon("close") }}</button>
         </div>
 
         <nav class="side-menu__nav" aria-label="Main">
@@ -102,9 +108,7 @@
         </ul>
 
         <p class="side-menu__copyright">© 2026 Sedshed. All rights reserved.</p>
-    </aside>
-
-    <script src="/home.js" defer></script>
+    </dialog>
 </body>
 
 </html>
