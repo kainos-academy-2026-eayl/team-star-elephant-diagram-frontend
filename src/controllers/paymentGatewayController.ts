@@ -65,7 +65,11 @@ export class PaymentGatewayController {
 				// If profile fetch fails, continue without saved address
 			}
 
-			res.render("payment_gateway", { payment: null, error: null, savedAddress });
+			res.render("payment_gateway", {
+				payment: null,
+				error: null,
+				savedAddress,
+			});
 		} catch (error) {
 			if (error instanceof BackendApiError && error.status === 401) {
 				res.status(401).render("payment_gateway", {

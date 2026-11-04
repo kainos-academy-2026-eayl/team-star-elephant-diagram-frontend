@@ -36,8 +36,10 @@ export class PaymentGatewayService {
 
 	async submit(body: unknown): Promise<PaymentSubmissionResult> {
 		try {
-			const useExisting = (body as Record<string, unknown>).useExistingAddress === "true" || (body as Record<string, unknown>).useExistingAddress === true;
-			
+			const useExisting =
+				(body as Record<string, unknown>).useExistingAddress === "true" ||
+				(body as Record<string, unknown>).useExistingAddress === true;
+
 			if (!useExisting) {
 				const validatedData = this.validatePaymentData(body);
 				if (!validatedData) {

@@ -75,10 +75,15 @@ export class SessionService {
 		const access = cookieValue(req, "accessToken");
 		if (authorization || access) {
 			try {
-				return await this.api.request<Result>(path, body, {
-					...headers,
-					Authorization: authorization ?? `Bearer ${access}`,
-				}, method);
+				return await this.api.request<Result>(
+					path,
+					body,
+					{
+						...headers,
+						Authorization: authorization ?? `Bearer ${access}`,
+					},
+					method,
+				);
 			} catch (error) {
 				if (!(error instanceof BackendApiError) || error.status !== 401)
 					throw error;
@@ -112,10 +117,15 @@ export class SessionService {
 				}
 				throw error;
 			}
-			const result = await this.api.request<Result>(path, body, {
-				...headers,
-				Authorization: `Bearer ${credentials.result.accessToken}`,
-			}, method);
+			const result = await this.api.request<Result>(
+				path,
+				body,
+				{
+					...headers,
+					Authorization: `Bearer ${credentials.result.accessToken}`,
+				},
+				method,
+			);
 			if (!operation.invalidated) this.establish(res, credentials);
 			return result;
 		} catch (error) {
