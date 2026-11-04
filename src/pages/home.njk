@@ -1,0 +1,117 @@
+{%- import "partials/icons.njk" as i -%}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sedshed | Home</title>
+    <link rel="stylesheet" href="/home.css">
+</head>
+
+<body class="home">
+    <header class="site-header">
+        <a href="/" class="brand" aria-label="Sedshed home">
+            <img src="/images/home/logo.png" alt="" width="80" height="42">
+            <span class="brand__name">SEDSHED</span>
+        </a>
+
+        <form action="/products" method="get" class="site-search" role="search">
+            <input type="search" name="q" placeholder="Search for something.." aria-label="Search products">
+            <button type="submit" aria-label="Search">{{ i.icon("search") }}</button>
+        </form>
+
+        <div class="site-header__actions">
+            <a href="/basket" class="icon-link cart-link" aria-label="Basket{% if cartCount %}, {{ cartCount }} {{ 'item' if cartCount == 1 else 'items' }}{% endif %}">
+                {{ i.icon("cart") }}
+                {% if cartCount %}<span class="cart-link__badge" aria-hidden="true">{{ '99+' if cartCount > 99 else cartCount }}</span>{% endif %}
+            </a>
+            <button type="button" class="icon-link" command="show-modal" commandfor="site-menu" aria-label="Open menu">{{ i.icon("menu") }}</button>
+        </div>
+    </header>
+
+    <main>
+        <section class="carousel" aria-roledescription="carousel" aria-label="Featured">
+            {% set count = slides | length %}
+            {% for slide in slides %}
+            <input type="radio" class="carousel__radio" name="slide" id="slide-{{ loop.index0 }}" aria-label="Show slide {{ loop.index }}">
+            {% endfor %}
+            <div class="carousel__track">
+                {% for slide in slides %}
+                <div class="carousel__slide">
+                    <a href="{{ slide.href }}"><img src="{{ slide.image }}" alt="{{ slide.label }}"></a>
+                    <label class="carousel__arrow carousel__arrow--prev" for="slide-{{ (loop.index0 - 1 + count) % count }}" aria-hidden="true"></label>
+                    <label class="carousel__arrow carousel__arrow--next" for="slide-{{ (loop.index0 + 1) % count }}" aria-hidden="true"></label>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="carousel__dots">
+                {% for slide in slides %}
+                <label class="carousel__dot" for="slide-{{ loop.index0 }}" aria-hidden="true"></label>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="tiles" aria-label="Shop highlights">
+            {% for tile in smallTiles %}
+            <a class="tile tile--small" href="{{ tile.href }}"><img src="{{ tile.image }}" alt="{{ tile.label }}" loading="lazy"></a>
+            {% endfor %}
+            {% for tile in largeTiles %}
+            <a class="tile tile--large" href="{{ tile.href }}"><img src="{{ tile.image }}" alt="{{ tile.label }}" loading="lazy"></a>
+            {% endfor %}
+        </section>
+    </main>
+
+    <dialog class="side-menu" id="site-menu" aria-label="Site menu" closedby="any">
+        <div class="side-menu__top">
+            <a href="/" class="side-menu__brand">
+                <img src="/images/home/logo-menu.png" alt="" width="56" height="36">
+                <span>Sedshed</span>
+            </a>
+            <button type="button" class="icon-link icon-link--dark" command="close" commandfor="site-menu" aria-label="Close menu" autofocus>{{ i.icon("close") }}</button>
+        </div>
+
+        <nav class="side-menu__nav" aria-label="Main">
+            <ul>
+                <li><a class="menu-item is-current" href="/" aria-current="page">{{ i.icon("home") }}<span>Home</span></a></li>
+                {% for category in menuCategories %}
+                <li><a class="menu-item" href="{{ category.href }}">{{ i.icon(category.icon) }}<span>{{ category.label }}</span></a></li>
+                {% endfor %}
+                <li><a class="menu-item" href="/products">{{ i.icon("tag") }}<span>Deals &amp; Offers</span></a></li>
+            </ul>
+
+            <ul class="menu-section">
+                <li><a class="menu-item" href="/profile">{{ i.icon("user") }}<span>Account</span></a></li>
+                <li><a class="menu-item" href="/profile">{{ i.icon("box") }}<span>Orders</span></a></li>
+                <li><a class="menu-item" href="/products">{{ i.icon("heart") }}<span>Wishlist</span></a></li>
+                <li><a class="menu-item" href="/basket">{{ i.icon("cart") }}<span>Cart</span>{% if cartCount %}<span class="menu-item__badge">{{ '99+' if cartCount > 99 else cartCount }}</span>{% endif %}</a></li>
+            </ul>
+        </nav>
+
+        <a class="shipping-banner" href="/products">
+            {{ i.icon("truck") }}
+            <span><strong>Free Shipping</strong><small>On orders over £50</small></span>
+            {{ i.icon("arrow") }}
+        </a>
+
+        <div class="help">
+            <p class="help__title">Need Help?</p>
+            <ul>
+                <li><a href="/products">{{ i.icon("help") }}<span>FAQs</span></a></li>
+                <li><a href="/products">{{ i.icon("mail") }}<span>Contact Us</span></a></li>
+                <li><a href="/profile">{{ i.icon("pin") }}<span>Track Order</span></a></li>
+            </ul>
+        </div>
+
+        <ul class="social" aria-label="Social media">
+            <li><a href="/" aria-label="Instagram">{{ i.icon("instagram") }}</a></li>
+            <li><a href="/" aria-label="Facebook">{{ i.icon("facebook") }}</a></li>
+            <li><a href="/" aria-label="X">{{ i.icon("x") }}</a></li>
+            <li><a href="/" aria-label="YouTube">{{ i.icon("youtube") }}</a></li>
+        </ul>
+
+        <p class="side-menu__copyright">© 2026 Sedshed. All rights reserved.</p>
+    </dialog>
+</body>
+
+</html>

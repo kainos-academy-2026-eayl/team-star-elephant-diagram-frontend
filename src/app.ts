@@ -47,7 +47,7 @@ export function createApp({
 		new BasketService(api),
 		sessions,
 	);
-	const pageController = new PageController();
+	const pageController = new PageController(sessions);
 	const productService = new ProductService(api);
 	const productController = new ProductController(productService);
 	const checkoutController = new CheckoutController(
@@ -57,6 +57,7 @@ export function createApp({
 	const paymentGatewayController = new PaymentGatewayController(
 		new PaymentGatewayService(),
 		new BasketService(api),
+		sessions,
 	);
 	const profileController = new ProfileController(new ProfileService(sessions));
 
@@ -69,6 +70,7 @@ export function createApp({
 
 	app.use(express.static("src/pages"));
 	app.use(express.static("src/styles"));
+	app.use(express.static("src/assets"));
 	app.use(express.json({ limit: "100kb" }));
 	app.use(express.urlencoded({ extended: false, limit: "100kb" }));
 

@@ -76,6 +76,7 @@ export class SessionService {
 		res: Response,
 		headers: Record<string, string> = {},
 		body?: Record<string, string | number>,
+		method?: string,
 	): Promise<Result> {
 		res.set("Cache-Control", "no-store");
 		const renewed = this.renewedForRequest.get(req);
@@ -86,10 +87,15 @@ export class SessionService {
 		const access = cookieValue(req, "accessToken");
 		if (authorization || access) {
 			try {
-				return await this.api.request<Result>(path, body, {
-					...headers,
-					Authorization: authorization ?? `Bearer ${access}`,
-				});
+				return await this.api.request<Result>(
+					path,
+					body,
+					{
+						...headers,
+						Authorization: authorization ?? `Bearer ${access}`,
+					},
+					method,
+				);
 			} catch (error) {
 				if (!(error instanceof BackendApiError) || error.status !== 401)
 					throw error;
@@ -133,13 +139,15 @@ export class SessionService {
 				}
 				throw error;
 			}
-			if (!operation.invalidated) {
-				this.renewedForRequest.set(req, { credentials, operation });
-			}
-			const result = await this.api.request<Result>(path, body, {
-				...headers,
-				Authorization: `Bearer ${credentials.result.accessToken}`,
-			});
+			const result = await this.api.request<Result>(
+				path,
+				body,
+				{
+					...headers,
+					Authorization: `Bearer ${credentials.result.accessToken}`,
+				},
+				method,
+			);
 			if (!operation.invalidated) this.establish(res, credentials);
 			return result;
 		} catch (error) {

@@ -36,7 +36,7 @@ const readAuthorization = (req: Request): string | undefined => {
 	);
 };
 
-const basketCookieHeader = (req: Request): string | undefined => {
+export const basketCookieHeader = (req: Request): string | undefined => {
 	const basketId = readCookie(req, BASKET_COOKIE);
 	return basketId ? `${BASKET_COOKIE}=${basketId}` : undefined;
 };
