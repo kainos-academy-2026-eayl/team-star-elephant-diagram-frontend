@@ -891,6 +891,43 @@ ul {
 	outline-offset: 2px;
 }
 
+.basket-item__quantity {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin-top: 0.5rem;
+	font-size: 0.9rem;
+}
+
+.basket-item__quantity input {
+	width: 4.5rem;
+	padding: 0.35rem 0.5rem;
+	font: inherit;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+}
+
+.update-button {
+	padding: 0.4rem 0.9rem;
+	font: inherit;
+	font-size: 0.9rem;
+	font-weight: 600;
+	background: transparent;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	cursor: pointer;
+}
+
+.update-button:hover {
+	background: var(--border);
+}
+
+.update-button:focus-visible,
+.basket-item__quantity input:focus-visible {
+	outline: 3px solid rgba(47, 91, 234, 0.4);
+	outline-offset: 2px;
+}
+
 .basket-summary {
 	padding: 1.25rem;
 	background: var(--surface);
