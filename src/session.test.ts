@@ -159,7 +159,8 @@ describe("persistent authentication", () => {
 				"Cookie",
 				"accessToken=customer-access; refreshToken=customer-refresh",
 			);
-		expect(result.status).toBe(403);
+		expect(result.status).toBe(303);
+		expect(result.headers.location).toBe("/admin/login?reason=forbidden");
 		expect(api).toHaveBeenCalledTimes(1);
 
 		const rejected = vi
@@ -169,7 +170,8 @@ describe("persistent authentication", () => {
 		const retry = await request(createApp({ fetch: rejected }))
 			.get("/admin")
 			.set("Cookie", "refreshToken=current");
-		expect(retry.status).toBe(401);
+		expect(retry.status).toBe(303);
+		expect(retry.headers.location).toBe("/admin/login");
 		expect(rejected).toHaveBeenCalledTimes(2);
 	});
 
