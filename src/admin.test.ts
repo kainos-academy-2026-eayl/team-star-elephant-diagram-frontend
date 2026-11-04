@@ -43,7 +43,8 @@ describe("admin", () => {
 			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 		).get("/admin");
 
-		expect(res.status).toBe(401);
+		expect(res.status).toBe(303);
+		expect(res.headers.location).toBe("/admin/login");
 		expect(fetchApi).not.toHaveBeenCalled();
 	});
 
@@ -85,7 +86,8 @@ describe("admin", () => {
 			.get("/admin")
 			.set("Cookie", "accessToken=customer-access");
 
-		expect(res.status).toBe(403);
+		expect(res.status).toBe(303);
+		expect(res.headers.location).toBe("/admin/login?reason=forbidden");
 		expect(res.text).not.toContain("New registrations");
 	});
 
@@ -502,7 +504,7 @@ describe("admin", () => {
 				createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 			)
 				.get("/admin/users?q=ada%20l&page=2")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-session");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain('value="ada l"');
@@ -522,10 +524,10 @@ describe("admin", () => {
 
 			const res = await request(app)
 				.get("/admin/users")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-session");
 			const searched = await request(app)
 				.get("/admin/users?q=nobody")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-session");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain("No user accounts found.");
@@ -541,7 +543,7 @@ describe("admin", () => {
 				createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 			)
 				.get("/admin/users/7")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-session");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain("Customer information");
@@ -561,7 +563,7 @@ describe("admin", () => {
 				"http://backend:4000/admin/users/7",
 			);
 			expect(fetchApi.mock.calls[0]?.[1]?.headers).toMatchObject({
-				Cookie: "session=staff-session",
+				Authorization: ["Bearer", "staff-session"].join(" "),
 			});
 		});
 
@@ -575,7 +577,7 @@ describe("admin", () => {
 			);
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/users/7")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-session");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain('action="/admin/users/7/reactivate"');
@@ -591,7 +593,10 @@ describe("admin", () => {
 				const fetchApi = vi.fn<typeof fetch>();
 				const res = await request(createApp({ fetch: fetchApi })).get(path);
 
-				expect(res.status).toBe(401);
+				expect(res.status).toBe(303);
+				expect(res.headers.location).toBe(
+					`/admin/login?returnTo=${encodeURIComponent(path)}`,
+				);
 				expect(fetchApi).not.toHaveBeenCalled();
 			},
 		);
@@ -609,9 +614,14 @@ describe("admin", () => {
 					.mockResolvedValue(jsonResponse({ error: "Denied" }, status));
 				const res = await request(createApp({ fetch: fetchApi }))
 					.get(path)
-					.set("Cookie", "session=customer-session");
+					.set("Cookie", "accessToken=customer-session");
 
-				expect(res.status).toBe(status);
+				expect(res.status).toBe(303);
+				expect(res.headers.location).toBe(
+					status === 403
+						? "/admin/login?reason=forbidden"
+						: `/admin/login?returnTo=${encodeURIComponent(path)}`,
+				);
 				expect(res.text).not.toContain("User accounts");
 				expect(res.text).not.toContain("Customer information");
 			},
@@ -640,7 +650,7 @@ describe("admin", () => {
 				.mockResolvedValue(jsonResponse({ error: "Not found" }, 404));
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/users/999")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-session");
 
 			expect(res.status).toBe(404);
 			expect(res.text).toContain("User not found");
@@ -650,7 +660,7 @@ describe("admin", () => {
 			const fetchApi = vi.fn<typeof fetch>();
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/users/bad.id")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-session");
 
 			expect(res.status).toBe(404);
 			expect(fetchApi).not.toHaveBeenCalled();
@@ -671,7 +681,7 @@ describe("admin", () => {
 				.post(`/admin/users/7/${action}`)
 				.set("Host", "shop.example")
 				.set("Origin", "http://shop.example")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-session");
 
 			expect(res.status).toBe(303);
 			expect(res.headers.location).toBe(`/admin/users/7?updated=${updated}`);
@@ -680,7 +690,7 @@ describe("admin", () => {
 			);
 			expect(fetchApi.mock.calls[0]?.[1]?.method).toBe("POST");
 			expect(fetchApi.mock.calls[0]?.[1]?.headers).toMatchObject({
-				Cookie: "session=staff-session",
+				Authorization: ["Bearer", "staff-session"].join(" "),
 			});
 		});
 
@@ -702,7 +712,7 @@ describe("admin", () => {
 					.set("Host", "shop.example")
 					.set("Origin", "https://shop.example")
 					.set("X-Forwarded-Proto", "https")
-					.set("Cookie", "session=staff-session");
+					.set("Cookie", "accessToken=staff-session");
 
 				expect(res.status).toBe(303);
 				expect(res.headers.location).toBe(`/admin/users/7?updated=${updated}`);
@@ -744,18 +754,22 @@ describe("admin", () => {
 				.mockResolvedValue(jsonResponse(userDetails({ status: "suspended" })));
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/users/7?updated=suspended")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-session");
 
 			expect(res.text).toContain("The account has been suspended.");
 		});
 
 		it("requires staff credentials before changing account status", async () => {
 			const fetchApi = vi.fn<typeof fetch>();
-			const res = await request(createApp({ fetch: fetchApi })).post(
-				"/admin/users/7/suspend",
-			);
+			const res = await request(createApp({ fetch: fetchApi }))
+				.post("/admin/users/7/suspend")
+				.set("Host", "shop.example")
+				.set("Origin", "http://shop.example");
 
-			expect(res.status).toBe(401);
+			expect(res.status).toBe(303);
+			expect(res.headers.location).toBe(
+				"/admin/login?returnTo=%2Fadmin%2Fusers%2F7",
+			);
 			expect(fetchApi).not.toHaveBeenCalled();
 		});
 
@@ -767,9 +781,10 @@ describe("admin", () => {
 				.post("/admin/users/7/suspend")
 				.set("Host", "shop.example")
 				.set("Origin", "http://shop.example")
-				.set("Cookie", "session=customer-session");
+				.set("Cookie", "accessToken=customer-session");
 
-			expect(res.status).toBe(403);
+			expect(res.status).toBe(303);
+			expect(res.headers.location).toBe("/admin/login?reason=forbidden");
 		});
 
 		it("reports a failed status change when the backend is unavailable", async () => {
@@ -782,14 +797,14 @@ describe("admin", () => {
 				.post("/admin/users/7/suspend")
 				.set("Host", "shop.example")
 				.set("Origin", "http://shop.example")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-session");
 
 			expect(res.status).toBe(303);
 			expect(res.headers.location).toBe("/admin/users/7?actionFailed=1");
 
 			const page = await request(app)
 				.get(String(res.headers.location))
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-session");
 			expect(page.text).toContain("could not be updated");
 			expect(page.text).not.toContain("Connection refused");
 		});
