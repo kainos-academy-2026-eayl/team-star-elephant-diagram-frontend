@@ -13,8 +13,14 @@ export interface ProductInventory {
 	quantity: number;
 }
 
+export interface ProductImage {
+	url: string;
+	altText: string | null;
+}
+
 export interface ExpandedProduct extends Product {
 	inventory: ProductInventory | null;
+	images?: ProductImage[];
 }
 
 export interface CatalogueProduct extends Product {
@@ -24,6 +30,7 @@ export interface CatalogueProduct extends Product {
 
 export interface ProductDetail extends Product {
 	formattedPrice: string;
+	images: ProductImage[];
 	stockQuantity: number;
 	inStock: boolean;
 	lowStock: boolean;

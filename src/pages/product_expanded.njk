@@ -45,7 +45,22 @@
         <a href="/products">Back to products</a>
         <section class="product-detail" aria-labelledby="product-title">
             <div class="product-gallery" aria-label="Product images">
-                {% if product.imageURL %}
+                {% if product.images and product.images.length > 1 %}
+                {# CSS-only carousel: each hidden radio shows the slide directly after it; arrows are labels for the neighbouring radios. #}
+                <div class="carousel">
+                    {% for image in product.images %}
+                    <input class="carousel__radio" type="radio" name="product-gallery" id="gallery-{{ loop.index }}" aria-label="Show image {{ loop.index }} of {{ loop.length }}"{% if loop.first %} checked{% endif %}>
+                    <figure class="carousel__slide">
+                        <img src="{{ image.url }}" alt="{{ image.altText or product.name }}"{% if not loop.first %} loading="lazy"{% endif %}>
+                        <label class="carousel__arrow carousel__arrow--prev" for="gallery-{{ loop.length if loop.first else loop.index - 1 }}" title="Previous image" aria-hidden="true">&#8249;</label>
+                        <label class="carousel__arrow carousel__arrow--next" for="gallery-{{ 1 if loop.last else loop.index + 1 }}" title="Next image" aria-hidden="true">&#8250;</label>
+                        <figcaption class="carousel__count">{{ loop.index }} / {{ loop.length }}</figcaption>
+                    </figure>
+                    {% endfor %}
+                </div>
+                {% elif product.images and product.images.length %}
+                <img src="{{ product.images[0].url }}" alt="{{ product.images[0].altText or product.name }}">
+                {% elif product.imageURL %}
                 <img src="{{ product.imageURL }}" alt="{{ product.name }}">
                 {% else %}
                 <div class="product-image" role="img" aria-label="No product image available"></div>
