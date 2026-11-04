@@ -6,6 +6,64 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>Payment</title>
 	<link rel="stylesheet" href="/styles.css" />
+	<style>
+		.address-selector {
+			display: flex;
+			gap: 1rem;
+			margin-bottom: 1.5rem;
+			flex-wrap: wrap;
+		}
+
+		.address-button {
+			flex: 1;
+			min-width: 150px;
+			padding: 0.75rem 1rem;
+			border: 2px solid #ccc;
+			background: white;
+			cursor: pointer;
+			border-radius: 4px;
+			font-size: 1rem;
+			transition: all 0.2s ease;
+		}
+
+		.address-button:hover {
+			border-color: #333;
+			background: #f9f9f9;
+		}
+
+		.address-button.active {
+			border-color: #007bff;
+			background: #e7f3ff;
+			color: #007bff;
+			font-weight: 600;
+		}
+
+		.saved-address-display {
+			background: #f0f8ff;
+			border-left: 4px solid #007bff;
+			padding: 1rem;
+			margin-bottom: 1.5rem;
+			border-radius: 4px;
+		}
+
+		.saved-address-display h3 {
+			margin: 0 0 0.5rem 0;
+			color: #007bff;
+		}
+
+		.saved-address-display p {
+			margin: 0.25rem 0;
+			color: #333;
+		}
+
+		.shipping-fieldset {
+			display: none;
+		}
+
+		.shipping-fieldset.active {
+			display: block;
+		}
+	</style>
 </head>
 
 <body>
@@ -52,7 +110,7 @@
 				<h2 id="payment-heading">Payment details</h2>
 				<p class="payment-intro">Enter your card and shipping information to complete your purchase.</p>
 
-				<form class="payment-form" action="/payment_gateway" method="post">
+				<form class="payment-form" action="/payment_gateway" method="post" id="paymentForm">
 					<fieldset class="payment-fieldset">
 						<legend class="payment-legend">Card information</legend>
 
@@ -78,6 +136,60 @@
 						</div>
 					</fieldset>
 
+					{% if savedAddress %}
+					<fieldset class="payment-fieldset">
+						<legend class="payment-legend">Shipping address</legend>
+
+						<div class="address-selector">
+							<button type="button" class="address-button active" data-address-option="saved">
+								Use saved address
+							</button>
+							<button type="button" class="address-button" data-address-option="new">
+								Use new address
+							</button>
+						</div>
+
+						<div class="saved-address-display" id="savedAddressDisplay">
+							<h3>Saved Address</h3>
+							<p>{{ savedAddress.user.firstName }} {{ savedAddress.user.lastName }}</p>
+							<p>{{ savedAddress.user.addressLine1 }}</p>
+							{% if savedAddress.user.addressLine2 %}
+							<p>{{ savedAddress.user.addressLine2 }}</p>
+							{% endif %}
+							<p>{{ savedAddress.user.city }}, {{ savedAddress.user.postcode }}</p>
+						</div>
+
+						<fieldset class="shipping-fieldset" id="newAddressForm">
+							<div class="field">
+								<label for="fullname">Full name</label>
+								<input type="text" id="fullname" name="fullName" autocomplete="name" maxlength="100">
+							</div>
+
+							<div class="field">
+								<label for="address1">Street address</label>
+								<input type="text" id="address1" name="addressLine1" autocomplete="street-address" maxlength="100">
+							</div>
+
+							<div class="field">
+								<label for="address2">Apartment, suite, etc. (optional)</label>
+								<input type="text" id="address2" name="addressLine2" autocomplete="address-line2" maxlength="100">
+							</div>
+
+							<div class="payment-row">
+								<div class="field">
+									<label for="city">City</label>
+									<input type="text" id="city" name="city" autocomplete="address-level2" maxlength="50">
+								</div>
+								<div class="field">
+									<label for="postcode">Postcode</label>
+									<input type="text" id="postcode" name="postcode" autocomplete="postal-code" maxlength="20">
+								</div>
+							</div>
+						</fieldset>
+
+						<input type="hidden" id="useExistingAddress" name="useExistingAddress" value="true">
+					</fieldset>
+					{% else %}
 					<fieldset class="payment-fieldset">
 						<legend class="payment-legend">Shipping address</legend>
 
@@ -106,12 +218,8 @@
 								<input type="text" id="postcode" name="postcode" autocomplete="postal-code" maxlength="20" required>
 							</div>
 						</div>
-
-						<div class="field">
-							<label for="country">Country</label>
-							<input type="text" id="country" name="country" autocomplete="country-name" maxlength="50" required>
-						</div>
 					</fieldset>
+					{% endif %}
 
 					<div class="payment-actions">
 						<button type="submit" class="btn btn--primary">Submit payment</button>
@@ -122,6 +230,96 @@
 		</div>
 		{% endif %}
 	</main>
+
+	<script>
+		{% if savedAddress %}
+		const addressButtons = document.querySelectorAll('[data-address-option]');
+		const newAddressForm = document.getElementById('newAddressForm');
+		const useExistingInput = document.getElementById('useExistingAddress');
+		const fullNameInput = document.getElementById('fullname');
+		const addressLine1Input = document.getElementById('address1');
+		const addressLine2Input = document.getElementById('address2');
+		const cityInput = document.getElementById('city');
+		const postcodeInput = document.getElementById('postcode');
+		const paymentForm = document.getElementById('paymentForm');
+
+		addressButtons.forEach(button => {
+			button.addEventListener('click', (e) => {
+				e.preventDefault();
+				
+				const option = button.getAttribute('data-address-option');
+				
+				addressButtons.forEach(btn => btn.classList.remove('active'));
+				button.classList.add('active');
+
+				if (option === 'saved') {
+					useExistingInput.value = 'true';
+					newAddressForm.classList.remove('active');
+					
+					fullNameInput.removeAttribute('required');
+					addressLine1Input.removeAttribute('required');
+					cityInput.removeAttribute('required');
+					postcodeInput.removeAttribute('required');
+					
+					fullNameInput.value = '';
+					addressLine1Input.value = '';
+					addressLine2Input.value = '';
+					cityInput.value = '';
+					postcodeInput.value = '';
+				} else {
+					useExistingInput.value = 'false';
+					newAddressForm.classList.add('active');
+					
+					fullNameInput.setAttribute('required', '');
+					addressLine1Input.setAttribute('required', '');
+					cityInput.setAttribute('required', '');
+					postcodeInput.setAttribute('required', '');
+				}
+			});
+		});
+
+		paymentForm.addEventListener('submit', async (e) => {
+			if (useExistingInput.value === 'false' && addressLine1Input.value) {
+				e.preventDefault();
+				
+				const authorization = document.cookie
+					.split('; ')
+					.find(row => row.startsWith('accessToken='))
+					?.split('=')[1];
+				
+				if (!authorization) {
+					console.error('No authorization token found');
+					paymentForm.submit();
+					return;
+				}
+
+				try {
+					const response = await fetch('/profile/shipping-address', {
+						method: 'PUT',
+						headers: {
+							'Content-Type': 'application/json',
+							'Authorization': `Bearer ${authorization}`,
+						},
+						body: JSON.stringify({
+							addressLine1: addressLine1Input.value,
+							addressLine2: addressLine2Input.value || undefined,
+							city: cityInput.value,
+							postcode: postcodeInput.value,
+						}),
+					});
+
+					if (!response.ok) {
+						console.error('Failed to update shipping address');
+					}
+				} catch (error) {
+					console.error('Error updating shipping address:', error);
+				}
+
+				paymentForm.submit();
+			}
+		});
+		{% endif %}
+	</script>
 </body>
 
 </html>
