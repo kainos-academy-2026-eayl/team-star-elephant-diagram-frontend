@@ -55,4 +55,29 @@ export class BasketService {
 		);
 		return { basket: result, cookies };
 	}
+
+	updateItemQuantity(
+		productId: number,
+		quantity: number,
+		credentials: BasketRequestCredentials,
+	): Promise<Basket> {
+		return this.api.request<Basket>(
+			`/basket/items/${productId}`,
+			{ quantity },
+			toHeaders(credentials),
+			"PATCH",
+		);
+	}
+
+	removeItem(
+		productId: number,
+		credentials: BasketRequestCredentials,
+	): Promise<Basket> {
+		return this.api.request<Basket>(
+			`/basket/items/${productId}`,
+			undefined,
+			toHeaders(credentials),
+			"DELETE",
+		);
+	}
 }

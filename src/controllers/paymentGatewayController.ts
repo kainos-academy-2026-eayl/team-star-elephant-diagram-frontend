@@ -13,20 +13,34 @@ export class PaymentGatewayController {
 			const authorization = req.get("authorization");
 			const cookie = req.get("cookie");
 
-			let hasItems = false;
-			if (authorization || cookie) {
-				const basket = await this.basketService.getBasket({
-					...(authorization ? { authorization } : {}),
-					...(cookie ? { cookie } : {}),
+			if (!authorization && !cookie) {
+				res.status(401).render("payment_gateway", {
+					error: "Please log in to complete payment.",
+					loginRequired: true,
+					payment: null,
 				});
-				hasItems = basket && basket.items.length > 0;
+				return;
 			}
 
-			res.render("payment_gateway", { hasItems });
+			const basket = await this.basketService.getBasket({
+				...(authorization ? { authorization } : {}),
+				...(cookie ? { cookie } : {}),
+			});
+
+			if (!basket || basket.items.length === 0) {
+				res.status(400).render("payment_gateway", {
+					error:
+						"Your basket is empty. Please add items before proceeding to payment.",
+					payment: null,
+				});
+				return;
+			}
+
+			res.render("payment_gateway", { payment: null, error: null });
 		} catch {
 			res.status(503).render("payment_gateway", {
-				error: "Basket is temporarily unavailable. Please try again.",
-				hasItems: false,
+				error: "Payment gateway is temporarily unavailable. Please try again.",
+				payment: null,
 			});
 		}
 	}
