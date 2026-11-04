@@ -59,6 +59,7 @@
                 </div>
             </dl>
 
+            {% if canChangeUserStatus %}
             <div class="admin-user-actions">
                 {% if user.isSuspended %}
                 <form action="{{ user.detailsHref }}/reactivate" method="post">
@@ -70,6 +71,7 @@
                 </form>
                 {% endif %}
             </div>
+            {% endif %}
         </section>
 
         <div class="activity-grid">

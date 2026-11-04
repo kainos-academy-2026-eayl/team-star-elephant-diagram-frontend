@@ -42,7 +42,7 @@ export function createApp({
 	const api = new BackendApi(apiBaseUrl, fetchApi);
 	const sessions = new SessionService(api);
 	const authController = new AuthController(new AuthService(api), sessions);
-	const adminController = new AdminController(new AdminService(api, sessions));
+	const adminController = new AdminController(new AdminService(sessions));
 	const basketController = new BasketController(
 		new BasketService(api),
 		sessions,

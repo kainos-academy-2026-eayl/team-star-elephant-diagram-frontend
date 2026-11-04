@@ -4,21 +4,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard | Shop</title>
+    <title>{% if forbidden %}Access denied{% else %}Admin Dashboard{% endif %} | Shop</title>
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/admin.css">
     <script src="/admin.js" defer></script>
 </head>
 
 <body>
-    {% set activeNav = "dashboard" %}
+    {% set activeNav = "" if forbidden else "dashboard" %}
     {% include "partials/admin-nav.njk" %}
 
+    {% if not forbidden %}
     <div class="search-bar">
         <div class="admin-search-unavailable" aria-disabled="true">Search is unavailable.</div>
     </div>
+    {% endif %}
 
     <main class="container">
+        {% if forbidden %}
+        <h1 class="section-heading">Access denied</h1>
+        <div class="error-message" role="alert">
+            You do not have permission to view this page.
+            <a href="/admin">Return to the dashboard</a>
+        </div>
+        {% else %}
         <h1 class="section-heading">Admin dashboard</h1>
 
         {% if error %}
@@ -135,6 +144,7 @@
             </section>
         </div>
 
+        {% endif %}
         {% endif %}
     </main>
 </body>
