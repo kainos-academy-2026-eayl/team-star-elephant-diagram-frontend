@@ -5,6 +5,11 @@ import type {
 	AdminRequestCredentials,
 	AdminService,
 } from "../services/adminService";
+import {
+	CustomerSessionError,
+	SessionExpiredError,
+} from "../services/sessionService";
+import { safeAdminReturnTo } from "../validators/returnTo";
 
 const isAuthError = (error: unknown): error is BackendApiError =>
 	error instanceof BackendApiError && [401, 403].includes(error.status);
@@ -12,16 +17,53 @@ const isAuthError = (error: unknown): error is BackendApiError =>
 const isNotFound = (error: unknown): boolean =>
 	error instanceof BackendApiError && error.status === 404;
 
+const ADMIN_LOGIN_PATH = "/admin/login";
+const CUSTOMER_HOME_PATH = "/products";
+
+// 401 → admin login (with returnTo, and reason=expired only when a refresh token was rejected).
+// 403 → admin login with reason=forbidden (staff without permission).
+const redirectToAdminLogin = (
+	error: unknown,
+	req: Request,
+	res: Response,
+	returnTo: string = req.originalUrl,
+): boolean => {
+	if (error instanceof CustomerSessionError) {
+		res.redirect(303, CUSTOMER_HOME_PATH);
+		return true;
+	}
+	if (!isAuthError(error)) {
+		return false;
+	}
+	const params = new URLSearchParams();
+	if (error.status === 403) {
+		params.set("reason", "forbidden");
+	} else {
+		if (error instanceof SessionExpiredError) {
+			params.set("reason", "expired");
+		}
+		const target = safeAdminReturnTo(returnTo);
+		if (target && target !== "/admin") {
+			params.set("returnTo", target);
+		}
+	}
+	const query = params.toString();
+	res.redirect(303, `${ADMIN_LOGIN_PATH}${query ? `?${query}` : ""}`);
+	return true;
+};
+
 export class AdminController {
 	constructor(private readonly adminService: AdminService) {}
 
 	async getDashboard(req: Request, res: Response): Promise<void> {
+		if (this.redirectCustomer(req, res)) {
+			return;
+		}
 		try {
 			const dashboard = await this.adminService.getDashboard(req, res);
 			res.render("admin", dashboard);
 		} catch (error) {
-			if (isAuthError(error)) {
-				res.sendStatus(error.status);
+			if (redirectToAdminLogin(error, req, res)) {
 				return;
 			}
 			res.status(503).render("admin", {
@@ -38,23 +80,20 @@ export class AdminController {
 	}
 
 	async getUsers(req: Request, res: Response): Promise<void> {
-		const credentials = this.getCredentials(req);
-		if (!credentials) {
-			res.sendStatus(401);
+		if (this.redirectCustomer(req, res)) {
 			return;
 		}
 		const search = this.adminService.normaliseSearch(req.query.q);
 		const page = this.adminService.normalisePage(req.query.page);
 
 		try {
-			const userList = await this.adminService.getUsers(credentials, {
+			const userList = await this.adminService.getUsers(req, res, {
 				search,
 				page,
 			});
 			res.render("admin-users", { search, ...userList });
 		} catch (error) {
-			if (isAuthError(error)) {
-				res.sendStatus(error.status);
+			if (redirectToAdminLogin(error, req, res)) {
 				return;
 			}
 			res.status(503).render("admin-users", {
@@ -66,9 +105,7 @@ export class AdminController {
 	}
 
 	async getUserDetails(req: Request, res: Response): Promise<void> {
-		const credentials = this.getCredentials(req);
-		if (!credentials) {
-			res.sendStatus(401);
+		if (this.redirectCustomer(req, res)) {
 			return;
 		}
 		const id = String(req.params.id ?? "");
@@ -78,15 +115,14 @@ export class AdminController {
 		}
 
 		try {
-			const userDetails = await this.adminService.getUserById(credentials, id);
+			const userDetails = await this.adminService.getUserById(req, res, id);
 			res.render("admin-user-details", {
 				...userDetails,
 				updated: this.adminService.parseStatusUpdate(req.query.updated),
 				actionFailed: req.query.actionFailed === "1",
 			});
 		} catch (error) {
-			if (isAuthError(error)) {
-				res.sendStatus(error.status);
+			if (redirectToAdminLogin(error, req, res)) {
 				return;
 			}
 			if (isNotFound(error)) {
@@ -168,11 +204,6 @@ export class AdminController {
 		req: Request,
 		res: Response,
 	): Promise<void> {
-		const credentials = this.getCredentials(req);
-		if (!credentials) {
-			res.sendStatus(401);
-			return;
-		}
 		if (
 			!this.adminService.isSameOrigin(
 				req.get("origin"),
@@ -181,6 +212,9 @@ export class AdminController {
 			)
 		) {
 			res.sendStatus(403);
+			return;
+		}
+		if (this.redirectCustomer(req, res)) {
 			return;
 		}
 		const id = String(req.params.id ?? "");
@@ -192,14 +226,14 @@ export class AdminController {
 		const detailsPath = this.adminService.getUserDetailsHref(id);
 		try {
 			const updated = await this.adminService.changeUserStatus(
-				credentials,
+				req,
+				res,
 				id,
 				action,
 			);
 			res.redirect(303, `${detailsPath}?updated=${updated}`);
 		} catch (error) {
-			if (isAuthError(error)) {
-				res.sendStatus(error.status);
+			if (redirectToAdminLogin(error, req, res, detailsPath)) {
 				return;
 			}
 			if (isNotFound(error)) {
@@ -208,6 +242,15 @@ export class AdminController {
 			}
 			res.redirect(303, `${detailsPath}?actionFailed=1`);
 		}
+	}
+
+	// Customer sessions are sent back to the shop so they are never logged out or shown the staff login.
+	private redirectCustomer(req: Request, res: Response): boolean {
+		if (!this.adminService.isCustomerSession(req)) {
+			return false;
+		}
+		res.redirect(303, CUSTOMER_HOME_PATH);
+		return true;
 	}
 
 	private getCredentials(req: Request): AdminRequestCredentials | undefined {

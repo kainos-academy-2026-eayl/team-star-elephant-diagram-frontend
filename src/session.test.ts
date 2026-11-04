@@ -159,7 +159,8 @@ describe("persistent authentication", () => {
 				"Cookie",
 				"accessToken=customer-access; refreshToken=customer-refresh",
 			);
-		expect(result.status).toBe(403);
+		expect(result.status).toBe(303);
+		expect(result.headers.location).toBe("/admin/login?reason=forbidden");
 		expect(api).toHaveBeenCalledTimes(1);
 
 		const rejected = vi
@@ -169,8 +170,28 @@ describe("persistent authentication", () => {
 		const retry = await request(createApp({ fetch: rejected }))
 			.get("/admin")
 			.set("Cookie", "refreshToken=current");
-		expect(retry.status).toBe(401);
+		expect(retry.status).toBe(303);
+		expect(retry.headers.location).toBe("/admin/login");
 		expect(rejected).toHaveBeenCalledTimes(2);
+	});
+
+	it("persists refreshed credentials when a staff retry fails with a non-401 response", async () => {
+		const api = vi
+			.fn<typeof fetch>()
+			.mockResolvedValueOnce(credentials())
+			.mockResolvedValueOnce(response({ error: "Not found" }, 404));
+		const result = await request(createApp({ fetch: api }))
+			.get("/admin/users/999")
+			.set("Cookie", "refreshToken=current-refresh");
+
+		expect(result.status).toBe(404);
+		expect(result.headers["set-cookie"]).toHaveLength(2);
+		expect(String(result.headers["set-cookie"])).toContain(
+			"accessToken=new-access",
+		);
+		expect(String(result.headers["set-cookie"])).toContain(
+			"refreshToken=new-refresh",
+		);
 	});
 
 	it("offers a working separate admin login", async () => {

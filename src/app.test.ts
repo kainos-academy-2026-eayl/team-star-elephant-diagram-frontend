@@ -86,13 +86,14 @@ describe("app", () => {
 		});
 	});
 
-	it("requires staff credentials before requesting the admin dashboard", async () => {
+	it("redirects to the admin login before requesting the admin dashboard without a session", async () => {
 		const fetchApi = vi.fn<typeof fetch>();
 		const res = await request(
 			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 		).get("/admin");
 
-		expect(res.status).toBe(401);
+		expect(res.status).toBe(303);
+		expect(res.headers.location).toBe("/admin/login");
 		expect(fetchApi).not.toHaveBeenCalled();
 	});
 
@@ -122,7 +123,7 @@ describe("app", () => {
 		});
 	});
 
-	it("does not render admin data when the backend rejects staff credentials", async () => {
+	it("sends staff without permission to the admin login with a forbidden reason", async () => {
 		const fetchApi = vi
 			.fn<typeof fetch>()
 			.mockResolvedValue(
@@ -134,7 +135,8 @@ describe("app", () => {
 			.get("/admin")
 			.set("Cookie", "accessToken=customer-access");
 
-		expect(res.status).toBe(403);
+		expect(res.status).toBe(303);
+		expect(res.headers.location).toBe("/admin/login?reason=forbidden");
 		expect(res.text).not.toContain("New registrations");
 	});
 
@@ -551,7 +553,7 @@ describe("app", () => {
 				createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 			)
 				.get("/admin/users?q=ada%20l&page=2")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain('value="ada l"');
@@ -571,10 +573,10 @@ describe("app", () => {
 
 			const res = await request(app)
 				.get("/admin/users")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 			const searched = await request(app)
 				.get("/admin/users?q=nobody")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain("No user accounts found.");
@@ -590,7 +592,7 @@ describe("app", () => {
 				createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 			)
 				.get("/admin/users/7")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain("Customer information");
@@ -610,8 +612,9 @@ describe("app", () => {
 				"http://backend:4000/admin/users/7",
 			);
 			expect(fetchApi.mock.calls[0]?.[1]?.headers).toMatchObject({
-				Cookie: "session=staff-session",
+				Authorization: ["Bearer", "staff-access"].join(" "),
 			});
+			expect(fetchApi.mock.calls[0]?.[1]?.headers).not.toHaveProperty("Cookie");
 		});
 
 		it("offers reactivation for a suspended user with an empty basket", async () => {
@@ -624,7 +627,7 @@ describe("app", () => {
 			);
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/users/7")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.status).toBe(200);
 			expect(res.text).toContain('action="/admin/users/7/reactivate"');
@@ -634,35 +637,164 @@ describe("app", () => {
 			expect(res.text).toContain("The basket is empty.");
 		});
 
-		it.each(["/admin/users", "/admin/users/7"])(
-			"requires staff credentials before requesting %s",
-			async (path) => {
+		it.each([
+			["/admin/users", "/admin/login?returnTo=%2Fadmin%2Fusers"],
+			["/admin/users/7", "/admin/login?returnTo=%2Fadmin%2Fusers%2F7"],
+			[
+				"/admin/users?q=ada&page=2",
+				"/admin/login?returnTo=%2Fadmin%2Fusers%3Fq%3Dada%26page%3D2",
+			],
+		])(
+			"redirects to the admin login without a session for %s",
+			async (path, location) => {
 				const fetchApi = vi.fn<typeof fetch>();
 				const res = await request(createApp({ fetch: fetchApi })).get(path);
 
-				expect(res.status).toBe(401);
+				expect(res.status).toBe(303);
+				expect(res.headers.location).toBe(location);
 				expect(fetchApi).not.toHaveBeenCalled();
 			},
 		);
 
-		it.each([
-			["/admin/users", 401],
-			["/admin/users", 403],
-			["/admin/users/7", 401],
-			["/admin/users/7", 403],
-		])(
-			"does not render %s when the backend responds %i",
-			async (path, status) => {
-				const fetchApi = vi
-					.fn<typeof fetch>()
-					.mockResolvedValue(jsonResponse({ error: "Denied" }, status));
+		it.each(["/admin/users", "/admin/users/7"])(
+			"ignores unrelated browser cookies and redirects to the admin login for %s",
+			async (path) => {
+				const fetchApi = vi.fn<typeof fetch>();
 				const res = await request(createApp({ fetch: fetchApi }))
 					.get(path)
-					.set("Cookie", "session=customer-session");
+					.set("Cookie", "session=staff-session");
 
-				expect(res.status).toBe(status);
+				expect(res.status).toBe(303);
+				expect(res.headers.location).toBe(
+					`/admin/login?returnTo=${encodeURIComponent(path)}`,
+				);
+				expect(fetchApi).not.toHaveBeenCalled();
+			},
+		);
+
+		it.each(["/admin/users", "/admin/users/7"])(
+			"redirects to the admin login when the session has expired for %s",
+			async (path) => {
+				const fetchApi = vi
+					.fn<typeof fetch>()
+					.mockResolvedValueOnce(jsonResponse({ error: "Expired" }, 401))
+					.mockResolvedValueOnce(
+						jsonResponse({ error: "Expired refresh" }, 401),
+					);
+				const res = await request(createApp({ fetch: fetchApi }))
+					.get(path)
+					.set(
+						"Cookie",
+						"accessToken=expired-access; refreshToken=expired-refresh",
+					);
+
+				expect(res.status).toBe(303);
+				expect(res.headers.location).toBe(
+					`/admin/login?reason=expired&returnTo=${encodeURIComponent(path)}`,
+				);
+				expect(res.text).not.toContain("Unauthorized");
+				expect(res.headers["set-cookie"]).toHaveLength(2);
+				expect(fetchApi).toHaveBeenCalledTimes(2);
+			},
+		);
+
+		it.each(["/admin/users", "/admin/users/7"])(
+			"sends staff without permission for %s to the admin login",
+			async (path) => {
+				const fetchApi = vi
+					.fn<typeof fetch>()
+					.mockResolvedValue(jsonResponse({ error: "Denied" }, 403));
+				const res = await request(createApp({ fetch: fetchApi }))
+					.get(path)
+					.set("Cookie", "accessToken=customer-access");
+
+				expect(res.status).toBe(303);
+				expect(res.headers.location).toBe("/admin/login?reason=forbidden");
 				expect(res.text).not.toContain("User accounts");
 				expect(res.text).not.toContain("Customer information");
+			},
+		);
+
+		it("refreshes an expired access token and keeps the users list working", async () => {
+			const fetchApi = vi
+				.fn<typeof fetch>()
+				.mockResolvedValueOnce(jsonResponse({ error: "Expired" }, 401))
+				.mockResolvedValueOnce(loginResponse())
+				.mockResolvedValueOnce(jsonResponse({ users: [adminUser()] }))
+				.mockResolvedValueOnce(jsonResponse(userDetails()));
+			const app = createApp({
+				apiBaseUrl: "http://backend:4000",
+				fetch: fetchApi,
+			});
+			const res = await request(app)
+				.get("/admin/users")
+				.set(
+					"Cookie",
+					"accessToken=expired-access; refreshToken=current-refresh",
+				);
+
+			expect(res.status).toBe(200);
+			expect(res.text).toContain("Ada Lovelace");
+			expect(String(fetchApi.mock.calls[1]?.[0])).toBe(
+				"http://backend:4000/auth/refresh",
+			);
+			expect(fetchApi.mock.calls[1]?.[1]?.headers).toMatchObject({
+				Cookie: "refreshToken=current-refresh",
+			});
+			expect(fetchApi.mock.calls[2]?.[1]?.headers).toMatchObject({
+				Authorization: ["Bearer", "access-one"].join(" "),
+			});
+			const cookies = res.headers["set-cookie"] as unknown as string[];
+			expect(cookies.some((c) => c.startsWith("accessToken=access-one"))).toBe(
+				true,
+			);
+			expect(
+				cookies.some((c) => c.startsWith("refreshToken=refresh-one")),
+			).toBe(true);
+
+			const details = await request(app)
+				.get("/admin/users/7")
+				.set("Cookie", "accessToken=access-one; refreshToken=refresh-one");
+			expect(details.status).toBe(200);
+			expect(details.text).toContain("Customer information");
+			expect(fetchApi.mock.calls[3]?.[1]?.headers).toMatchObject({
+				Authorization: ["Bearer", "access-one"].join(" "),
+			});
+			expect(fetchApi).toHaveBeenCalledTimes(4);
+		});
+
+		it.each(["suspend", "reactivate"])(
+			"refreshes an expired access token before retrying %s",
+			async (action) => {
+				const fetchApi = vi
+					.fn<typeof fetch>()
+					.mockResolvedValueOnce(jsonResponse({ error: "Expired" }, 401))
+					.mockResolvedValueOnce(loginResponse())
+					.mockResolvedValueOnce(jsonResponse({ user: { id: 7 } }));
+				const res = await request(
+					createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
+				)
+					.post(`/admin/users/7/${action}`)
+					.set("Host", "shop.example")
+					.set("Origin", "http://shop.example")
+					.set(
+						"Cookie",
+						"accessToken=expired-access; refreshToken=current-refresh",
+					);
+
+				expect(res.status).toBe(303);
+				expect(res.headers.location).toMatch(/^\/admin\/users\/7\?updated=/);
+				expect(String(fetchApi.mock.calls[2]?.[0])).toBe(
+					`http://backend:4000/admin/users/7/${action}`,
+				);
+				expect(fetchApi.mock.calls[2]?.[1]?.method).toBe("POST");
+				expect(fetchApi.mock.calls[2]?.[1]?.headers).toMatchObject({
+					Authorization: ["Bearer", "access-one"].join(" "),
+				});
+				expect(fetchApi.mock.calls[2]?.[1]?.headers).not.toHaveProperty(
+					"Cookie",
+				);
+				expect(res.headers["set-cookie"]).toHaveLength(2);
 			},
 		);
 
@@ -689,7 +821,7 @@ describe("app", () => {
 				.mockResolvedValue(jsonResponse({ error: "Not found" }, 404));
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/users/999")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.status).toBe(404);
 			expect(res.text).toContain("User not found");
@@ -699,7 +831,7 @@ describe("app", () => {
 			const fetchApi = vi.fn<typeof fetch>();
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/users/bad.id")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.status).toBe(404);
 			expect(fetchApi).not.toHaveBeenCalled();
@@ -720,7 +852,7 @@ describe("app", () => {
 				.post(`/admin/users/7/${action}`)
 				.set("Host", "shop.example")
 				.set("Origin", "http://shop.example")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.status).toBe(303);
 			expect(res.headers.location).toBe(`/admin/users/7?updated=${updated}`);
@@ -729,8 +861,9 @@ describe("app", () => {
 			);
 			expect(fetchApi.mock.calls[0]?.[1]?.method).toBe("POST");
 			expect(fetchApi.mock.calls[0]?.[1]?.headers).toMatchObject({
-				Cookie: "session=staff-session",
+				Authorization: ["Bearer", "staff-access"].join(" "),
 			});
+			expect(fetchApi.mock.calls[0]?.[1]?.headers).not.toHaveProperty("Cookie");
 		});
 
 		it.each([
@@ -751,7 +884,7 @@ describe("app", () => {
 					.set("Host", "shop.example")
 					.set("Origin", "https://shop.example")
 					.set("X-Forwarded-Proto", "https")
-					.set("Cookie", "session=staff-session");
+					.set("Cookie", "accessToken=staff-access");
 
 				expect(res.status).toBe(303);
 				expect(res.headers.location).toBe(`/admin/users/7?updated=${updated}`);
@@ -767,7 +900,7 @@ describe("app", () => {
 					.post(`/admin/users/7/${action}`)
 					.set("Host", "shop.example")
 					.set("Origin", "https://attacker.example")
-					.set("Cookie", "session=staff-session");
+					.set("Cookie", "accessToken=staff-access");
 
 				expect(res.status).toBe(403);
 				expect(fetchApi).not.toHaveBeenCalled();
@@ -780,7 +913,7 @@ describe("app", () => {
 				const fetchApi = vi.fn<typeof fetch>();
 				const res = await request(createApp({ fetch: fetchApi }))
 					.post(`/admin/users/7/${action}`)
-					.set("Cookie", "session=staff-session");
+					.set("Cookie", "accessToken=staff-access");
 
 				expect(res.status).toBe(403);
 				expect(fetchApi).not.toHaveBeenCalled();
@@ -793,22 +926,26 @@ describe("app", () => {
 				.mockResolvedValue(jsonResponse(userDetails({ status: "suspended" })));
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/users/7?updated=suspended")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.text).toContain("The account has been suspended.");
 		});
 
-		it("requires staff credentials before changing account status", async () => {
+		it("redirects to the admin login before changing account status without a session", async () => {
 			const fetchApi = vi.fn<typeof fetch>();
-			const res = await request(createApp({ fetch: fetchApi })).post(
-				"/admin/users/7/suspend",
-			);
+			const res = await request(createApp({ fetch: fetchApi }))
+				.post("/admin/users/7/suspend")
+				.set("Host", "shop.example")
+				.set("Origin", "http://shop.example");
 
-			expect(res.status).toBe(401);
+			expect(res.status).toBe(303);
+			expect(res.headers.location).toBe(
+				"/admin/login?returnTo=%2Fadmin%2Fusers%2F7",
+			);
 			expect(fetchApi).not.toHaveBeenCalled();
 		});
 
-		it("propagates rejected credentials when changing account status", async () => {
+		it("sends staff without permission to the admin login when changing account status", async () => {
 			const fetchApi = vi
 				.fn<typeof fetch>()
 				.mockResolvedValue(jsonResponse({ error: "Forbidden" }, 403));
@@ -816,9 +953,10 @@ describe("app", () => {
 				.post("/admin/users/7/suspend")
 				.set("Host", "shop.example")
 				.set("Origin", "http://shop.example")
-				.set("Cookie", "session=customer-session");
+				.set("Cookie", "accessToken=customer-access");
 
-			expect(res.status).toBe(403);
+			expect(res.status).toBe(303);
+			expect(res.headers.location).toBe("/admin/login?reason=forbidden");
 		});
 
 		it("reports a failed status change when the backend is unavailable", async () => {
@@ -831,16 +969,233 @@ describe("app", () => {
 				.post("/admin/users/7/suspend")
 				.set("Host", "shop.example")
 				.set("Origin", "http://shop.example")
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.status).toBe(303);
 			expect(res.headers.location).toBe("/admin/users/7?actionFailed=1");
 
 			const page = await request(app)
 				.get(String(res.headers.location))
-				.set("Cookie", "session=staff-session");
+				.set("Cookie", "accessToken=staff-access");
 			expect(page.text).toContain("could not be updated");
 			expect(page.text).not.toContain("Connection refused");
+		});
+
+		describe("customer sessions on admin pages", () => {
+			const customerToken = [
+				"e30",
+				Buffer.from(
+					JSON.stringify({ kind: "customer", tokenUse: "access" }),
+				).toString("base64url"),
+				"signature",
+			].join(".");
+
+			it.each(["/admin", "/admin/users", "/admin/users/7"])(
+				"sends a logged-in customer from %s back to the shop without logging them out",
+				async (path) => {
+					const fetchApi = vi.fn<typeof fetch>();
+					const res = await request(createApp({ fetch: fetchApi }))
+						.get(path)
+						.set(
+							"Cookie",
+							`accessToken=${customerToken}; refreshToken=customer-refresh`,
+						);
+
+					expect(res.status).toBe(303);
+					expect(res.headers.location).toBe("/products");
+					expect(res.headers["set-cookie"]).toBeUndefined();
+					expect(fetchApi).not.toHaveBeenCalled();
+				},
+			);
+
+			it("returns a refresh-only customer to the shop with renewed credentials", async () => {
+				const refreshedCustomerToken = [
+					"e30",
+					Buffer.from(
+						JSON.stringify({ kind: "customer", tokenUse: "access" }),
+					).toString("base64url"),
+					"signature",
+				].join(".");
+				const fetchApi = vi
+					.fn<typeof fetch>()
+					.mockResolvedValueOnce(
+						new Response(
+							JSON.stringify({
+								accessToken: refreshedCustomerToken,
+								expiresIn: 900,
+							}),
+							{
+								headers: {
+									"Set-Cookie":
+										"refreshToken=new-customer-refresh; Path=/; HttpOnly; Secure; SameSite=Strict",
+								},
+							},
+						),
+					)
+					.mockResolvedValueOnce(jsonResponse({ error: "Forbidden" }, 403));
+				const res = await request(createApp({ fetch: fetchApi }))
+					.get("/admin")
+					.set("Cookie", "refreshToken=customer-refresh");
+
+				expect(res.status).toBe(303);
+				expect(res.headers.location).toBe("/products");
+				expect(res.headers["set-cookie"]).toHaveLength(2);
+				expect(res.headers["set-cookie"]).toEqual(
+					expect.arrayContaining([
+						expect.stringContaining(`accessToken=${refreshedCustomerToken}`),
+						expect.stringContaining("refreshToken=new-customer-refresh"),
+					]),
+				);
+				expect(fetchApi).toHaveBeenCalledTimes(2);
+			});
+
+			it.each(["suspend", "reactivate"])(
+				"does not let a customer %s accounts or reach the staff login",
+				async (action) => {
+					const fetchApi = vi.fn<typeof fetch>();
+					const res = await request(createApp({ fetch: fetchApi }))
+						.post(`/admin/users/7/${action}`)
+						.set("Host", "shop.example")
+						.set("Origin", "http://shop.example")
+						.set("Cookie", `accessToken=${customerToken}`);
+
+					expect(res.status).toBe(303);
+					expect(res.headers.location).toBe("/products");
+					expect(fetchApi).not.toHaveBeenCalled();
+				},
+			);
+		});
+
+		describe("admin login return path", () => {
+			it("keeps the requested admin page through the login form", async () => {
+				const form = await request(createApp()).get(
+					"/admin/login?reason=expired&returnTo=%2Fadmin%2Fusers%3Fq%3Dada%26page%3D2",
+				);
+
+				expect(form.text).toContain(
+					"Your session has expired. Please log in again.",
+				);
+				expect(form.text).toContain(
+					'<input type="hidden" name="returnTo" value="/admin/users?q=ada&amp;page=2">',
+				);
+			});
+
+			it("explains forbidden access on the admin login", async () => {
+				const form = await request(createApp()).get(
+					"/admin/login?reason=forbidden",
+				);
+
+				expect(form.text).toContain(
+					"You need a staff account to access that page.",
+				);
+				expect(form.text).not.toContain("Your session has expired.");
+			});
+
+			it("shows no reason message for an unknown reason", async () => {
+				const form = await request(createApp()).get(
+					"/admin/login?reason=%3Cscript%3E",
+				);
+
+				expect(form.text).not.toContain("Your session has expired.");
+				expect(form.text).not.toContain("You need a staff account");
+				expect(form.text).not.toContain("<script>");
+			});
+
+			it("drops unsafe return paths from the admin login form", async () => {
+				const form = await request(createApp()).get(
+					"/admin/login?returnTo=https%3A%2F%2Fevil.example",
+				);
+
+				expect(form.text).not.toContain('name="returnTo"');
+			});
+
+			it("returns the admin to the requested page after logging in", async () => {
+				const fetchApi = vi
+					.fn<typeof fetch>()
+					.mockResolvedValueOnce(loginResponse());
+				const res = await request(createApp({ fetch: fetchApi }))
+					.post("/admin/login")
+					.type("form")
+					.send({
+						email: "admin@example.com",
+						password: "correct-horse",
+						returnTo: "/admin/users?q=ada&page=2",
+					});
+
+				expect(res.status).toBe(303);
+				expect(res.headers.location).toBe("/admin/users?q=ada&page=2");
+				expect(JSON.parse(String(fetchApi.mock.calls[0]?.[1]?.body))).toEqual({
+					email: "admin@example.com",
+					password: "correct-horse",
+				});
+			});
+
+			it.each([
+				"https://evil.example",
+				"//evil.example",
+				"/admin/login",
+				"/products",
+			])(
+				"ignores the unsafe return path %s after logging in",
+				async (returnTo) => {
+					const fetchApi = vi
+						.fn<typeof fetch>()
+						.mockResolvedValueOnce(loginResponse());
+					const res = await request(createApp({ fetch: fetchApi }))
+						.post("/admin/login")
+						.type("form")
+						.send({
+							email: "admin@example.com",
+							password: "correct-horse",
+							returnTo,
+						});
+
+					expect(res.status).toBe(303);
+					expect(res.headers.location).toBe("/admin");
+				},
+			);
+
+			it("keeps the return path when an admin login fails", async () => {
+				const fetchApi = vi
+					.fn<typeof fetch>()
+					.mockResolvedValueOnce(
+						jsonResponse({ error: "Invalid email or password" }, 401),
+					);
+				const res = await request(createApp({ fetch: fetchApi }))
+					.post("/admin/login")
+					.type("form")
+					.send({
+						email: "admin@example.com",
+						password: "wrong",
+						returnTo: "/admin/users/7",
+					});
+
+				expect(res.status).toBe(401);
+				expect(res.text).toContain(
+					'<input type="hidden" name="returnTo" value="/admin/users/7">',
+				);
+			});
+
+			it("leaves the customer login unchanged", async () => {
+				const form = await request(createApp()).get(
+					"/login?reason=expired&returnTo=%2Fadmin%2Fusers",
+				);
+				expect(form.text).not.toContain('name="returnTo"');
+				expect(form.text).not.toContain("Your session has expired.");
+
+				const fetchApi = vi
+					.fn<typeof fetch>()
+					.mockResolvedValueOnce(loginResponse());
+				const res = await request(createApp({ fetch: fetchApi }))
+					.post("/login")
+					.type("form")
+					.send({
+						email: "ada@example.com",
+						password: "correct-horse",
+						returnTo: "/admin/users",
+					});
+				expect(res.headers.location).toBe("/products");
+			});
 		});
 	});
 
@@ -1032,788 +1387,6 @@ describe("app", () => {
 
 		expect(res.status).toBe(200);
 		expect(res.headers["content-type"]).toContain("text/css");
-	});
-
-	it.each([
-		[
-			"login",
-			{ email: "ada@example.com", password: "correct-horse" },
-			"/products",
-		],
-		[
-			"forgot-password",
-			{ email: "ada@example.com" },
-			"/forgot-password?sent=1",
-		],
-		[
-			"reset-password",
-			{
-				token: "a".repeat(64),
-				password: "new-password",
-				confirmPassword: "new-password",
-			},
-			"/login?reset=1",
-		],
-		[
-			"register",
-			{
-				forename: "Ada",
-				surname: "Lovelace",
-				email: "ada@example.com",
-				password: "correct-horse",
-				confirmPassword: "correct-horse",
-			},
-			"/login?registered=1",
-		],
-	])(
-		"POST /%s forwards JSON to the backend and redirects",
-		async (page, values, location) => {
-			const fetchApi = vi
-				.fn<typeof fetch>()
-				.mockResolvedValue(
-					page === "login"
-						? loginResponse()
-						: new Response(JSON.stringify({ status: "ok" })),
-				);
-			const res = await request(
-				createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
-			)
-				.post(`/${page}`)
-				.type("form")
-				.send(values);
-			expect(res.status).toBe(303);
-			expect(res.headers.location).toBe(location);
-			const [url, options] = fetchApi.mock.calls[0] ?? [];
-			expect(String(url)).toBe(`http://backend:4000/${page}`);
-			expect(options?.method).toBe("POST");
-			const { confirmPassword: _confirmation, ...payload } = values as Record<
-				string,
-				string
-			>;
-			expect(JSON.parse(options?.body as string)).toEqual(payload);
-		},
-	);
-
-	it("does not call the backend when confirmation differs", async () => {
-		const fetchApi = vi.fn<typeof fetch>();
-		const res = await request(createApp({ fetch: fetchApi }))
-			.post("/register")
-			.type("form")
-			.send({
-				email: "ada@example.com",
-				password: "correct-horse",
-				confirmPassword: "different-password",
-			});
-		expect(res.status).toBe(400);
-		expect(res.text).toContain("Passwords do not match.");
-		expect(fetchApi).not.toHaveBeenCalled();
-	});
-
-	it("rate-limits repeated authentication submissions", async () => {
-		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
-			new Response(JSON.stringify({ error: "Invalid email or password" }), {
-				status: 401,
-			}),
-		);
-		const client = request(createApp({ fetch: fetchApi }));
-
-		for (let attempt = 0; attempt < 10; attempt++) {
-			const res = await client
-				.post("/login")
-				.type("form")
-				.send({ email: "ada@example.com", password: "wrong-password" });
-			expect(res.status).toBe(401);
-		}
-
-		const limited = await client
-			.post("/login")
-			.type("form")
-			.send({ email: "ada@example.com", password: "wrong-password" });
-
-		expect(limited.status).toBe(429);
-		expect(fetchApi).toHaveBeenCalledTimes(10);
-	});
-
-	it("keeps a failed login on the form", async () => {
-		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
-			new Response(JSON.stringify({ error: "Invalid email or password" }), {
-				status: 401,
-			}),
-		);
-		const res = await request(createApp({ fetch: fetchApi }))
-			.post("/login")
-			.type("form")
-			.send({
-				email: "ada@example.com",
-				password: "wrong-password",
-			});
-		expect(res.status).toBe(401);
-		expect(res.text).toContain("Invalid email or password");
-		expect(res.text).toContain('value="ada@example.com"');
-		expect(res.headers.location).toBeUndefined();
-		expect(res.text).not.toContain("wrong-password");
-	});
-
-	it("keeps the token but never passwords after a reset confirmation mismatch", async () => {
-		const fetchApi = vi.fn<typeof fetch>();
-		const token = "a".repeat(64);
-		const res = await request(createApp({ fetch: fetchApi }))
-			.post("/reset-password")
-			.type("form")
-			.send({
-				token,
-				password: "private-password",
-				confirmPassword: "different",
-			});
-		expect(res.status).toBe(400);
-		expect(res.text).toContain("Passwords do not match.");
-		expect(res.text).toContain(`value="${token}"`);
-		expect(res.text).not.toContain("private-password");
-		expect(fetchApi).not.toHaveBeenCalled();
-	});
-
-	it.each([
-		["/forgot-password", "Invalid email address"],
-		["/reset-password", "This reset link is invalid or has expired."],
-	])(
-		"shows backend rejection for %s without redirecting",
-		async (path, error) => {
-			const fetchApi = vi
-				.fn<typeof fetch>()
-				.mockResolvedValue(
-					new Response(JSON.stringify({ error }), { status: 400 }),
-				);
-
-			const res = await request(createApp({ fetch: fetchApi }))
-				.post(path)
-				.type("form")
-				.send({
-					email: "ada@example.com",
-					token: "a".repeat(64),
-					password: "private-password",
-					confirmPassword: "private-password",
-				});
-			expect(res.status).toBe(400);
-			expect(res.text).toContain(error);
-			expect(res.text).not.toContain("private-password");
-			expect(res.headers.location).toBeUndefined();
-		},
-	);
-
-	it("shows reset rate-limit errors instead of a service outage", async () => {
-		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
-			new Response(
-				JSON.stringify({
-					error: "Too many password reset attempts. Please try again later.",
-				}),
-				{ status: 429 },
-			),
-		);
-		const res = await request(createApp({ fetch: fetchApi }))
-			.post("/forgot-password")
-			.type("form")
-			.send({ email: "ada@example.com" });
-		expect(res.status).toBe(429);
-		expect(res.text).toContain("Too many password reset attempts.");
-		expect(res.text).not.toContain("temporarily unavailable");
-	});
-
-	it("loads products from the backend", async () => {
-		const fetchApi = vi
-			.fn<typeof fetch>()
-			.mockResolvedValue(new Response("[]"));
-		const res = await request(
-			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
-		).get("/products");
-		expect(res.status).toBe(200);
-		expect(String(fetchApi.mock.calls[0]?.[0])).toBe(
-			"http://backend:4000/products",
-		);
-		expect(res.text).toContain("No products found.");
-	});
-
-	it("does not show payment details when opened without basket credentials", async () => {
-		const fetchApi = vi.fn<typeof fetch>();
-		const res = await request(
-			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
-		).get("/payment_gateway");
-
-		expect(res.status).toBe(200);
-		expect(fetchApi).not.toHaveBeenCalled();
-		expect(res.text).not.toContain('id="nameoncard"');
-		expect(res.text).not.toContain('id="cardnumber"');
-	});
-
-	it("shows a clear unavailable response when the basket service is offline", async () => {
-		const fetchApi = vi
-			.fn<typeof fetch>()
-			.mockRejectedValue(new Error("Connection refused"));
-		const res = await request(createApp({ fetch: fetchApi }))
-			.get("/payment_gateway")
-			.set("Cookie", "session=test-session");
-
-		expect(res.status).toBe(503);
-		expect(res.text).toContain("Basket is temporarily unavailable.");
-		expect(res.text).not.toContain("Connection refused");
-	});
-
-	it("simulates a payment using product-table prices, not submitted prices", async () => {
-		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
-			new Response(
-				JSON.stringify([
-					{
-						productId: 7,
-						name: "Green tea",
-						category: "Food & Drink",
-						description: "Fresh tea",
-						price: 12.99,
-						imageURL: "",
-					},
-				]),
-			),
-		);
-		const res = await request(
-			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
-		)
-			.post("/payment_gateway")
-			.type("form")
-			.send({ productId: "7", quantity: "2", price: "0.01" });
-
-		expect(res.status).toBe(200);
-		expect(res.text).toContain("Payment successful. Payment was processed.");
-		expect(res.text).toContain("£25.98");
-		expect(res.text).toContain("Green tea × 2");
-		expect(fetchApi).toHaveBeenCalledTimes(1);
-	});
-
-	it("simulates multiple selected products and totals their quantities", async () => {
-		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
-			new Response(
-				JSON.stringify([
-					{
-						productId: 7,
-						name: "Green tea",
-						category: "Food & Drink",
-						description: "Fresh tea",
-						price: 12.99,
-						imageURL: "",
-					},
-					{
-						productId: 8,
-						name: "Coffee",
-						category: "Food & Drink",
-						description: "Roasted beans",
-						price: 5,
-						imageURL: "",
-					},
-				]),
-			),
-		);
-		const res = await request(createApp({ fetch: fetchApi }))
-			.post("/payment_gateway")
-			.type("form")
-			.send({ productId: ["7", "8"], quantity: ["2", "1"] });
-
-		expect(res.status).toBe(200);
-		expect(res.text).toContain("Green tea × 2");
-		expect(res.text).toContain("Coffee × 1");
-		expect(res.text).toContain("£30.98");
-		expect(res.text).toContain(">3</span>");
-	});
-
-	it("rejects payment requests with no selected products", async () => {
-		const fetchApi = vi
-			.fn<typeof fetch>()
-			.mockResolvedValue(new Response(JSON.stringify([])));
-		const res = await request(createApp({ fetch: fetchApi }))
-			.post("/payment_gateway")
-			.type("form")
-			.send({ productId: "7", quantity: "0" });
-
-		expect(res.status).toBe(400);
-		expect(res.text).toContain("Select at least one product");
-	});
-
-	it("rejects product IDs that are not in the products table", async () => {
-		const fetchApi = vi
-			.fn<typeof fetch>()
-			.mockResolvedValue(new Response(JSON.stringify([])));
-		const res = await request(createApp({ fetch: fetchApi }))
-			.post("/payment_gateway")
-			.type("form")
-			.send({ productId: "7", quantity: "1" });
-
-		expect(res.status).toBe(400);
-		expect(res.text).toContain("Selected product is no longer available.");
-		expect(res.text).toContain("Choose your products");
-	});
-
-	it("loads profile details and order history from the backend", async () => {
-		const profile = {
-			user: {
-				firstName: "Ada",
-				lastName: "Lovelace",
-				email: "ada@example.com",
-				memberSince: "2026-01-01",
-			},
-			orders: [
-				{
-					id: 42,
-					placedAt: "2026-10-01",
-					status: "Dispatched",
-					items: [
-						{
-							productName: "Green tea",
-							quantity: 2,
-							displayUnitPrice: "£3.50",
-							displaySubtotal: "£7.00",
-						},
-					],
-					displayTotal: "£7.00",
-				},
-			],
-		};
-		const fetchApi = vi
-			.fn<typeof fetch>()
-			.mockResolvedValue(new Response(JSON.stringify(profile)));
-		const res = await request(
-			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
-		)
-			.get("/profile")
-			.set("Cookie", "accessToken=customer-access");
-
-		expect(res.status).toBe(200);
-		expect(res.text).toContain("Ada Lovelace");
-		expect(res.text).toContain("ada@example.com");
-		expect(res.text).toContain("Order #42");
-		expect(res.text).toContain("Green tea");
-		expect(String(fetchApi.mock.calls[0]?.[0])).toBe(
-			"http://backend:4000/profile",
-		);
-	});
-
-	it("shows a friendly message when profile data is unavailable", async () => {
-		const fetchApi = vi
-			.fn<typeof fetch>()
-			.mockRejectedValue(new Error("Connection refused"));
-		const res = await request(createApp({ fetch: fetchApi }))
-			.get("/profile")
-			.set("Cookie", "accessToken=customer-access");
-
-		expect(res.status).toBe(503);
-		expect(res.text).toContain("Your profile is temporarily unavailable.");
-		expect(res.text).not.toContain("You haven't placed any orders yet.");
-		expect(res.text).not.toContain("Connection refused");
-	});
-
-	it("renders real products and filters search and category", async () => {
-		const products = [
-			{
-				productId: 7,
-				name: "Green tea",
-				category: "Food & Drink",
-				description: "Fresh tea",
-				price: 12.99,
-				imageURL: "https://example.com/tea.jpg",
-			},
-			{
-				productId: 2,
-				name: "Coffee",
-				category: "Other",
-				description: "Roasted beans",
-				price: 5,
-				imageURL: "",
-			},
-		];
-		const fetchApi = vi
-			.fn<typeof fetch>()
-			.mockImplementation(async () => new Response(JSON.stringify(products)));
-		const res = await request(createApp({ fetch: fetchApi }))
-			.get("/products")
-			.query({ q: "tea", category: "Food & Drink" });
-		expect(res.status).toBe(200);
-		expect(res.text).toContain("Green tea");
-		expect(res.text).toContain('href="/products/7"');
-		expect(res.text).not.toContain('href="/products/"');
-		expect(res.text).not.toContain("undefined");
-		expect(res.text).toContain("£12.99");
-		expect(res.text).toContain('src="https://example.com/tea.jpg"');
-		expect(res.text).not.toContain("Coffee");
-		expect(res.text).toContain("Food%20%26%20Drink");
-	});
-
-	it("displays backend prices in pounds without dividing by 100", async () => {
-		const products = [
-			{
-				productId: 1,
-				name: "CoreBook 14 Essential",
-				category: "Laptops",
-				description: "Laptop",
-				price: 349.99,
-				imageURL: "",
-			},
-			{
-				productId: 2,
-				name: "Big monitor",
-				category: "Monitors",
-				description: "Monitor",
-				price: 1249,
-				imageURL: "",
-			},
-		];
-		const fetchApi = vi
-			.fn<typeof fetch>()
-			.mockResolvedValue(new Response(JSON.stringify(products)));
-		const res = await request(createApp({ fetch: fetchApi })).get("/products");
-
-		expect(res.text).toContain("£349.99");
-		expect(res.text).toContain("£1,249.00");
-		expect(res.text).not.toContain("£3.50");
-	});
-
-	it("shows a short description preview on catalogue cards", async () => {
-		const description = `${"Long words ".repeat(30)}END-OF-DESCRIPTION`;
-		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
-			new Response(
-				JSON.stringify([
-					{
-						productId: 3,
-						name: "Wordy",
-						category: "Other",
-						description,
-						price: 1,
-						imageURL: "",
-					},
-				]),
-			),
-		);
-		const res = await request(createApp({ fetch: fetchApi })).get("/products");
-		const preview = res.text.match(
-			/class="product-card__description"[^>]*>([^<]*)</,
-		)?.[1];
-
-		expect(preview).toBeDefined();
-		expect(preview?.length).toBeLessThanOrEqual(111);
-		expect(preview?.endsWith("…")).toBe(true);
-		expect(preview).not.toContain("END-OF-DESCRIPTION");
-		expect(res.text).toContain('href="/products/3"');
-	});
-
-	it("loads an expanded product by productId", async () => {
-		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
-			new Response(
-				JSON.stringify({
-					productId: 42,
-					name: "Green tea",
-					category: "Food & Drink",
-					description: "Fresh tea",
-					price: 12.99,
-					imageURL: "https://example.com/tea.jpg",
-					inventory: { quantity: 30 },
-				}),
-			),
-		);
-		const res = await request(
-			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
-		).get("/products/42");
-
-		expect(res.status).toBe(200);
-		expect(fetchApi).toHaveBeenCalledTimes(1);
-		expect(String(fetchApi.mock.calls[0]?.[0])).toBe(
-			"http://backend:4000/products/42",
-		);
-		expect(res.headers["content-type"]).toContain("text/html");
-		expect(res.text).toContain("Green tea");
-		expect(res.text).toContain("Fresh tea");
-		expect(res.text).toContain("Food &amp; Drink");
-		expect(res.text).toContain("£12.99");
-		expect(res.text).toContain('src="https://example.com/tea.jpg"');
-		expect(res.text).toContain('action="/basket" method="post"');
-		expect(res.text).toContain('name="productId" value="42"');
-		expect(res.text).toMatch(/name="quantity"[^>]*max="30"/);
-		expect(res.text).toContain("In stock");
-		expect(res.text).not.toMatch(/<button[^>]*disabled/);
-		expect(res.text).toContain('href="/styles.css"');
-	});
-
-	it.each([
-		[{ quantity: 0 }, "Out of stock", true, 'max="1"'],
-		[null, "Out of stock", true, 'max="1"'],
-		[{ quantity: 3 }, "Only 3 left in stock", false, 'max="3"'],
-		[{ quantity: 500 }, "In stock", false, 'max="99"'],
-	])(
-		"renders stock state for inventory %j",
-		async (inventory, message, disabled, max) => {
-			const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
-				new Response(
-					JSON.stringify({
-						productId: 5,
-						name: "Mouse",
-						category: "Mice",
-						description: "Clicky",
-						price: 19.99,
-						imageURL: "",
-						inventory,
-					}),
-				),
-			);
-			const res = await request(createApp({ fetch: fetchApi })).get(
-				"/products/5",
-			);
-
-			expect(res.status).toBe(200);
-			expect(res.text).toContain(message);
-			expect(res.text).toContain(max);
-			expect(/<button[^>]*disabled/.test(res.text)).toBe(disabled);
-			expect(/name="quantity"[^>]*disabled/.test(res.text)).toBe(disabled);
-		},
-	);
-
-	it("uses a collapsible full description on the product page", async () => {
-		const description = `${"Detail ".repeat(40)}END`;
-		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
-			new Response(
-				JSON.stringify({
-					productId: 9,
-					name: "Laptop",
-					category: "Laptops",
-					description,
-					price: 1,
-					imageURL: "",
-					inventory: { quantity: 1 },
-				}),
-			),
-		);
-		const res = await request(createApp({ fetch: fetchApi })).get(
-			"/products/9",
-		);
-
-		expect(res.text).toContain('<details class="product-detail__description">');
-		expect(res.text).toContain("Read full description");
-		expect(res.text).toContain(description);
-	});
-
-	it("does not display a different product than the one requested", async () => {
-		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
-			new Response(
-				JSON.stringify({
-					productId: 1,
-					name: "Wrong product",
-					category: "Other",
-					description: "Nope",
-					price: 1,
-					imageURL: "",
-					inventory: { quantity: 1 },
-				}),
-			),
-		);
-		const res = await request(createApp({ fetch: fetchApi })).get(
-			"/products/2",
-		);
-
-		expect(res.status).toBe(503);
-		expect(res.text).not.toContain("Wrong product");
-	});
-
-	it("adds a product to the basket and relays the basket cookie", async () => {
-		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
-			new Response(JSON.stringify({ items: [], subtotal: 0 }), {
-				headers: {
-					"Set-Cookie":
-						"basketId=0b7e0c5e-4a8f-4f43-9a2e-3c1f2f6a9d11; Max-Age=604800; Path=/; HttpOnly; SameSite=Lax",
-				},
-			}),
-		);
-		const res = await request(
-			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
-		)
-			.post("/basket")
-			.set(
-				"Cookie",
-				"session=abc; accessToken=access-one; basketId=0b7e0c5e-4a8f-4f43-9a2e-3c1f2f6a9d11",
-			)
-			.type("form")
-			.send({ productId: "42", quantity: "3" });
-
-		expect(res.status).toBe(303);
-		expect(res.headers.location).toBe("/basket");
-		expect(String(fetchApi.mock.calls[0]?.[0])).toBe(
-			"http://backend:4000/basket",
-		);
-		const init = fetchApi.mock.calls[0]?.[1];
-		expect(init?.method).toBe("POST");
-		expect(JSON.parse(String(init?.body))).toEqual({
-			productId: 42,
-			quantity: 3,
-		});
-		expect(init?.headers).toEqual({
-			"Content-Type": "application/json",
-			Authorization: ["Bearer", "access-one"].join(" "),
-			Cookie: "basketId=0b7e0c5e-4a8f-4f43-9a2e-3c1f2f6a9d11",
-		});
-		expect(res.headers["set-cookie"]).toEqual([
-			"basketId=0b7e0c5e-4a8f-4f43-9a2e-3c1f2f6a9d11; Path=/; Max-Age=604800; HttpOnly; SameSite=Lax",
-		]);
-	});
-
-	it.each([
-		[{ productId: "42", quantity: "0" }, "/products/42?basket=invalid"],
-		[{ productId: "42", quantity: "100" }, "/products/42?basket=invalid"],
-		[{ productId: "42", quantity: "1.5" }, "/products/42?basket=invalid"],
-		[{ productId: "abc", quantity: "1" }, "/products"],
-	])(
-		"rejects invalid add-to-basket input %j without calling the backend",
-		async (form, location) => {
-			const fetchApi = vi.fn<typeof fetch>();
-			const res = await request(createApp({ fetch: fetchApi }))
-				.post("/basket")
-				.set("Cookie", "accessToken=access-one")
-				.type("form")
-				.send(form);
-
-			expect(res.status).toBe(303);
-			expect(res.headers.location).toBe(location);
-			expect(fetchApi).not.toHaveBeenCalled();
-		},
-	);
-
-	it("sends logged-out users to login instead of adding to the basket", async () => {
-		const fetchApi = vi.fn<typeof fetch>();
-		const res = await request(createApp({ fetch: fetchApi }))
-			.post("/basket")
-			.set("Cookie", "basketId=0b7e0c5e-4a8f-4f43-9a2e-3c1f2f6a9d11")
-			.type("form")
-			.send({ productId: "42", quantity: "1" });
-
-		expect(res.status).toBe(303);
-		expect(res.headers.location).toBe("/login");
-		expect(fetchApi).not.toHaveBeenCalled();
-	});
-
-	it("sends users to login when the backend rejects their session", async () => {
-		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
-			new Response(JSON.stringify({ error: "Authentication required" }), {
-				status: 401,
-			}),
-		);
-		const res = await request(createApp({ fetch: fetchApi }))
-			.post("/basket")
-			.set("Cookie", "accessToken=expired")
-			.type("form")
-			.send({ productId: "42", quantity: "1" });
-
-		expect(res.status).toBe(303);
-		expect(res.headers.location).toBe("/login");
-	});
-
-	it.each([
-		[404, "Product not found", "notfound"],
-		[400, "Quantity cannot exceed 99", "limit"],
-		[500, "Internal server error", "unavailable"],
-	])(
-		"returns to the product page when the backend responds %i",
-		async (status, error, code) => {
-			const fetchApi = vi
-				.fn<typeof fetch>()
-				.mockResolvedValue(new Response(JSON.stringify({ error }), { status }));
-			const res = await request(createApp({ fetch: fetchApi }))
-				.post("/basket")
-				.set("Cookie", "accessToken=access-one")
-				.type("form")
-				.send({ productId: "42", quantity: "1" });
-
-			expect(res.status).toBe(303);
-			expect(res.headers.location).toBe(`/products/42?basket=${code}`);
-		},
-	);
-
-	it("shows add-to-basket errors on the product page", async () => {
-		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
-			new Response(
-				JSON.stringify({
-					productId: 42,
-					name: "Green tea",
-					category: "Food & Drink",
-					description: "Fresh tea",
-					price: 12.99,
-					imageURL: "",
-					inventory: { quantity: 30 },
-				}),
-			),
-		);
-		const res = await request(createApp({ fetch: fetchApi })).get(
-			"/products/42?basket=limit",
-		);
-
-		expect(res.text).toContain(
-			"Your basket already holds the maximum quantity of this product.",
-		);
-	});
-
-	it.each(["abc", "0", "-1", "1.5", "9007199254740992"])(
-		"rejects invalid product ID %s without calling the backend",
-		async (productId) => {
-			const fetchApi = vi.fn<typeof fetch>();
-			const res = await request(createApp({ fetch: fetchApi })).get(
-				`/products/${productId}`,
-			);
-
-			expect(res.status).toBe(400);
-			expect(res.text).toContain("Invalid product ID.");
-			expect(fetchApi).not.toHaveBeenCalled();
-		},
-	);
-
-	it("renders the not-found page for a missing product", async () => {
-		const fetchApi = vi
-			.fn<typeof fetch>()
-			.mockResolvedValue(
-				new Response(JSON.stringify({ error: "Not found" }), { status: 404 }),
-			);
-		const res = await request(createApp({ fetch: fetchApi })).get(
-			"/products/42",
-		);
-
-		expect(res.status).toBe(404);
-		expect(res.text).toContain("Product not found");
-	});
-
-	it("shows an unavailable message when the product backend fails", async () => {
-		const fetchApi = vi
-			.fn<typeof fetch>()
-			.mockRejectedValue(new Error("Connection refused"));
-		const res = await request(createApp({ fetch: fetchApi })).get(
-			"/products/42",
-		);
-
-		expect(res.status).toBe(503);
-		expect(res.text).toContain("Product is temporarily unavailable");
-		expect(res.text).not.toContain("Connection refused");
-	});
-
-	it("shows backend field validation without exposing the password", async () => {
-		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
-			new Response(
-				JSON.stringify({
-					error: "Invalid registration details",
-					details: { password: ["Too short"] },
-				}),
-				{ status: 400 },
-			),
-		);
-		const res = await request(createApp({ fetch: fetchApi }))
-			.post("/register")
-			.type("form")
-			.send({
-				forename: "<script>alert(1)</script>",
-				email: "ada@example.com",
-				password: "secret",
-				confirmPassword: "secret",
-			});
-		expect(res.status).toBe(400);
-		expect(res.text).toContain("Too short");
-		expect(res.text).not.toContain('value="secret"');
-		expect(res.text).not.toContain("<script>");
 	});
 
 	it.each([

@@ -23,6 +23,19 @@ function cookieValue(req: Request, name: string): string | undefined {
 	return value && /^[A-Za-z0-9._-]+$/.test(value) ? value : undefined;
 }
 
+// Thrown when a refresh token was presented and the backend rejected it.
+export class SessionExpiredError extends BackendApiError {
+	constructor(message = "Your session has expired.") {
+		super(401, message);
+	}
+}
+
+export class CustomerSessionError extends BackendApiError {
+	constructor() {
+		super(403, "Customer sessions cannot access staff resources.");
+	}
+}
+
 export class SessionService {
 	private readonly refreshing = new Map<
 		string,
@@ -54,13 +67,14 @@ export class SessionService {
 		req: Request,
 		res: Response,
 		headers: Record<string, string> = {},
+		body?: Record<string, string | number>,
 	): Promise<Result> {
 		res.set("Cache-Control", "no-store");
 		const authorization = req.get("authorization");
 		const access = cookieValue(req, "accessToken");
 		if (authorization || access) {
 			try {
-				return await this.api.request<Result>(path, undefined, {
+				return await this.api.request<Result>(path, body, {
 					...headers,
 					Authorization: authorization ?? `Bearer ${access}`,
 				});
@@ -87,22 +101,67 @@ export class SessionService {
 			this.refreshing.set(refresh, operation);
 		}
 		operation.users += 1;
+		let credentials: { result: LoginResponse; cookies: string[] } | undefined;
 		try {
-			const credentials = await operation.promise;
-			const result = await this.api.request<Result>(path, undefined, {
+			try {
+				credentials = await operation.promise;
+			} catch (error) {
+				if (error instanceof BackendApiError && error.status === 401) {
+					throw new SessionExpiredError();
+				}
+				throw error;
+			}
+			const result = await this.api.request<Result>(path, body, {
 				...headers,
 				Authorization: `Bearer ${credentials.result.accessToken}`,
 			});
 			if (!operation.invalidated) this.establish(res, credentials);
 			return result;
 		} catch (error) {
-			if (error instanceof BackendApiError && error.status === 401)
+			if (
+				error instanceof BackendApiError &&
+				error.status === 403 &&
+				credentials &&
+				this.tokenKind(credentials.result.accessToken) === "customer"
+			) {
+				if (!operation.invalidated) this.establish(res, credentials);
+				throw new CustomerSessionError();
+			}
+			if (error instanceof BackendApiError && error.status === 401) {
 				this.clear(res);
+			} else if (credentials && !operation.invalidated) {
+				this.establish(res, credentials);
+			}
 			throw error;
 		} finally {
 			operation.users -= 1;
 			if (operation.users === 0 && this.refreshing.get(refresh) === operation)
 				this.refreshing.delete(refresh);
+		}
+	}
+
+	// Reads the unverified `kind` claim for routing only; the backend still verifies every token.
+	accessTokenKind(req: Request): string | undefined {
+		const bearer = /^Bearer\s+(\S+)$/i.exec(req.get("authorization") ?? "");
+		const token = bearer?.[1] ?? cookieValue(req, "accessToken");
+		return this.tokenKind(token);
+	}
+
+	private tokenKind(token: string | undefined): string | undefined {
+		const payload = token?.split(".")[1];
+		if (!payload) return undefined;
+		try {
+			const claims: unknown = JSON.parse(
+				Buffer.from(payload, "base64url").toString("utf8"),
+			);
+			return claims &&
+				typeof claims === "object" &&
+				"kind" in claims &&
+				typeof claims.kind === "string"
+				? claims.kind
+				: undefined;
+		} catch {
+			return undefined;
 		}
 	}
 

@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { BackendApiError } from "../backendApi";
 import type { BasketService } from "../services/basketService";
 import type { PaymentGatewayService } from "../services/paymentGatewayService";
 
@@ -11,22 +12,42 @@ export class PaymentGatewayController {
 	async show(req: Request, res: Response): Promise<void> {
 		try {
 			const authorization = req.get("authorization");
-			const cookie = req.get("cookie");
 
-			let hasItems = false;
-			if (authorization || cookie) {
-				const basket = await this.basketService.getBasket({
-					...(authorization ? { authorization } : {}),
-					...(cookie ? { cookie } : {}),
+			if (!authorization) {
+				res.status(401).render("payment_gateway", {
+					error: "Please log in to complete payment.",
+					loginRequired: true,
+					payment: null,
 				});
-				hasItems = basket && basket.items.length > 0;
+				return;
 			}
 
-			res.render("payment_gateway", { hasItems });
-		} catch {
+			const basket = await this.basketService.getBasket({
+				authorization,
+			});
+
+			if (!basket || basket.items.length === 0) {
+				res.status(400).render("payment_gateway", {
+					error:
+						"Your basket is empty. Please add items before proceeding to payment.",
+					payment: null,
+				});
+				return;
+			}
+
+			res.render("payment_gateway", { payment: null, error: null });
+		} catch (error) {
+			if (error instanceof BackendApiError && error.status === 401) {
+				res.status(401).render("payment_gateway", {
+					error: "Please log in to complete payment.",
+					loginRequired: true,
+					payment: null,
+				});
+				return;
+			}
 			res.status(503).render("payment_gateway", {
-				error: "Basket is temporarily unavailable. Please try again.",
-				hasItems: false,
+				error: "Payment gateway is temporarily unavailable. Please try again.",
+				payment: null,
 			});
 		}
 	}

@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { BackendApiError } from "../backendApi";
 import type { AuthService } from "../services/authService";
 import type { SessionService } from "../services/sessionService";
+import { safeAdminReturnTo } from "../validators/returnTo";
 
 export class AuthController {
 	constructor(
@@ -14,6 +15,13 @@ export class AuthController {
 			admin,
 			registered: req.query.registered === "1",
 			passwordReset: req.query.reset === "1",
+			...(admin
+				? {
+						returnTo: safeAdminReturnTo(req.query.returnTo),
+						sessionExpired: req.query.reason === "expired",
+						forbidden: req.query.reason === "forbidden",
+					}
+				: {}),
 		});
 	}
 
@@ -84,6 +92,7 @@ export class AuthController {
 			]),
 		);
 		const { password, ...safeValues } = values;
+		const returnTo = admin ? safeAdminReturnTo(req.body?.returnTo) : undefined;
 		if (
 			(page === "register" || page === "reset-password") &&
 			password !== req.body?.confirmPassword
@@ -110,7 +119,7 @@ export class AuthController {
 			}
 			const destinations = {
 				register: "/login?registered=1",
-				login: admin ? "/admin" : "/products",
+				login: admin ? (returnTo ?? "/admin") : "/products",
 				"forgot-password": "/forgot-password?sent=1",
 				"reset-password": "/login?reset=1",
 			};
@@ -122,6 +131,7 @@ export class AuthController {
 			if (!rejected) console.error("Authentication submission failed", error);
 			res.status(rejected ? error.status : 503).render(page, {
 				admin,
+				...(returnTo ? { returnTo } : {}),
 				values: safeValues,
 				error: rejected
 					? error.message
