@@ -270,6 +270,29 @@ describe("app", () => {
 		expect(res.text).not.toContain("Unavailable");
 	});
 
+	it("rate-limits order lookups", async () => {
+		const fetchApi = vi.fn<typeof fetch>(() =>
+			Promise.resolve(new Response(JSON.stringify({ orders: [] }))),
+		);
+		const client = request(createApp({ fetch: fetchApi }));
+		let result = await client
+			.get("/admin/orders")
+			.set("Cookie", "accessToken=staff-access");
+
+		for (let i = 1; i < 60; i += 1) {
+			result = await client
+				.get("/admin/orders")
+				.set("Cookie", "accessToken=staff-access");
+		}
+		const limited = await client
+			.get("/admin/orders")
+			.set("Cookie", "accessToken=staff-access");
+
+		expect(result.status).toBe(200);
+		expect(limited.status).toBe(429);
+		expect(fetchApi).toHaveBeenCalledTimes(60);
+	});
+
 	describe("admin baskets", () => {
 		const basketSummaries = [
 			{
