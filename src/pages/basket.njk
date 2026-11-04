@@ -36,10 +36,11 @@
 	<main class="container">
 		<h1 class="section-heading">Your basket</h1>
 
-		<div id="basket-error" class="basket-error" role="alert" {% if not error %}hidden{% endif %}>
-			{{ error }}
+		<div id="basket-error" class="basket-error" role="alert" {% if not error and not status %}hidden{% endif %}>
+			{{ error or status }}
 			{% if loginRequired %}<a href="/login">Log in</a>{% endif %}
 		</div>
+
 
 		<p id="basket-loading" class="basket-state" hidden>Loading your basket…</p>
 
@@ -60,10 +61,18 @@
 					{% endif %}
 					<div>
 						<h2 class="basket-item__name">{{ item.productName }}</h2>
-						<p class="basket-item__meta">{{ item.displayUnitPrice }} each · Quantity: {{ item.quantity }}</p>
+						<p class="basket-item__meta">{{ item.displayUnitPrice }} each</p>
+						<form class="basket-item__quantity" method="post" action="/basket/items/{{ item.productId }}">
+							<label for="quantity-{{ item.productId }}">Quantity</label>
+							<input id="quantity-{{ item.productId }}" name="quantity" type="number" inputmode="numeric" min="1" max="{{ maxItemQuantity }}" step="1" value="{{ item.quantity }}" required />
+							<noscript><button type="submit" class="update-button">Update</button></noscript>
+						</form>
 					</div>
 					<div class="basket-item__side">
 						<span class="basket-item__total">{{ item.displaySubtotal }}</span>
+						<form method="post" action="/basket/items/{{ item.productId }}/remove">
+							<button type="submit" class="remove-button" aria-label="Remove {{ item.productName }} from basket">Remove</button>
+						</form>
 					</div>
 				</li>
 				{% endfor %}
@@ -83,6 +92,8 @@
 			</aside>
 		</div>
 	</main>
+
+	<script src="/basket.js" defer></script>
 
 	
 </body>
