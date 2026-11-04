@@ -1,0 +1,22 @@
+{%- import "partials/icons.njk" as i -%}
+<header class="site-header">
+    <a href="/" class="brand" aria-label="Sedshed home">
+        <img src="/images/home/logo.png" alt="" width="80" height="42">
+        <span class="brand__name">SEDSHED</span>
+    </a>
+
+    <form action="/products" method="get" class="site-search" role="search">
+        <input type="search" name="q" placeholder="Search for something.." aria-label="Search products" value="{{ searchQuery }}">
+        {% for name in searchCategories %}<input type="hidden" name="category" value="{{ name }}">{% endfor %}
+        {% if searchPrice %}<input type="hidden" name="minPrice" value="{{ searchPrice.lo }}"><input type="hidden" name="maxPrice" value="{{ searchPrice.hi }}">{% endif %}
+        <button type="submit" aria-label="Search">{{ i.icon("search") }}</button>
+    </form>
+
+    <div class="site-header__actions">
+        <a href="/basket" class="icon-link cart-link" aria-label="Basket{% if cartCount %}, {{ cartCount }} {{ 'item' if cartCount == 1 else 'items' }}{% endif %}">
+            {{ i.icon("cart") }}
+            {% if cartCount %}<span class="cart-link__badge" aria-hidden="true">{{ '99+' if cartCount > 99 else cartCount }}</span>{% endif %}
+        </a>
+        <button type="button" class="icon-link" command="show-modal" commandfor="site-menu" aria-label="Open menu">{{ i.icon("menu") }}</button>
+    </div>
+</header>

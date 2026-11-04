@@ -50,8 +50,72 @@ describe("products", () => {
 		expect(res.text).toContain("£12.99");
 		expect(res.text).toContain('src="https://example.com/tea.jpg"');
 		expect(res.text).not.toContain("Coffee");
-		expect(res.text).toContain("Food%20%26%20Drink");
+		expect(res.text).toContain('value="Food &amp; Drink" checked');
+		expect(res.text).toContain('href="/products?q=tea"');
 	});
+
+	it("GET /products uses the shared storefront header and menu without client-side JS", async () => {
+		const products = [
+			{
+				productId: 7,
+				name: "Green tea",
+				category: "Food & Drink",
+				description: "Fresh tea",
+				price: 12.99,
+				imageURL: "",
+			},
+		];
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(new Response(JSON.stringify(products)));
+		const res = await request(createApp({ fetch: fetchApi }))
+			.get("/products")
+			.query({ q: "tea", category: "Food & Drink" });
+
+		expect(res.status).toBe(200);
+		expect(res.text).toContain('class="site-header"');
+		expect(res.text).toContain('<dialog class="side-menu" id="site-menu"');
+		expect(res.text).toContain('value="tea"');
+		expect(res.text).toContain(
+			'<input type="hidden" name="category" value="Food &amp; Drink">',
+		);
+		expect(res.text).toContain("1 product for “tea”");
+		expect(res.text).not.toMatch(/<script/i);
+	});
+
+	it("renders the applied price range as fallback text for the CSS-driven live labels", async () => {
+		const products = [5, 50].map((price, index) => ({
+			productId: index + 1,
+			name: `Item ${index + 1}`,
+			category: "Other",
+			description: "Item",
+			price,
+			imageURL: "",
+		}));
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(new Response(JSON.stringify(products)));
+		const res = await request(createApp({ fetch: fetchApi }))
+			.get("/products")
+			.query({ minPrice: "10", maxPrice: "40" });
+
+		expect(res.status).toBe(200);
+		expect(res.text).toContain('style="--min: 5; --max: 50;');
+		expect(res.text).toContain('range__value range__value--lo">£10<');
+		expect(res.text).toContain('range__value range__value--hi">£40<');
+		expect(res.text).toContain('class="range__input range__input--a"');
+		expect(res.text).toContain('class="range__input range__input--b"');
+		expect(res.text).not.toMatch(/<script/i);
+	});
+
+	it.each(["/site.css", "/products.css"])(
+		"serves the catalogue stylesheet %s",
+		async (path) => {
+			const res = await request(createApp()).get(path);
+
+			expect(res.status).toBe(200);
+		},
+	);
 
 	it("allows same-site image paths but drops unsafe image URLs", async () => {
 		const products = [

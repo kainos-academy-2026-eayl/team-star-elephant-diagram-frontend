@@ -45,14 +45,6 @@ const largeTiles = [
 	},
 ];
 
-const menuCategories = [
-	{ label: "Shop All", icon: "grid", href: PLACEHOLDER_HREF },
-	{ label: "Winter Shop", icon: "snowflake", href: PLACEHOLDER_HREF },
-	{ label: "Electronics Shop", icon: "headphones", href: PLACEHOLDER_HREF },
-	{ label: "Home & Living", icon: "house", href: PLACEHOLDER_HREF },
-	{ label: "Fashion", icon: "hanger", href: PLACEHOLDER_HREF },
-];
-
 export class PageController {
 	constructor(private readonly sessions: SessionService) {}
 
@@ -66,7 +58,6 @@ export class PageController {
 			slides,
 			smallTiles,
 			largeTiles,
-			menuCategories,
 			cartCount,
 		});
 	}

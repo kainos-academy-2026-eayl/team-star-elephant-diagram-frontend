@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { BackendApiError } from "../backendApi";
+import { buildCatalogueView, parseFilters } from "../catalogueFilters";
 import type { ProductService } from "../services/productService";
 
 const BASKET_MESSAGES: Record<string, { type: "error"; text: string }> = {
@@ -58,35 +59,15 @@ export class ProductController {
 	}
 
 	async getProducts(req: Request, res: Response): Promise<void> {
-		const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
-		const category =
-			typeof req.query.category === "string" ? req.query.category : "";
+		const filters = parseFilters(req.query);
 		try {
 			const products = await this.productService.getProducts();
-			const categories = [
-				...new Set(products.map((product) => product.category)),
-			].sort();
-			const filtered = products.filter(
-				(product) =>
-					(!category || product.category === category) &&
-					`${product.name} ${product.category} ${product.description}`
-						.toLowerCase()
-						.includes(query.toLowerCase()),
-			);
-			res.render("product_catalogue", {
-				products: filtered,
-				categories: categories.map((name) => ({
-					name,
-					query: encodeURIComponent(name),
-				})),
-				query,
-				category,
-			});
+			res.render("product_catalogue", buildCatalogueView(products, filters));
 		} catch {
 			res.status(503).render("product_catalogue", {
 				error: "Products are temporarily unavailable. Please try again.",
-				query,
-				category,
+				query: filters.query,
+				title: "Top Picks",
 			});
 		}
 	}
