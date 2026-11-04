@@ -37,6 +37,8 @@ export class CustomerSessionError extends BackendApiError {
 }
 
 export class SessionService {
+	private readonly establishedResponses = new WeakSet<Response>();
+	private readonly clearedResponses = new WeakSet<Response>();
 	private readonly refreshing = new Map<
 		string,
 		{
@@ -59,6 +61,8 @@ export class SessionService {
 		) {
 			throw new Error("Backend returned incomplete session credentials");
 		}
+		if (this.establishedResponses.has(res)) return;
+		this.establishedResponses.add(res);
 		this.write(res, credentials);
 	}
 
@@ -200,6 +204,8 @@ export class SessionService {
 	}
 
 	private clear(res: Response): void {
+		if (this.clearedResponses.has(res)) return;
+		this.clearedResponses.add(res);
 		res.clearCookie("accessToken", COOKIE_OPTIONS);
 		res.clearCookie("refreshToken", COOKIE_OPTIONS);
 	}

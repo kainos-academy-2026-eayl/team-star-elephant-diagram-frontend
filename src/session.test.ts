@@ -149,7 +149,7 @@ describe("persistent authentication", () => {
 		expect(result.headers["set-cookie"]).toBeUndefined();
 	});
 
-	it("does not retry forbidden requests or loop when a replacement access token is rejected", async () => {
+	it("shows access denied for forbidden admin requests and does not retry them", async () => {
 		const api = vi
 			.fn<typeof fetch>()
 			.mockResolvedValueOnce(response({ error: "Forbidden" }, 403));
@@ -159,8 +159,8 @@ describe("persistent authentication", () => {
 				"Cookie",
 				"accessToken=customer-access; refreshToken=customer-refresh",
 			);
-		expect(result.status).toBe(303);
-		expect(result.headers.location).toBe("/admin/login?reason=forbidden");
+		expect(result.status).toBe(403);
+		expect(result.text).toContain("Access denied");
 		expect(api).toHaveBeenCalledTimes(1);
 
 		const rejected = vi
