@@ -6,6 +6,13 @@ export interface LoginResponse {
 	expiresIn: number;
 }
 
+type SessionCredentials = { result: LoginResponse; cookies: string[] };
+type RefreshOperation = {
+	promise: Promise<SessionCredentials>;
+	invalidated: boolean;
+	users: number;
+};
+
 const COOKIE_OPTIONS = {
 	httpOnly: true,
 	secure: true,
@@ -39,13 +46,10 @@ export class CustomerSessionError extends BackendApiError {
 export class SessionService {
 	private readonly establishedResponses = new WeakSet<Response>();
 	private readonly clearedResponses = new WeakSet<Response>();
-	private readonly refreshing = new Map<
-		string,
-		{
-			promise: Promise<{ result: LoginResponse; cookies: string[] }>;
-			invalidated: boolean;
-			users: number;
-		}
+	private readonly refreshing = new Map<string, RefreshOperation>();
+	private readonly renewedForRequest = new WeakMap<
+		Request,
+		{ credentials: SessionCredentials; operation: RefreshOperation }
 	>();
 
 	constructor(private readonly api: BackendApi) {}
@@ -74,6 +78,10 @@ export class SessionService {
 		body?: Record<string, string | number>,
 	): Promise<Result> {
 		res.set("Cache-Control", "no-store");
+		const renewed = this.renewedForRequest.get(req);
+		if (renewed) {
+			return this.requestWithCredentials(path, res, headers, body, renewed);
+		}
 		const authorization = req.get("authorization");
 		const access = cookieValue(req, "accessToken");
 		if (authorization || access) {
@@ -85,6 +93,16 @@ export class SessionService {
 			} catch (error) {
 				if (!(error instanceof BackendApiError) || error.status !== 401)
 					throw error;
+				const renewedAfterFailure = this.renewedForRequest.get(req);
+				if (renewedAfterFailure) {
+					return this.requestWithCredentials(
+						path,
+						res,
+						headers,
+						body,
+						renewedAfterFailure,
+					);
+				}
 			}
 		}
 		const refresh = cookieValue(req, "refreshToken");
@@ -105,7 +123,7 @@ export class SessionService {
 			this.refreshing.set(refresh, operation);
 		}
 		operation.users += 1;
-		let credentials: { result: LoginResponse; cookies: string[] } | undefined;
+		let credentials: SessionCredentials | undefined;
 		try {
 			try {
 				credentials = await operation.promise;
@@ -114,6 +132,9 @@ export class SessionService {
 					throw new SessionExpiredError();
 				}
 				throw error;
+			}
+			if (!operation.invalidated) {
+				this.renewedForRequest.set(req, { credentials, operation });
 			}
 			const result = await this.api.request<Result>(path, body, {
 				...headers,
@@ -141,6 +162,39 @@ export class SessionService {
 			operation.users -= 1;
 			if (operation.users === 0 && this.refreshing.get(refresh) === operation)
 				this.refreshing.delete(refresh);
+		}
+	}
+
+	private async requestWithCredentials<Result>(
+		path: string,
+		res: Response,
+		headers: Record<string, string>,
+		body: Record<string, string | number> | undefined,
+		renewed: { credentials: SessionCredentials; operation: RefreshOperation },
+	): Promise<Result> {
+		const { credentials, operation } = renewed;
+		try {
+			const result = await this.api.request<Result>(path, body, {
+				...headers,
+				Authorization: `Bearer ${credentials.result.accessToken}`,
+			});
+			if (!operation.invalidated) this.establish(res, credentials);
+			return result;
+		} catch (error) {
+			if (
+				error instanceof BackendApiError &&
+				error.status === 403 &&
+				this.tokenKind(credentials.result.accessToken) === "customer"
+			) {
+				if (!operation.invalidated) this.establish(res, credentials);
+				throw new CustomerSessionError();
+			}
+			if (error instanceof BackendApiError && error.status === 401) {
+				this.clear(res);
+			} else if (!operation.invalidated) {
+				this.establish(res, credentials);
+			}
+			throw error;
 		}
 	}
 

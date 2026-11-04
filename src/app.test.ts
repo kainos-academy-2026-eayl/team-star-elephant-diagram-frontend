@@ -116,6 +116,7 @@ describe("app", () => {
 			.set("Cookie", "accessToken=customer-access");
 
 		expect(res.status).toBe(403);
+		expect(res.headers.location).toBeUndefined();
 		expect(res.text).toContain("Access denied");
 		expect(res.text).not.toContain("New registrations");
 	});
@@ -139,7 +140,7 @@ describe("app", () => {
 
 		expect(res.status).toBe(200);
 		expect(res.text).toContain('<a href="/admin/users">Users</a>');
-		expect(res.text).toContain('<a href="/admin/orders">Orders</a>');
+		expect(res.text).not.toContain('<a href="/admin/orders">Orders</a>');
 		expect(res.text).not.toContain("Unavailable");
 	});
 
@@ -162,7 +163,7 @@ describe("app", () => {
 
 		expect(res.text).toContain('<a href="/admin" class="active"');
 		expect(res.text).toContain('<a href="/admin/baskets">Baskets</a>');
-		expect(res.text).toContain('<a href="/admin/orders">Orders</a>');
+		expect(res.text).not.toContain('<a href="/admin/orders">Orders</a>');
 		expect(res.text).not.toContain('<a href="/admin/users">Users</a>');
 		expect(res.text).not.toContain("Unavailable");
 	});
@@ -213,7 +214,6 @@ describe("app", () => {
 		};
 		const jsonResponse = (body: unknown, status = 200) =>
 			new Response(JSON.stringify(body), { status });
-
 		it("renders the active basket list from the backend", async () => {
 			const fetchApi = vi.fn<typeof fetch>().mockImplementation(async () =>
 				jsonResponse({
@@ -488,6 +488,7 @@ describe("app", () => {
 					.set("Cookie", "accessToken=staff-access");
 
 				expect(res.status).toBe(403);
+				expect(res.headers.location).toBeUndefined();
 				expect(res.text).toContain("Access denied");
 				expect(res.text).not.toContain("Active baskets");
 				expect(res.text).not.toContain("Basket contents");
@@ -510,13 +511,16 @@ describe("app", () => {
 				if (url.endsWith("/admin/baskets")) {
 					return Promise.resolve(jsonResponse({ baskets: basketSummaries }));
 				}
-				return Promise.resolve(
-					jsonResponse({
-						staff: { name: "Staff member" },
-						sections: [{ label: "Baskets" }],
-						quickActions: [],
-					}),
-				);
+				if (url.endsWith("/admin")) {
+					return Promise.resolve(
+						jsonResponse({
+							staff: { name: "Staff member" },
+							sections: [{ label: "Baskets" }],
+							quickActions: [],
+						}),
+					);
+				}
+				return Promise.resolve(jsonResponse({ error: "Unexpected URL" }, 500));
 			});
 			const app = createApp({
 				apiBaseUrl: "http://backend:4000",
@@ -633,6 +637,12 @@ describe("app", () => {
 		});
 		const jsonResponse = (body: unknown, status = 200) =>
 			new Response(JSON.stringify(body), { status });
+		const userAccess = {
+			staff: { name: "Staff member" },
+			role: "Admin",
+			sections: [{ label: "Users" }],
+			quickActions: [{ label: "Suspend or reactivate customers" }],
+		};
 
 		it.each(["admin-users", "admin-user-details"])(
 			"provides the %s template",
@@ -722,9 +732,13 @@ describe("app", () => {
 		});
 
 		it("renders user details with orders, basket and a suspend action", async () => {
-			const fetchApi = vi
-				.fn<typeof fetch>()
-				.mockImplementation(async () => jsonResponse(userDetails()));
+			const fetchApi = vi.fn<typeof fetch>((input) =>
+				Promise.resolve(
+					jsonResponse(
+						String(input).endsWith("/admin") ? userAccess : userDetails(),
+					),
+				),
+			);
 			const res = await request(
 				createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 			)
@@ -755,12 +769,18 @@ describe("app", () => {
 		});
 
 		it("offers reactivation for a suspended user with an empty basket", async () => {
-			const fetchApi = vi.fn<typeof fetch>().mockImplementation(async () =>
-				jsonResponse({
-					...userDetails({ status: "suspended" }),
-					recentOrders: [],
-					basket: { itemCount: 0, subtotal: 0, items: [] },
-				}),
+			const fetchApi = vi.fn<typeof fetch>((input) =>
+				Promise.resolve(
+					jsonResponse(
+						String(input).endsWith("/admin")
+							? userAccess
+							: {
+									...userDetails({ status: "suspended" }),
+									recentOrders: [],
+									basket: { itemCount: 0, subtotal: 0, items: [] },
+								},
+					),
+				),
 			);
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get("/admin/users/7")
@@ -773,6 +793,33 @@ describe("app", () => {
 			expect(res.text).toContain("No orders yet.");
 			expect(res.text).toContain("The basket is empty.");
 		});
+
+		it.each(["active", "suspended"])(
+			"does not offer status changes for a read-only role with an %s user",
+			async (status) => {
+				const fetchApi = vi.fn<typeof fetch>((input) =>
+					Promise.resolve(
+						jsonResponse(
+							String(input).endsWith("/admin")
+								? {
+										staff: { name: "Staff member" },
+										role: "Read-only staff",
+										sections: [{ label: "Users" }],
+										quickActions: [],
+									}
+								: userDetails({ status }),
+						),
+					),
+				);
+				const res = await request(createApp({ fetch: fetchApi }))
+					.get("/admin/users/7")
+					.set("Cookie", "accessToken=staff-access");
+
+				expect(res.status).toBe(200);
+				expect(res.text).not.toContain("Suspend account");
+				expect(res.text).not.toContain("Reactivate account");
+			},
+		);
 
 		it.each([
 			["/admin/users", "/admin/login?returnTo=%2Fadmin%2Fusers"],
@@ -847,6 +894,7 @@ describe("app", () => {
 					.set("Cookie", "accessToken=customer-access");
 
 				expect(res.status).toBe(403);
+				expect(res.headers.location).toBeUndefined();
 				expect(res.text).toContain("Access denied");
 				expect(res.text).not.toContain("User accounts");
 				expect(res.text).not.toContain("Customer information");
@@ -869,7 +917,17 @@ describe("app", () => {
 				if (url.endsWith("/admin/users")) {
 					return Promise.resolve(jsonResponse({ users: [adminUser()] }));
 				}
-				return Promise.resolve(jsonResponse(userDetails()));
+				if (url.endsWith("/admin")) {
+					return Promise.resolve(
+						jsonResponse({
+							staff: { name: "Staff member" },
+							role: "Admin",
+							sections: [{ label: "Users" }],
+							quickActions: [{ label: "Suspend or reactivate customers" }],
+						}),
+					);
+				}
+				return Promise.resolve(jsonResponse({ error: "Unexpected URL" }, 500));
 			});
 			const app = createApp({
 				apiBaseUrl: "http://backend:4000",
@@ -1107,7 +1165,64 @@ describe("app", () => {
 				.set("Cookie", "accessToken=customer-access");
 
 			expect(res.status).toBe(403);
+			expect(res.headers.location).toBeUndefined();
 			expect(res.text).toContain("Access denied");
+		});
+
+		it("reuses refreshed credentials when checking access after a forbidden status change", async () => {
+			const fetchApi = vi.fn<typeof fetch>((input, init) => {
+				const url = String(input);
+				const authorization = (
+					init?.headers as Record<string, string> | undefined
+				)?.Authorization;
+				if (url.endsWith("/auth/refresh")) {
+					return Promise.resolve(loginResponse());
+				}
+				if (url.endsWith("/admin/users/7/suspend")) {
+					return Promise.resolve(
+						authorization === ["Bearer", "expired-access"].join(" ")
+							? jsonResponse({ error: "Expired" }, 401)
+							: jsonResponse({ error: "Forbidden" }, 403),
+					);
+				}
+				if (url.endsWith("/admin")) {
+					return Promise.resolve(
+						jsonResponse({
+							staff: { name: "Staff member" },
+							role: "Read-only staff",
+							sections: [{ label: "Users" }],
+							quickActions: [],
+						}),
+					);
+				}
+				return Promise.resolve(jsonResponse({ error: "Unexpected URL" }, 500));
+			});
+			const res = await request(createApp({ fetch: fetchApi }))
+				.post("/admin/users/7/suspend")
+				.set("Host", "shop.example")
+				.set("Origin", "http://shop.example")
+				.set(
+					"Cookie",
+					"accessToken=expired-access; refreshToken=current-refresh",
+				);
+
+			expect(res.status).toBe(403);
+			expect(res.headers.location).toBeUndefined();
+			expect(res.text).toContain("Access denied");
+			expect(
+				fetchApi.mock.calls.filter(([url]) =>
+					String(url).endsWith("/auth/refresh"),
+				),
+			).toHaveLength(1);
+			expect(fetchApi.mock.calls[3]?.[1]?.headers).toMatchObject({
+				Authorization: ["Bearer", "access-one"].join(" "),
+			});
+			expect(String(res.headers["set-cookie"])).toContain(
+				"accessToken=access-one",
+			);
+			expect(String(res.headers["set-cookie"])).toContain(
+				"refreshToken=refresh-one",
+			);
 		});
 
 		it("reports a failed status change when the backend is unavailable", async () => {

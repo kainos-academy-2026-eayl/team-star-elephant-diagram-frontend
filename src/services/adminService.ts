@@ -65,6 +65,11 @@ const DASHBOARD_NAV_ITEM: AdminNavItem = {
 	href: "/admin",
 };
 
+const IMPLEMENTED_SECTION_HREFS = new Map([
+	["users", "/admin/users"],
+	["baskets", "/admin/baskets"],
+]);
+
 const toNavKey = (label: string): string =>
 	label
 		.trim()
@@ -76,9 +81,13 @@ const toNav = (sections: AdminDashboard["sections"]): AdminNavItem[] => [
 	DASHBOARD_NAV_ITEM,
 	...sections
 		.filter((section) => typeof section?.label === "string")
-		.map((section) => ({ key: toNavKey(section.label), label: section.label }))
-		.filter(({ key }) => key && key !== DASHBOARD_NAV_ITEM.key)
-		.map(({ key, label }) => ({ key, label, href: `/admin/${key}` })),
+		.flatMap((section) => {
+			const key = toNavKey(section.label);
+			const href = IMPLEMENTED_SECTION_HREFS.get(key);
+			return key && key !== DASHBOARD_NAV_ITEM.key && href
+				? [{ key, label: section.label, href }]
+				: [];
+		}),
 ];
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
