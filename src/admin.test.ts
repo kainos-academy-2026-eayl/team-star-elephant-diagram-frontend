@@ -759,6 +759,22 @@ describe("admin", () => {
 			},
 		);
 
+		it("redirects to admin login when access lookup fails authentication and page data is unavailable", async () => {
+			const fetchApi = vi.fn<typeof fetch>((input) =>
+				String(input).endsWith("/admin")
+					? Promise.resolve(jsonResponse({ error: "Unauthorized" }, 401))
+					: Promise.reject(new Error("Connection refused")),
+			);
+			const res = await request(createApp({ fetch: fetchApi }))
+				.get("/admin/users/7")
+				.set("Cookie", "accessToken=staff-access");
+
+			expect(res.status).toBe(303);
+			expect(res.headers.location).toBe(
+				"/admin/login?returnTo=%2Fadmin%2Fusers%2F7",
+			);
+		});
+
 		it("shows not found for an unknown user", async () => {
 			const fetchApi = vi
 				.fn<typeof fetch>()

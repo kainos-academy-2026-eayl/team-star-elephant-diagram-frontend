@@ -139,6 +139,7 @@ export class SessionService {
 				}
 				throw error;
 			}
+			this.renewedForRequest.set(req, { credentials, operation });
 			const result = await this.api.request<Result>(
 				path,
 				body,
