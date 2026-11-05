@@ -1,72 +1,117 @@
+{%- import "partials/icons.njk" as i -%}
+{%- set currentNav = "shop-all" -%}
+{%- set searchQuery = query -%}
+{%- set searchCategories = selectedCategories -%}
+{%- set searchPrice = price if price.active -%}
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Top Picks | Shop</title>
-    <link rel="stylesheet" href="/styles.css">
+    <title>Shop All | Sedshed</title>
+    <link rel="stylesheet" href="/site.css">
+    <link rel="stylesheet" href="/products.css">
 </head>
 
-<body>
-    <header class="navbar">
-        <a href="/products" class="navbar-brand">Products</a>
+<body class="site">
+    {% include "partials/site-header.njk" %}
 
-        <input type="checkbox" id="menu-toggle" class="menu-toggle">
-        <label for="menu-toggle" class="menu-button">
-            <span>Menu</span>
-            <span class="menu-arrow"></span>
-        </label>
+    <main class="catalogue">
+        <div class="catalogue__header">
+            <h1 class="catalogue__title">{{ title }}</h1>
+            {% if not error %}
+            <p class="catalogue__count" role="status">
+                {{ products | length }} {{ "product" if (products | length) == 1 else "products" }}{% if query %} for “{{ query }}”{% endif %}
+            </p>
+            {% endif %}
+        </div>
 
-        <nav class="dropdown">
-            <ul class="category-links">
-                <li><a href="/products" {% if not category %}class="active"{% endif %}>All</a></li>
-                {% for item in categories %}
-                <li><a href="/products?category={{ item.query }}" {% if category == item.name %}class="active"{% endif %}>{{ item.name }}</a></li>
-                {% endfor %}
-            </ul>
+        <div class="catalogue__layout{% if error %} catalogue__layout--single{% endif %}">
+            {% if not error %}
+            <aside class="filters" aria-label="Filter products">
+                <form action="/products" method="get" class="filters__form">
+                    {% if query %}<input type="hidden" name="q" value="{{ query }}">{% endif %}
 
-            <div class="dropdown-actions">
-                <a href="/login" class="action-button">Account</a>
+                    <div class="filters__top">
+                        <h2 class="filters__title">Filters</h2>
+                        {% if activeFilters | length %}<a class="filters__clear" href="{{ clearHref }}">Clear all</a>{% endif %}
+                    </div>
+
+                    {% if price.hasRange %}
+                    <fieldset class="filters__group">
+                        <legend>Price range</legend>
+                        <div class="range-field" style="--min: {{ price.min }}; --max: {{ price.max }}; --lo: {{ price.loPercent }}%; --hi: {{ price.hiPercent }}%">
+                            <div class="range__values" aria-hidden="true">
+                                <span class="range__value range__value--lo">£{{ price.lo }}</span>
+                                <span class="range__value range__value--hi">£{{ price.hi }}</span>
+                            </div>
+                            <div class="range">
+                                <div class="range__track"></div>
+                                <input class="range__input range__input--a" id="price-min" type="range" name="minPrice" min="{{ price.min }}" max="{{ price.max }}" step="1" value="{{ price.lo }}" aria-label="Minimum price">
+                                <input class="range__input range__input--b" id="price-max" type="range" name="maxPrice" min="{{ price.min }}" max="{{ price.max }}" step="1" value="{{ price.hi }}" aria-label="Maximum price">
+                            </div>
+                        </div>
+                    </fieldset>
+                    {% endif %}
+
+                    {% if categories | length %}
+                    <fieldset class="filters__group">
+                        <legend>Categories</legend>
+                        <div class="tags">
+                            {% for item in categories %}
+                            <label class="tag">
+                                <input type="checkbox" name="category" value="{{ item.name }}"{% if item.selected %} checked{% endif %}>
+                                <span>{{ item.name }} <small>{{ item.count }}</small></span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </fieldset>
+                    {% endif %}
+
+                    <button class="filters__apply" type="submit">Apply filters</button>
+                </form>
+            </aside>
+            {% endif %}
+
+            <div class="catalogue__results">
+                {% if activeFilters | length %}
+                <ul class="active-filters" aria-label="Active filters">
+                    {% for filter in activeFilters %}
+                    <li><a class="active-filter" href="{{ filter.removeHref }}" aria-label="Remove filter {{ filter.label }}">{{ filter.label }} {{ i.icon("close") }}</a></li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+
+                {% if error %}
+                <p class="notice notice--error" role="alert">{{ error }}</p>
+                {% else %}
+                <section class="product-grid" aria-label="Products">
+                    {% for product in products %}
+                    <article class="product-card">
+                        <a class="product-card__media" href="/products/{{ product.productId }}" tabindex="-1" aria-hidden="true">
+                            {% if product.imageURL %}<img src="{{ product.imageURL }}" alt="" loading="lazy">{% else %}<span class="product-card__placeholder">{{ i.icon("box") }}</span>{% endif %}
+                        </a>
+                        <div class="product-card__body">
+                            <p class="product-card__category">{{ product.category }}</p>
+                            <h2 class="product-card__title"><a href="/products/{{ product.productId }}">{{ product.name }}</a></h2>
+                            <p class="product-card__description" title="{{ product.description }}">{{ product.shortDescription }}</p>
+                            <div class="product-card__footer">
+                                <p class="product-price">{{ product.formattedPrice }}</p>
+                                <a class="product-card__link" href="/products/{{ product.productId }}" aria-label="View details for {{ product.name }}">View details {{ i.icon("arrow") }}</a>
+                            </div>
+                        </div>
+                    </article>
+                    {% else %}
+                    <p class="notice">No products found.</p>
+                    {% endfor %}
+                </section>
+                {% endif %}
             </div>
-        </nav>
-        <a href="/basket" class="action-button navbar-basket">Basket <span class="basket-count">0</span></a>
-    </header>
-
-    <div class="search-bar">
-        <form action="/products" method="get" class="search-form">
-            <input type="search" name="q" placeholder="Search products" aria-label="Search products" value="{{ query }}">
-            {% if category %}<input type="hidden" name="category" value="{{ category }}">{% endif %}
-            <button type="submit">Search</button>
-        </form>
-    </div>
-
-    <main class="container">
-        <h1 class="section-heading">Top Picks</h1>
-
-        {% if error %}
-        <p role="alert">{{ error }}</p>
-        {% else %}
-        <section class="product-grid">
-            {% for product in products %}
-            <article class="product-card">
-                <a class="product-image" href="/products/{{ product.productId }}" tabindex="-1" aria-hidden="true">
-                    {% if product.imageURL %}<img src="{{ product.imageURL }}" alt="" loading="lazy">{% endif %}
-                </a>
-                <div class="product-info">
-                    <p class="product-card__category">{{ product.category }}</p>
-                    <h2 class="product-card__title"><a href="/products/{{ product.productId }}">{{ product.name }}</a></h2>
-                    <p class="product-card__description" title="{{ product.description }}">{{ product.shortDescription }}</p>
-                    <p class="product-price">{{ product.formattedPrice }}</p>
-                    <a class="product-card__link" href="/products/{{ product.productId }}" aria-label="View details for {{ product.name }}">View details</a>
-                </div>
-            </article>
-            {% else %}
-            <p>No products found.</p>
-            {% endfor %}
-        </section>
-        {% endif %}
+        </div>
     </main>
+
+    {% include "partials/site-menu.njk" %}
 </body>
 
 </html>
