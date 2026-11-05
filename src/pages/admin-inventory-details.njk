@@ -6,7 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ product.name }} | Inventory | Admin | Sedshed</title>
     <link rel="stylesheet" href="/admin.css">
-    <script src="/admin.js" defer></script>
 </head>
 <body class="admin">
     {% set activeNav = "inventory" %}
@@ -39,6 +38,7 @@
                 <h2 class="admin-card__title">Adjust stock</h2>
                 <p>Use a positive quantity to increase stock or a negative quantity to decrease it. Reserved stock cannot be removed.</p>
                 <form method="post" action="{{ product.href }}/stock" class="admin-product-form">
+                    <input type="hidden" name="{{ submissionField }}" value="{{ submissionToken() }}">
                     {{ controls.field("adjustment", "Adjustment", values, errors, "number", "", "-2147483647", "2147483647", "1") }}
                     {{ controls.field("reason", "Reason", values, errors, "text", "255") }}
                     <button type="submit" class="admin-btn admin-btn--primary">Adjust stock</button>
@@ -47,6 +47,7 @@
             <section class="admin-card">
                 <h2 class="admin-card__title">Set threshold</h2>
                 <form method="post" action="{{ product.href }}/threshold" class="admin-product-form">
+                    <input type="hidden" name="{{ submissionField }}" value="{{ submissionToken() }}">
                     {{ controls.field("lowStockThreshold", "Low Stock Threshold", values or product, errors, "number", "", "0", "2147483647", "1") }}
                     <button type="submit" class="admin-btn admin-btn--primary">Set threshold</button>
                 </form>

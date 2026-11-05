@@ -118,7 +118,7 @@ Finance navigation remains dashboard-only.
 ### Admin inventory (KAN-71)
 
 Inventory reuses KAN-97's backend-derived access context/session service and
-KAN-104's admin navigation, icons, cards, tables, buttons, dialogs, loading states,
+KAN-104's admin navigation, icons, cards, tables, buttons, dialogs,
 alerts and access-denied page. Inventory permissions come from the dashboard's
 `inventoryPermissions`; missing permissions fail closed. No frontend role matrix
 is introduced. The backend must include the KAN-71 API changes and database
@@ -132,6 +132,11 @@ the corresponding backend permissions can create products, edit metadata/stock/
 threshold/image, adjust stock with a reason, and delete after a cancel-first
 confirmation dialog. Product details display paginated staff adjustment history
 with UTC dates, actor, reason, adjustment, previous stock and new stock.
+
+Admin pages ship no client-side JavaScript. Sort options are server-rendered
+links, and admin POST forms carry a one-time `_submission` token: a repeated
+POST with the same token (e.g. a double-click) waits for the first request and
+replays its response instead of repeating the action.
 
 Create includes a supplier selector because the existing stock model requires
 supplier-backed inventory. Images accept HTTP(S) URLs and existing `/images/`

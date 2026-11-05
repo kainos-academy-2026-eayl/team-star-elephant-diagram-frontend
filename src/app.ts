@@ -10,6 +10,11 @@ import { PageController } from "./controllers/pageController";
 import { PaymentGatewayController } from "./controllers/paymentGatewayController";
 import { ProductController } from "./controllers/productController";
 import { ProfileController } from "./controllers/profileController";
+import {
+	createSubmissionToken,
+	preventDuplicateSubmissions,
+	SUBMISSION_FIELD,
+} from "./middleware/duplicateSubmission";
 import { createAdminRoutes } from "./routes/adminRoutes";
 import { createAuthRoutes } from "./routes/authRoutes";
 import { createBasketRoutes } from "./routes/basketRoutes";
@@ -69,10 +74,12 @@ export function createApp({
 	);
 	const profileController = new ProfileController(new ProfileService(sessions));
 
-	nunjucks.configure("src/pages", {
+	const templates = nunjucks.configure("src/pages", {
 		autoescape: true,
 		express: app,
 	});
+	templates.addGlobal("submissionToken", createSubmissionToken);
+	templates.addGlobal("submissionField", SUBMISSION_FIELD);
 
 	app.set("view engine", "njk");
 
@@ -81,6 +88,7 @@ export function createApp({
 	app.use(express.static("src/assets"));
 	app.use(express.json({ limit: "100kb" }));
 	app.use(express.urlencoded({ extended: false, limit: "100kb" }));
+	app.use("/admin", preventDuplicateSubmissions());
 
 	app.use(createPageRoutes(pageController));
 	app.use(createAdminRoutes(adminController));

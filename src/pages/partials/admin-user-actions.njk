@@ -2,10 +2,12 @@
     {% if canChangeUserStatus %}
     {% if user.isSuspended %}
     <form action="{{ user.detailsHref }}/reactivate" method="post">
+        <input type="hidden" name="{{ submissionField }}" value="{{ submissionToken() }}">
         <button type="submit" class="admin-btn admin-btn--primary">Reactivate account</button>
     </form>
     {% else %}
     <form action="{{ user.detailsHref }}/suspend" method="post">
+        <input type="hidden" name="{{ submissionField }}" value="{{ submissionToken() }}">
         <button type="submit" class="admin-btn admin-btn--danger">Suspend account</button>
     </form>
     {% endif %}
@@ -14,6 +16,7 @@
     <details>
         <summary class="admin-btn admin-btn--danger">Delete permanently<span class="visually-hidden">: {{ user.name }}</span></summary>
         <form action="{{ user.detailsHref }}/delete" method="post">
+            <input type="hidden" name="{{ submissionField }}" value="{{ submissionToken() }}">
             <p>This permanently deletes {{ user.name }} and all their orders, payment details, basket and sessions. This cannot be undone.</p>
             <label>
                 <input type="checkbox" name="confirmDelete" value="yes" required>

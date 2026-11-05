@@ -152,6 +152,9 @@ export class InventoryService {
 			sortOptions: SORT_OPTIONS.map((option) => ({
 				value: `${option.sort}-${option.direction}`,
 				label: option.label,
+				href: href({ sort: option.sort, direction: option.direction }),
+				active:
+					option.sort === query.sort && option.direction === query.direction,
 			})),
 			statusTabs: STATUS_TABS.map((tab) => ({
 				...tab,

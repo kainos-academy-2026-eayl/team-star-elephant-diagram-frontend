@@ -1054,28 +1054,60 @@ body:has(.admin-menu[open]) {
 }
 
 .admin-inventory-sort {
-	display: flex;
-	align-items: center;
-	gap: 0.5rem;
+	position: relative;
 	color: var(--sed-muted);
 	font-size: 0.9rem;
 	font-weight: 600;
 }
 
-.admin-inventory-sort select {
+.admin-inventory-sort > summary {
 	padding: 0.6rem 0.8rem;
 	border: 1px solid var(--sed-line);
 	border-radius: 10px;
 	background: #fff;
-	color: var(--sed-text);
-	font: inherit;
-	font-weight: 600;
 	cursor: pointer;
 }
 
-.admin-inventory-sort select:focus-visible {
+.admin-inventory-sort > summary strong {
+	color: var(--sed-text);
+}
+
+.admin-inventory-sort > summary:focus-visible {
 	outline: 3px solid var(--sed-purple-soft);
 	border-color: var(--sed-purple);
+}
+
+.admin-inventory-sort__menu {
+	position: absolute;
+	inset-inline-end: 0;
+	z-index: 20;
+	min-width: 100%;
+	margin: 0.35rem 0 0;
+	padding: 0.35rem;
+	border: 1px solid var(--sed-line);
+	border-radius: 10px;
+	background: #fff;
+	box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+	list-style: none;
+}
+
+.admin-inventory-sort__menu a {
+	display: block;
+	padding: 0.45rem 0.7rem;
+	border-radius: 6px;
+	color: var(--sed-text);
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+.admin-inventory-sort__menu a:hover,
+.admin-inventory-sort__menu a:focus-visible {
+	background: var(--sed-purple-soft);
+}
+
+.admin-inventory-sort__menu a.is-active {
+	background: var(--sed-purple);
+	color: #fff;
 }
 
 .admin-inventory-status {
@@ -1229,60 +1261,6 @@ body:has(.admin-menu[open]) {
 	margin-top: 1.5rem;
 }
 
-/* Loading state (driven by admin.js) */
-.admin-progress {
-	position: fixed;
-	inset: 0 0 auto;
-	z-index: 30;
-	height: 3px;
-	background: linear-gradient(90deg, transparent, var(--sed-gold), transparent);
-	background-size: 50% 100%;
-	background-repeat: no-repeat;
-	opacity: 0;
-	pointer-events: none;
-}
-
-.admin-loading .admin-progress {
-	opacity: 1;
-	animation: admin-progress 1s linear infinite;
-}
-
-@keyframes admin-progress {
-	from {
-		background-position: -50% 0;
-	}
-
-	to {
-		background-position: 150% 0;
-	}
-}
-
-.admin-loading main {
-	opacity: 0.6;
-	transition: opacity 0.2s 0.15s;
-}
-
-[data-loading-label] {
-	pointer-events: none;
-	cursor: progress;
-}
-
-[data-loading-label]::after {
-	content: "";
-	width: 0.85em;
-	height: 0.85em;
-	border: 2px solid currentColor;
-	border-right-color: transparent;
-	border-radius: 50%;
-	animation: admin-spin 0.7s linear infinite;
-}
-
-@keyframes admin-spin {
-	to {
-		transform: rotate(360deg);
-	}
-}
-
 /* Responsive */
 /* Two 22rem activity columns fit once the page gutters and gap are included. */
 @media (min-width: 47rem) {
@@ -1362,8 +1340,6 @@ body:has(.admin-menu[open]) {
 		transition: none;
 	}
 
-	.admin-loading .admin-progress,
-	[data-loading-label]::after,
 	.admin-role-badge {
 		animation: none;
 	}

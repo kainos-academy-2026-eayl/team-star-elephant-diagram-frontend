@@ -6,7 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% if editing %}Edit{% else %}Create{% endif %} product | Admin | Sedshed</title>
     <link rel="stylesheet" href="/admin.css">
-    <script src="/admin.js" defer></script>
 </head>
 <body class="admin">
     {% set activeNav = "inventory" %}
@@ -20,6 +19,7 @@
         </div>
         {% endif %}
         <form method="post" action="/admin/inventory{% if editing %}/{{ productId }}{% endif %}" class="admin-card admin-product-form">
+            <input type="hidden" name="{{ submissionField }}" value="{{ submissionToken() }}">
             <p>All fields are required. Images use an http(s) URL or an existing /images/ path.</p>
             {{ controls.field("name", "Name", values, errors, "text", "100") }}
             <div class="admin-field">

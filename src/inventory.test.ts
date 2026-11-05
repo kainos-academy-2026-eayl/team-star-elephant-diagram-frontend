@@ -258,16 +258,26 @@ describe("admin inventory", () => {
 		);
 	});
 
-	it("renders the sort dropdown, status pills and sortable headers preserving other filters", async () => {
+	it("renders the sort menu, status pills and sortable headers preserving other filters", async () => {
 		const { get } = fixture();
 		const res = await get(
 			"/admin/inventory?q=tea&status=LOW_STOCK&sort=price&direction=desc",
 		);
+		expect(res.text).not.toContain("<script");
 		expect(res.text).toContain(
-			'<select id="inventory-order" name="order" data-autosubmit>',
+			"<summary>Sort by: <strong>Price (high → low)</strong></summary>",
 		);
 		expect(res.text).toContain(
-			'<option value="price-desc" selected>Price (high → low)</option>',
+			'<a href="/admin/inventory?q=tea&amp;status=LOW_STOCK&amp;sort=price&amp;direction=desc" class="is-active" aria-current="true">Price (high → low)</a>',
+		);
+		expect(res.text).toContain(
+			'<a href="/admin/inventory?q=tea&amp;status=LOW_STOCK&amp;sort=stockQuantity&amp;direction=asc">Stock (low → high)</a>',
+		);
+		expect(res.text).toContain(
+			'<input type="hidden" name="sort" value="price">',
+		);
+		expect(res.text).toContain(
+			'<input type="hidden" name="direction" value="desc">',
 		);
 		expect(res.text).toContain(
 			'<input type="hidden" name="status" value="LOW_STOCK">',
@@ -289,7 +299,7 @@ describe("admin inventory", () => {
 		expect(res.text).toContain("Clear search");
 	});
 
-	it("applies the combined dropdown order value and rejects malformed values", async () => {
+	it("applies the combined order value and rejects malformed values", async () => {
 		const { get, fetchApi } = fixture();
 		expect((await get("/admin/inventory?order=stockQuantity-asc")).status).toBe(
 			200,
@@ -306,6 +316,39 @@ describe("admin inventory", () => {
 		for (const order of ["price", "price-sideways", "bogus-asc"]) {
 			expect((await get(`/admin/inventory?order=${order}`)).status).toBe(400);
 		}
+	});
+
+	it("de-duplicates a repeated submission of the same form without client-side JavaScript", async () => {
+		const { get, post, fetchApi } = fixture();
+		const page = await get("/admin/inventory/new");
+		expect(page.text).not.toContain("<script");
+		const token = /name="_submission" value="([0-9a-f-]{36})"/.exec(
+			page.text,
+		)?.[1];
+		expect(token).toBeDefined();
+		const submit = () =>
+			post("/admin/inventory", { ...form, _submission: String(token) });
+		const responses = await Promise.all([submit(), submit()]);
+		const creates = () =>
+			fetchApi.mock.calls.filter(([, init]) => init?.method === "POST");
+		expect(creates()).toHaveLength(1);
+		for (const res of responses) {
+			expect(res.status).toBe(303);
+			expect(res.headers.location).toBe("/admin/inventory/7?notice=created");
+		}
+		expect(JSON.parse(String(creates()[0]?.[1]?.body))).not.toHaveProperty(
+			"_submission",
+		);
+		const fresh = await get("/admin/inventory/new");
+		const freshToken = /name="_submission" value="([0-9a-f-]{36})"/.exec(
+			fresh.text,
+		)?.[1];
+		expect(freshToken).not.toBe(token);
+		await post("/admin/inventory", {
+			...form,
+			_submission: String(freshToken),
+		});
+		expect(creates()).toHaveLength(2);
 	});
 
 	it("creates a supplier-backed product using the shared session API", async () => {

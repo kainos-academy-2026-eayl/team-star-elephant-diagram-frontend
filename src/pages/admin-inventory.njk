@@ -7,7 +7,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory Management | Admin | Sedshed</title>
     <link rel="stylesheet" href="/admin.css">
-    <script src="/admin.js" defer></script>
 </head>
 <body class="admin">
     {% set activeNav = "inventory" %}
@@ -25,20 +24,22 @@
         <section class="admin-card admin-inventory-toolbar" aria-label="Search, filter and sort products">
             <form method="get" action="/admin/inventory" class="admin-inventory-toolbar__row" role="search">
                 {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+                <input type="hidden" name="sort" value="{{ sort }}">
+                <input type="hidden" name="direction" value="{{ direction }}">
                 <div class="admin-inventory-search">
                     <label for="inventory-search" class="visually-hidden">Search products by name or SKU</label>
                     {{ i.icon("search") }}
                     <input id="inventory-search" type="search" name="q" maxlength="100" value="{{ search }}" placeholder="Search by name or SKU">
                     <button type="submit" class="admin-btn admin-btn--primary admin-btn--small">Search</button>
                 </div>
-                <div class="admin-inventory-sort">
-                    <label for="inventory-order">Sort by</label>
-                    <select id="inventory-order" name="order" data-autosubmit>
+                <details class="admin-inventory-sort">
+                    <summary>Sort by: {% for option in filters.sortOptions %}{% if option.active %}<strong>{{ option.label }}</strong>{% endif %}{% endfor %}</summary>
+                    <ul class="admin-inventory-sort__menu">
                         {% for option in filters.sortOptions %}
-                        <option value="{{ option.value }}"{% if option.value == filters.order %} selected{% endif %}>{{ option.label }}</option>
+                        <li><a href="{{ option.href }}"{% if option.active %} class="is-active" aria-current="true"{% endif %}>{{ option.label }}</a></li>
                         {% endfor %}
-                    </select>
-                </div>
+                    </ul>
+                </details>
             </form>
             <nav class="admin-inventory-status" aria-label="Filter by stock status">
                 {% for tab in filters.statusTabs %}

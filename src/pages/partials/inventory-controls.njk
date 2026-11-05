@@ -19,6 +19,7 @@
     <p>Are you sure you wish to delete this product?</p>
     <p>This cannot be undone. Products referenced by orders, baskets or reservations cannot be deleted.</p>
     <form method="post" action="{{ product.href }}/delete" class="admin-card__actions">
+        <input type="hidden" name="{{ submissionField }}" value="{{ submissionToken() }}">
         <button type="button" class="admin-btn admin-btn--ghost" command="close" commandfor="delete-product-{{ product.productId }}" autofocus>Cancel</button>
         <button type="submit" class="admin-btn admin-btn--danger" name="confirmDelete" value="yes">Confirm deletion</button>
     </form>

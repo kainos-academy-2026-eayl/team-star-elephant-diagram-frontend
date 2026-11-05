@@ -62,6 +62,7 @@
 
                 {% if canUpdateStatus %}
                 <form action="{{ order.detailsHref }}/status" method="post" class="admin-user-actions">
+                    <input type="hidden" name="{{ submissionField }}" value="{{ submissionToken() }}">
                     <label for="order-status-select">Update status</label>
                     <select id="order-status-select" name="status" required>
                         {% for transition in order.transitions %}
