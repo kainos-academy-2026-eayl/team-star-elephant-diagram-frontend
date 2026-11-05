@@ -1,3 +1,4 @@
+import { EventEmitter } from "node:events";
 import type { Response as ExpressResponse, Request } from "express";
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
@@ -461,6 +462,57 @@ describe("persistent authentication", () => {
 		expect(page.headers["set-cookie"]).toBeUndefined();
 	});
 
+	it("removes refreshed cookies when logout occurs between admin access and inventory lookup", async () => {
+		let resolveInventory!: (result: Response) => void;
+		const inventoryResponse = new Promise<Response>((resolve) => {
+			resolveInventory = resolve;
+		});
+		let inventoryStarted!: () => void;
+		const inventoryRequestStarted = new Promise<void>((resolve) => {
+			inventoryStarted = resolve;
+		});
+		const api = vi.fn<typeof fetch>(async (input) => {
+			const path = new URL(String(input)).pathname;
+			if (path.endsWith("/auth/refresh")) return credentials();
+			if (path.endsWith("/admin")) {
+				return response({
+					staff: { name: "Ada" },
+					role: "InventoryManager",
+					sections: [{ label: "Inventory" }],
+					inventoryPermissions: {
+						view: true,
+						create: true,
+						update: true,
+						delete: true,
+					},
+				});
+			}
+			if (path.endsWith("/api/admin/inventory")) {
+				inventoryStarted();
+				return inventoryResponse;
+			}
+			return response({ status: "Success" });
+		});
+		const app = createApp({ fetch: api });
+		const pageRequest = request(app)
+			.get("/admin/inventory")
+			.set("Cookie", "refreshToken=current-refresh")
+			.then((result) => result);
+
+		await inventoryRequestStarted;
+		const logout = await request(app)
+			.post("/logout")
+			.set("Cookie", "refreshToken=current-refresh");
+		expect(logout.status).toBe(303);
+		resolveInventory(
+			response({ items: [], totalItems: 0, totalPages: 1, currentPage: 1 }),
+		);
+		const page = await pageRequest;
+
+		expect(page.status).toBe(200);
+		expect(page.headers["set-cookie"]).toBeUndefined();
+	});
+
 	it("shares a refresh request across concurrent protected requests", async () => {
 		let resolveRefresh!: (result: Response) => void;
 		const refreshResponse = new Promise<Response>((resolve) => {
@@ -607,13 +659,26 @@ describe("SessionService", () => {
 			get: (name: string) => headers[name.toLowerCase()],
 		}) as unknown as Request;
 	const fakeResponse = () => {
+		const headers = new Map<string, string | string[]>();
 		const mocks = {
 			set: vi.fn(),
 			cookie: vi.fn(),
 			append: vi.fn(),
 			clearCookie: vi.fn(),
+			headersSent: false,
+			getHeader: vi.fn((name: string) => headers.get(name)),
+			setHeader: vi.fn((name: string, value: string | string[]) =>
+				headers.set(name, value),
+			),
+			removeHeader: vi.fn((name: string) => headers.delete(name)),
 		};
-		return { mocks, res: mocks as unknown as ExpressResponse };
+		return {
+			mocks,
+			res: Object.assign(
+				new EventEmitter(),
+				mocks,
+			) as unknown as ExpressResponse,
+		};
 	};
 	const setup = () => {
 		const fetchMock = vi.fn<typeof fetch>();

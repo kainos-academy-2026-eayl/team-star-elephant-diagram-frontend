@@ -303,6 +303,12 @@ describe("admin inventory", () => {
 		);
 		expect(url.searchParams.get("sort")).toBe("stockQuantity");
 		expect(url.searchParams.get("direction")).toBe("asc");
+		const descendingStatus = await get(
+			"/admin/inventory?q=tea&sort=stockStatus&direction=desc",
+		);
+		expect(descendingStatus.text).toContain(
+			'<option value="stockStatus-desc" selected>Status (descending)</option>',
+		);
 		for (const order of ["price", "price-sideways", "bogus-asc"]) {
 			expect((await get(`/admin/inventory?order=${order}`)).status).toBe(400);
 		}
