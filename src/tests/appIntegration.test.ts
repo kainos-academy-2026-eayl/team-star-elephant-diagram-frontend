@@ -1,7 +1,7 @@
 import { readdirSync } from "node:fs";
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
-import { createApp } from "./app";
+import { createApp } from "../app";
 
 const app = createApp();
 const loginResponse = () =>
