@@ -1,15 +1,10 @@
 import { Router } from "express";
-import { rateLimit } from "express-rate-limit";
 import type { AdminController } from "../controllers/adminController";
+import { createRateLimiter } from "../middleware/rateLimiter";
 
 export function createAdminRoutes(adminController: AdminController): Router {
 	const router = Router();
-	const orderRateLimit = rateLimit({
-		windowMs: 15 * 60 * 1000,
-		limit: 60,
-		standardHeaders: "draft-8",
-		legacyHeaders: false,
-	});
+	const orderRateLimit = createRateLimiter(60);
 
 	router.get("/admin", (req, res) => adminController.getDashboard(req, res));
 	router.get("/admin/users", (req, res) => adminController.getUsers(req, res));
