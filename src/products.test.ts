@@ -290,4 +290,14 @@ describe("products", () => {
 		expect(res.text).toContain("Product is temporarily unavailable");
 		expect(res.text).not.toContain("Connection refused");
 	});
+
+	it("handles an unavailable backend for /products", async () => {
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockRejectedValue(new Error("Connection refused"));
+		const res = await request(createApp({ fetch: fetchApi })).get("/products");
+		expect(res.status).toBe(503);
+		expect(res.text).toContain("temporarily unavailable");
+		expect(res.text).not.toContain("Connection refused");
+	});
 });

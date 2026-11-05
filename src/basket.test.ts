@@ -460,4 +460,16 @@ describe("basket", () => {
 			.set("Cookie", "accessToken=access-one");
 		expect(invalid.text).toContain("Please enter a quantity between 1 and 99.");
 	});
+
+	it("handles an unavailable backend for /basket", async () => {
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockRejectedValue(new Error("Connection refused"));
+		const res = await request(createApp({ fetch: fetchApi }))
+			.get("/basket")
+			.set("Authorization", ["Bearer", "test-token"].join(" "));
+		expect(res.status).toBe(503);
+		expect(res.text).toContain("temporarily unavailable");
+		expect(res.text).not.toContain("Connection refused");
+	});
 });

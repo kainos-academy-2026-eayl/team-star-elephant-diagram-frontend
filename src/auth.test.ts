@@ -275,4 +275,20 @@ describe("auth", () => {
 		expect(res.text).not.toContain('value="secret"');
 		expect(res.text).not.toContain("<script>");
 	});
+
+	it.each(["/login", "/register", "/forgot-password", "/reset-password"])(
+		"handles an unavailable backend for %s",
+		async (path) => {
+			const fetchApi = vi
+				.fn<typeof fetch>()
+				.mockRejectedValue(new Error("Connection refused"));
+			const res = await request(createApp({ fetch: fetchApi }))
+				.post(path)
+				.type("form")
+				.send({ password: "correct-horse", confirmPassword: "correct-horse" });
+			expect(res.status).toBe(503);
+			expect(res.text).toContain("temporarily unavailable");
+			expect(res.text).not.toContain("Connection refused");
+		},
+	);
 });
