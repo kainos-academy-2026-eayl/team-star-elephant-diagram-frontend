@@ -52,6 +52,30 @@ export class CheckoutController {
 				return;
 			}
 
+			// Hold the basket stock for 15 minutes while the customer pays.
+			try {
+				await this.sessions.request(
+					"/checkout/reserve",
+					req,
+					res,
+					{},
+					{},
+					"POST",
+				);
+			} catch (error) {
+				if (
+					error instanceof BackendApiError &&
+					(error.status === 400 || error.status === 409)
+				) {
+					res.status(409).render("checkout", {
+						error: error.message,
+						checkout: null,
+					});
+					return;
+				}
+				throw error;
+			}
+
 			const checkoutData = await this.checkoutService.prepareCheckout(basket);
 			res.render("checkout", { checkout: checkoutData, error: null });
 		} catch (error) {
