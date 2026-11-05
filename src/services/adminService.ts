@@ -53,6 +53,16 @@ export interface AdminDashboard {
 		amount: string;
 		reason: string;
 	}>;
+	lowStock?: {
+		total: number;
+		items: Array<{
+			inventoryId: number;
+			product: string;
+			supplier: string;
+			quantity: number;
+			reorderLevel: number;
+		}>;
+	} | null;
 }
 
 export interface AdminNavItem {
@@ -65,12 +75,30 @@ export interface AdminNavItem {
 export interface AdminContext {
 	staff: { name: string };
 	role: string;
+	roleLabel: string;
+	isFinanceDashboard: boolean;
+	canViewInventory: boolean;
 	nav: AdminNavItem[];
 	canChangeUserStatus: boolean;
+	canDeleteUsers: boolean;
 }
 
 // Backend quick action label granted to roles holding users:suspend.
 const USER_STATUS_QUICK_ACTION = "Suspend or reactivate customers";
+const USER_DELETE_QUICK_ACTION = "Permanently delete customers";
+const ROLE_LABELS: Record<string, string> = {
+	SuperAdmin: "Super Admin",
+	Admin: "Admin",
+	InventoryManager: "Inventory Manager",
+	FinanceManager: "Finance Manager",
+	CustomerService: "Customer Service",
+};
+const STAFF_MANAGEMENT_LABELS = new Set([
+	"Admin accounts",
+	"Permissions",
+	"Manage admin accounts",
+	"Manage permissions",
+]);
 
 const DASHBOARD_NAV_ITEM: AdminNavItem = {
 	key: "dashboard",
@@ -78,10 +106,11 @@ const DASHBOARD_NAV_ITEM: AdminNavItem = {
 	href: "/admin",
 };
 
-const IMPLEMENTED_SECTION_HREFS = new Map([
+const SECTION_HREFS = new Map([
 	["users", "/admin/users"],
 	["baskets", "/admin/baskets"],
 	["orders", "/admin/orders"],
+	["inventory", "/admin/inventory"],
 ]);
 
 const toNavKey = (label: string): string =>
@@ -97,7 +126,7 @@ const toNav = (sections: AdminDashboard["sections"]): AdminNavItem[] => [
 		.filter((section) => typeof section?.label === "string")
 		.flatMap((section) => {
 			const key = toNavKey(section.label);
-			const href = IMPLEMENTED_SECTION_HREFS.get(key);
+			const href = SECTION_HREFS.get(key);
 			return key && key !== DASHBOARD_NAV_ITEM.key && href
 				? [{ key, label: section.label, href }]
 				: [];
@@ -240,7 +269,16 @@ export class AdminService {
 			req,
 			res,
 		);
-		return { ...dashboard, ...this.toAccess(dashboard) };
+		const access = this.toAccess(dashboard);
+		return {
+			...dashboard,
+			...access,
+			lowStock: access.canViewInventory ? (dashboard.lowStock ?? null) : null,
+			sections: (dashboard.sections ?? []).filter(
+				(section) => !STAFF_MANAGEMENT_LABELS.has(section.label),
+			),
+			quickActions: [],
+		};
 	}
 
 	async getAccess(req: Request, res: Response): Promise<AdminContext> {
@@ -256,13 +294,30 @@ export class AdminService {
 		const quickActions = Array.isArray(dashboard.quickActions)
 			? dashboard.quickActions
 			: [];
+		const isFinanceDashboard = dashboard.role === "FinanceManager";
 		return {
 			staff: { name: dashboard.staff?.name ?? "" },
 			role: dashboard.role ?? "",
-			nav: toNav(sections),
-			canChangeUserStatus: quickActions.some(
-				(action) => action?.label === USER_STATUS_QUICK_ACTION,
-			),
+			roleLabel: ROLE_LABELS[dashboard.role ?? ""] ?? dashboard.role ?? "",
+			isFinanceDashboard,
+			canViewInventory:
+				!isFinanceDashboard &&
+				sections.some(
+					(section) =>
+						typeof section?.label === "string" &&
+						toNavKey(section.label) === "inventory",
+				),
+			nav: isFinanceDashboard ? [DASHBOARD_NAV_ITEM] : toNav(sections),
+			canChangeUserStatus:
+				!isFinanceDashboard &&
+				quickActions.some(
+					(action) => action?.label === USER_STATUS_QUICK_ACTION,
+				),
+			canDeleteUsers:
+				!isFinanceDashboard &&
+				quickActions.some(
+					(action) => action?.label === USER_DELETE_QUICK_ACTION,
+				),
 		};
 	}
 
@@ -371,6 +426,10 @@ export class AdminService {
 			{},
 		);
 		return STATUS_UPDATES[action];
+	}
+
+	async deleteUser(req: Request, res: Response, id: string): Promise<void> {
+		await this.sessions.request(`${userPath(id)}/delete`, req, res, {}, {});
 	}
 
 	parseStatusUpdate(value: unknown): AdminUserStatusUpdate | undefined {

@@ -89,7 +89,12 @@ export class AdminController {
 			this.adminService.getUsers(req, res, { search, page }),
 		);
 		if (result.status === "fulfilled") {
-			res.render("admin-users", { ...access, search, ...result.value });
+			res.render("admin-users", {
+				...access,
+				search,
+				...result.value,
+				deleted: req.query.deleted === "1",
+			});
 			return;
 		}
 		const error: unknown = result.reason;
@@ -144,11 +149,15 @@ export class AdminController {
 	}
 
 	async postSuspendUser(req: Request, res: Response): Promise<void> {
-		await this.changeUserStatus("suspend", req, res);
+		await this.performUserAction("suspend", req, res);
 	}
 
 	async postReactivateUser(req: Request, res: Response): Promise<void> {
-		await this.changeUserStatus("reactivate", req, res);
+		await this.performUserAction("reactivate", req, res);
+	}
+
+	async postDeleteUser(req: Request, res: Response): Promise<void> {
+		await this.performUserAction("delete", req, res);
 	}
 
 	async getBaskets(req: Request, res: Response): Promise<void> {
@@ -223,22 +232,18 @@ export class AdminController {
 		const search = this.adminService.normaliseSearch(req.query.q);
 		const page = this.adminService.normalisePage(req.query.page);
 
-		try {
-			const orderList = await this.adminService.getOrders(req, res, {
-				search,
-				page,
-			});
-			res.render("admin-orders", { search, ...orderList });
-		} catch (error) {
-			if (redirectToAdminLogin(error, req, res)) {
-				return;
-			}
-			res.status(503).render("admin-orders", {
-				search,
-				orders: [],
-				error: "Orders are temporarily unavailable. Please try again.",
-			});
+		const { access, result } = await this.loadWithAccess(
+			req, res, this.adminService.getOrders(req, res, { search, page }),
+		);
+		if (result.status === "fulfilled") {
+			res.render("admin-orders", { ...access, search, ...result.value });
+			return;
 		}
+		if (this.handleAuthError(result.reason, req, res, access)) return;
+		res.status(503).render("admin-orders", {
+			...access, search, orders: [],
+			error: "Orders are temporarily unavailable. Please try again.",
+		});
 	}
 
 	async getOrderDetails(req: Request, res: Response): Promise<void> {
@@ -340,8 +345,8 @@ export class AdminController {
 		}
 	}
 
-	private async changeUserStatus(
-		action: AdminUserStatusAction,
+	private async performUserAction(
+		action: AdminUserStatusAction | "delete",
 		req: Request,
 		res: Response,
 	): Promise<void> {
@@ -365,7 +370,20 @@ export class AdminController {
 		}
 
 		const detailsPath = this.adminService.getUserDetailsHref(id);
+		if (action === "delete" && req.body?.confirmDelete !== "yes") {
+			res.status(400).render("admin-user-details", {
+				...this.adminService.getRestrictedAccess(),
+				userId: id,
+				error: "Confirm permanent deletion before deleting this customer.",
+			});
+			return;
+		}
 		try {
+			if (action === "delete") {
+				await this.adminService.deleteUser(req, res, id);
+				res.redirect(303, "/admin/users?deleted=1");
+				return;
+			}
 			const updated = await this.adminService.changeUserStatus(
 				req,
 				res,
@@ -386,6 +404,15 @@ export class AdminController {
 			}
 			if (isNotFound(error)) {
 				this.renderUserNotFound(res);
+				return;
+			}
+			console.error(`Admin user ${action} failed`, error);
+			if (action === "delete") {
+				res.status(503).render("admin-user-details", {
+					...this.adminService.getRestrictedAccess(),
+					userId: id,
+					error: "The customer could not be deleted. Please try again.",
+				});
 				return;
 			}
 			res.redirect(303, `${detailsPath}?actionFailed=1`);

@@ -18,7 +18,7 @@
         {% if admin and sessionExpired %}<p role="status">Your session has expired. Please log in again.</p>{% endif %}
         {% if admin and forbidden %}<p role="alert">You need a staff account to access that page.</p>{% endif %}
         {% if error %}
-        <div role="alert">
+        <div id="login-error" role="alert">
             <p>{{ error }}</p>
             {% for field, messages in details %}
             {% for message in messages %}<p>{{ field }}: {{ message }}</p>{% endfor %}
@@ -30,12 +30,12 @@
             {% if admin and returnTo %}<input type="hidden" name="returnTo" value="{{ returnTo }}">{% endif %}
             <div class="field">
                 <label for="email">Email</label>
-                <input type="email" name="email" id="email" autocomplete="email" value="{{ values.email }}" required>
+                <input type="email" name="email" id="email" autocomplete="email" value="{{ values.email }}" {% if invalidCredentials %}aria-invalid="true" aria-describedby="login-error"{% endif %} required>
             </div>
 
             <div class="field">
                 <label for="password">Password</label>
-                <input type="password" name="password" id="password" autocomplete="current-password" required>
+                <input type="password" name="password" id="password" autocomplete="current-password" {% if invalidCredentials %}aria-invalid="true" aria-describedby="login-error"{% endif %} required>
             </div>
 
             <button type="submit" class="btn btn--primary">Log in</button>

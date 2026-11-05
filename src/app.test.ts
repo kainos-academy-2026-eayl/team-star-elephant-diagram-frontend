@@ -290,7 +290,7 @@ describe("app", () => {
 
 		expect(result.status).toBe(200);
 		expect(limited.status).toBe(429);
-		expect(fetchApi).toHaveBeenCalledTimes(60);
+		expect(fetchApi).toHaveBeenCalledTimes(120);
 	});
 
 	describe("admin baskets", () => {
