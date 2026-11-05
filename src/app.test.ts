@@ -270,27 +270,25 @@ describe("app", () => {
 		expect(res.text).not.toContain("Unavailable");
 	});
 
-	it("rate-limits order lookups", async () => {
-		const fetchApi = vi.fn<typeof fetch>(() =>
-			Promise.resolve(new Response(JSON.stringify({ orders: [] }))),
-		);
-		const client = request(createApp({ fetch: fetchApi }));
-		let result = await client
-			.get("/admin/orders")
-			.set("Cookie", "accessToken=staff-access");
-
-		for (let i = 1; i < 60; i += 1) {
-			result = await client
-				.get("/admin/orders")
+	it.each(["/admin/orders", "/admin/orders/1"])(
+		"returns 404 for the unimplemented order page %s without requesting backend data",
+		async (path) => {
+			const fetchApi = vi.fn<typeof fetch>();
+			const res = await request(createApp({ fetch: fetchApi }))
+				.get(path)
 				.set("Cookie", "accessToken=staff-access");
-		}
-		const limited = await client
-			.get("/admin/orders")
-			.set("Cookie", "accessToken=staff-access");
+			expect(res.status).toBe(404);
+			expect(fetchApi).not.toHaveBeenCalled();
+		},
+	);
 
-		expect(result.status).toBe(200);
-		expect(limited.status).toBe(429);
-		expect(fetchApi).toHaveBeenCalledTimes(120);
+	it("does not expose order mutations before order pages are implemented", async () => {
+		const fetchApi = vi.fn<typeof fetch>();
+		const res = await request(createApp({ fetch: fetchApi }))
+			.post("/admin/orders/1/status")
+			.send({ status: "SHIPPED" });
+		expect(res.status).toBe(404);
+		expect(fetchApi).not.toHaveBeenCalled();
 	});
 
 	describe("admin baskets", () => {

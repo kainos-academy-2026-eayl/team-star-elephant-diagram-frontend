@@ -1,0 +1,75 @@
+{% import "partials/inventory-controls.njk" as controls %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Management | Admin | Sedshed</title>
+    <link rel="stylesheet" href="/admin.css">
+    <script src="/admin.js" defer></script>
+</head>
+<body class="admin">
+    {% set activeNav = "inventory" %}
+    {% include "partials/admin-nav.njk" %}
+    <main id="main" class="admin-main">
+        <header class="admin-page-head">
+            <p class="admin-page-head__eyebrow">Products and stock</p>
+            <h1 class="admin-page-head__title">{% if notFound %}Product not found{% else %}Inventory Management{% endif %}</h1>
+            {% if inventoryPermissions.create %}<a href="/admin/inventory/new" class="admin-btn admin-btn--primary">Create product</a>{% endif %}
+        </header>
+        {% if notice %}<div class="admin-alert admin-alert--success" role="status">{{ notice }}</div>{% endif %}
+        {% if error %}
+        <div class="admin-alert admin-alert--error" role="alert">{{ error }} <a href="/admin/inventory">Return to inventory</a></div>
+        {% else %}
+        <form method="get" action="/admin/inventory" class="admin-card admin-inventory-filters" role="search">
+            <div class="admin-field"><label for="inventory-search">Search by name or SKU</label><input id="inventory-search" type="search" name="q" maxlength="100" value="{{ search }}"></div>
+            <div class="admin-field">
+                <label for="inventory-status">Stock status</label>
+                <select id="inventory-status" name="status">
+                    <option value="">All statuses</option>
+                    <option value="IN_STOCK"{% if status == "IN_STOCK" %} selected{% endif %}>In Stock</option>
+                    <option value="LOW_STOCK"{% if status == "LOW_STOCK" %} selected{% endif %}>Low Stock</option>
+                    <option value="OUT_OF_STOCK"{% if status == "OUT_OF_STOCK" %} selected{% endif %}>Out Of Stock</option>
+                </select>
+            </div>
+            <div class="admin-field">
+                <label for="inventory-sort">Sort by</label>
+                <select id="inventory-sort" name="sort">
+                    {% for key, label in {name: "Name", sku: "SKU", price: "Price", stockQuantity: "Current Stock", lowStockThreshold: "Threshold", stockStatus: "Status"} %}
+                    <option value="{{ key }}"{% if sort == key %} selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="admin-field">
+                <label for="inventory-direction">Direction</label>
+                <select id="inventory-direction" name="direction"><option value="asc"{% if direction == "asc" %} selected{% endif %}>Ascending</option><option value="desc"{% if direction == "desc" %} selected{% endif %}>Descending</option></select>
+            </div>
+            <button type="submit" class="admin-btn admin-btn--primary">Apply filters</button>
+            <a href="/admin/inventory" class="admin-btn admin-btn--ghost">Clear</a>
+        </form>
+        <section class="admin-card admin-card--flush" aria-label="Inventory products">
+            <div class="admin-table-wrap" tabindex="0" role="region" aria-label="Inventory table">
+                <table class="admin-table">
+                    <thead><tr><th scope="col">Name</th><th scope="col">SKU</th><th scope="col">Price</th><th scope="col">Current Stock</th><th scope="col">Threshold</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
+                    <tbody>
+                        {% for product in items %}
+                        <tr>
+                            <td class="admin-table__strong"><a href="{{ product.href }}">{{ product.name }}</a></td><td>{{ product.sku }}</td><td>{{ product.displayPrice }}</td>
+                            <td class="admin-numeric">{{ product.stockQuantity }}</td><td class="admin-numeric">{{ product.lowStockThreshold }}</td><td>{{ controls.status(product) }}</td>
+                            <td class="admin-table__action">
+                                <a href="{{ product.href }}" class="admin-btn admin-btn--ghost admin-btn--small">Details and history<span class="visually-hidden"> for {{ product.name }}</span></a>
+                                {% if inventoryPermissions.update %}<a href="{{ product.href }}/edit" class="admin-btn admin-btn--ghost admin-btn--small">Edit<span class="visually-hidden"> {{ product.name }}</span></a>{% endif %}
+                                {% if inventoryPermissions.delete %}{{ controls.deleteProduct(product) }}{% endif %}
+                            </td>
+                        </tr>
+                        {% else %}<tr><td colspan="7" class="admin-empty">No products found. Try changing the search or filters.</td></tr>{% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        <p class="admin-card__note">{{ totalItems }} product{% if totalItems != 1 %}s{% endif %} found.</p>
+        {{ controls.pagination(pagination, "Inventory pages") }}
+        {% endif %}
+    </main>
+</body>
+</html>

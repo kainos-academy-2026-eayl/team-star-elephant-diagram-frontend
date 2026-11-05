@@ -5,6 +5,7 @@ import { AdminController } from "./controllers/adminController";
 import { AuthController } from "./controllers/authController";
 import { BasketController } from "./controllers/basketController";
 import { CheckoutController } from "./controllers/checkoutController";
+import { InventoryController } from "./controllers/inventoryController";
 import { PageController } from "./controllers/pageController";
 import { PaymentGatewayController } from "./controllers/paymentGatewayController";
 import { ProductController } from "./controllers/productController";
@@ -13,6 +14,7 @@ import { createAdminRoutes } from "./routes/adminRoutes";
 import { createAuthRoutes } from "./routes/authRoutes";
 import { createBasketRoutes } from "./routes/basketRoutes";
 import { createCheckoutRoutes } from "./routes/checkoutRoutes";
+import { createInventoryRoutes } from "./routes/inventoryRoutes";
 import { createPageRoutes } from "./routes/pageRoutes";
 import { createPaymentGatewayRoutes } from "./routes/paymentGatewayRoutes";
 import { createProductRoutes } from "./routes/productRoutes";
@@ -21,6 +23,7 @@ import { AdminService } from "./services/adminService";
 import { AuthService } from "./services/authService";
 import { BasketService } from "./services/basketService";
 import { CheckoutService } from "./services/checkoutService";
+import { InventoryService } from "./services/inventoryService";
 import { PaymentGatewayService } from "./services/paymentGatewayService";
 import { ProductService } from "./services/productService";
 import { ProfileService } from "./services/profileService";
@@ -42,7 +45,12 @@ export function createApp({
 	const api = new BackendApi(apiBaseUrl, fetchApi);
 	const sessions = new SessionService(api);
 	const authController = new AuthController(new AuthService(api), sessions);
-	const adminController = new AdminController(new AdminService(sessions));
+	const adminService = new AdminService(sessions);
+	const adminController = new AdminController(adminService);
+	const inventoryController = new InventoryController(
+		new InventoryService(sessions),
+		adminService,
+	);
 	const basketController = new BasketController(
 		new BasketService(api),
 		sessions,
@@ -76,6 +84,7 @@ export function createApp({
 
 	app.use(createPageRoutes(pageController));
 	app.use(createAdminRoutes(adminController));
+	app.use(createInventoryRoutes(inventoryController));
 	app.use(createAuthRoutes(authController));
 	app.use(createBasketRoutes(basketController));
 	app.use(createProductRoutes(productController));

@@ -32,9 +32,15 @@ import type {
 	AdminUserSummary,
 	AdminUserView,
 } from "../models/adminUser";
+import type {
+	InventoryPermissions,
+	InventorySummary,
+} from "../models/inventory";
 import type { SessionService } from "./sessionService";
 
 export interface AdminDashboard {
+	inventoryPermissions?: InventoryPermissions;
+	inventorySummary?: InventorySummary | null;
 	staff: { name: string };
 	role?: string;
 	dashboard?: string;
@@ -73,6 +79,7 @@ export interface AdminNavItem {
 
 // What the logged-in role may see, derived only from the backend's role-scoped dashboard response.
 export interface AdminContext {
+	inventoryPermissions: InventoryPermissions;
 	staff: { name: string };
 	role: string;
 	roleLabel: string;
@@ -90,6 +97,7 @@ const ROLE_LABELS: Record<string, string> = {
 	SuperAdmin: "Super Admin",
 	Admin: "Admin",
 	InventoryManager: "Inventory Manager",
+	WarehouseStaff: "Warehouse Staff",
 	FinanceManager: "Finance Manager",
 	CustomerService: "Customer Service",
 };
@@ -295,19 +303,29 @@ export class AdminService {
 			? dashboard.quickActions
 			: [];
 		const isFinanceDashboard = dashboard.role === "FinanceManager";
+		const inventoryVisible = dashboard.inventoryPermissions?.view !== false;
+		const visibleSections = sections.filter(
+			(section) => toNavKey(section.label) !== "inventory" || inventoryVisible,
+		);
 		return {
+			inventoryPermissions: {
+				view: dashboard.inventoryPermissions?.view === true,
+				create: dashboard.inventoryPermissions?.create === true,
+				update: dashboard.inventoryPermissions?.update === true,
+				delete: dashboard.inventoryPermissions?.delete === true,
+			},
 			staff: { name: dashboard.staff?.name ?? "" },
 			role: dashboard.role ?? "",
 			roleLabel: ROLE_LABELS[dashboard.role ?? ""] ?? dashboard.role ?? "",
 			isFinanceDashboard,
 			canViewInventory:
 				!isFinanceDashboard &&
-				sections.some(
+				visibleSections.some(
 					(section) =>
 						typeof section?.label === "string" &&
 						toNavKey(section.label) === "inventory",
 				),
-			nav: isFinanceDashboard ? [DASHBOARD_NAV_ITEM] : toNav(sections),
+			nav: isFinanceDashboard ? [DASHBOARD_NAV_ITEM] : toNav(visibleSections),
 			canChangeUserStatus:
 				!isFinanceDashboard &&
 				quickActions.some(

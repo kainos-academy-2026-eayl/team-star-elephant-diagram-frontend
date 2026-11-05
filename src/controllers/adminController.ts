@@ -233,7 +233,9 @@ export class AdminController {
 		const page = this.adminService.normalisePage(req.query.page);
 
 		const { access, result } = await this.loadWithAccess(
-			req, res, this.adminService.getOrders(req, res, { search, page }),
+			req,
+			res,
+			this.adminService.getOrders(req, res, { search, page }),
 		);
 		if (result.status === "fulfilled") {
 			res.render("admin-orders", { ...access, search, ...result.value });
@@ -241,7 +243,9 @@ export class AdminController {
 		}
 		if (this.handleAuthError(result.reason, req, res, access)) return;
 		res.status(503).render("admin-orders", {
-			...access, search, orders: [],
+			...access,
+			search,
+			orders: [],
 			error: "Orders are temporarily unavailable. Please try again.",
 		});
 	}

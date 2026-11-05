@@ -104,15 +104,55 @@ dashboard: all-time revenue, total orders and pending orders. Revenue excludes
 cancelled orders and does not represent confirmed payments. Its menu provides
 dashboard navigation and logout, but no operational quick actions or
 customer/inventory panels. Other roles retain
-their existing dashboard. The backend denies finance staff access to other
-admin resources.
+their existing dashboard. Direct resource URLs still use the backend permission
+matrix; the finance-only dashboard does not expose operational navigation.
 
 Staff sections are accessed through the top navigation and its matching menu,
 not dashboard quick-action buttons. Users, Baskets, Orders and Inventory links
 only appear when granted by the backend's role-scoped sections. Users and Baskets
-open their existing pages; Orders (`/admin/orders`) and Inventory
-(`/admin/inventory`) currently return the standard 404 until those pages exist.
-Finance remains dashboard-only.
+open their existing pages. Orders (`/admin/orders`, including detail and mutation
+URLs) intentionally return the standard 404 until that feature is enabled.
+Inventory (`/admin/inventory`) opens the integrated inventory section.
+Finance navigation remains dashboard-only.
+
+### Admin inventory (KAN-71)
+
+Inventory reuses KAN-97's backend-derived access context/session service and
+KAN-104's admin navigation, icons, cards, tables, buttons, dialogs, loading states,
+alerts and access-denied page. Inventory permissions come from the dashboard's
+`inventoryPermissions`; missing permissions fail closed. No frontend role matrix
+is introduced. The backend must include the KAN-71 API changes and database
+migration; do not point the running app at an empty test database to preview
+existing customer/product data.
+
+The dashboard adds a clickable Inventory Management card with Total Products,
+Low Stock Products and Out Of Stock Products. The inventory page supports
+server-side name/SKU search, status filtering, sorting and pagination. Staff with
+the corresponding backend permissions can create products, edit metadata/stock/
+threshold/image, adjust stock with a reason, and delete after a cancel-first
+confirmation dialog. Product details display paginated staff adjustment history
+with UTC dates, actor, reason, adjustment, previous stock and new stock.
+
+Create includes a supplier selector because the existing stock model requires
+supplier-backed inventory. Images accept HTTP(S) URLs and existing `/images/`
+paths, not uploads. SKU cannot be edited. Reserved stock cannot be removed;
+products referenced by orders, baskets or reservations cannot be deleted.
+Validation errors retain entered values; backend conflicts and outages are
+displayed explicitly. Writes require the existing same-origin check.
+
+All API calls use the existing server-side HTTP/session utilities and
+`/api/admin/inventory` endpoints. Create uses POST, edit PUT, stock/threshold
+changes PATCH and deletion DELETE. Form routes are `/admin/inventory/new`,
+`/admin/inventory/:id/edit` and `/admin/inventory/:id`; history is on the details page.
+
+Integration notes: KAN-97 and KAN-104 were merged into this feature branch before
+implementation. Their admin controller/service, session service and test
+conflicts were resolved retaining the shared access context, refreshed-request
+credentials and KAN-104 UI. The backend must retain KAN-104's `lowStock` response
+alongside KAN-71's new inventory summary/permissions. The existing supplier-line
+low-stock panel is separate from product-level status counts. Finance's
+finance-only dashboard remains unchanged; permission-granted direct inventory
+URLs are read-only for that role. Order routes remain deliberately unregistered.
 
 Dashboard summary cards include a green role badge under "Your access"; its
 glow is disabled for reduced-motion preferences. Staff whose backend-granted

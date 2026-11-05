@@ -963,6 +963,82 @@ body:has(.admin-menu[open]) {
 	border: 0;
 }
 
+.admin-status--warning {
+	background: #fff3cd;
+	color: #7a4d00;
+}
+
+.admin-product-form {
+	display: grid;
+	gap: 1rem;
+}
+
+.admin-field {
+	display: grid;
+	gap: 0.4rem;
+}
+
+.admin-field label {
+	font-weight: 600;
+}
+
+.admin-field input,
+.admin-field select,
+.admin-field textarea {
+	box-sizing: border-box;
+	width: 100%;
+	min-width: 0;
+	padding: 0.7rem;
+	border: 1px solid var(--sed-line);
+	border-radius: 8px;
+	background: #fff;
+	color: var(--sed-text);
+	font: inherit;
+}
+
+.admin-field [aria-invalid="true"] {
+	border-color: var(--sed-danger);
+}
+
+.admin-field-error {
+	margin: 0;
+	color: var(--sed-danger);
+}
+
+.admin-inventory-filters {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: end;
+	gap: 1rem;
+}
+
+.admin-inventory-filters .admin-field {
+	flex: 1 1 10rem;
+}
+
+.admin-confirm {
+	max-width: min(30rem, calc(100vw - 3rem));
+	padding: 1.5rem;
+	border: 1px solid var(--sed-line);
+	border-radius: 14px;
+	color: var(--sed-text);
+}
+
+.admin-confirm::backdrop {
+	background: rgb(0 0 0 / 45%);
+}
+
+.admin-inventory-summary {
+	display: block;
+	color: inherit;
+	text-decoration: none;
+}
+
+.admin-product-image {
+	max-width: 100%;
+	object-fit: contain;
+}
+
 .admin-pagination {
 	display: flex;
 	align-items: center;

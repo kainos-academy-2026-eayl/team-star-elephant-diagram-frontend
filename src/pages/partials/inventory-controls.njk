@@ -1,0 +1,37 @@
+{% macro status(product) %}
+<span class="admin-status admin-status--{{ product.statusClass }}">{{ product.statusLabel }}</span>
+{% endmacro %}
+
+{% macro pagination(pages, label) %}
+{% if pages and pages.totalPages > 1 %}
+<nav class="admin-pagination" aria-label="{{ label }}">
+    {% if pages.previousHref %}<a href="{{ pages.previousHref }}" class="admin-btn admin-btn--ghost">Previous</a>{% endif %}
+    <span>Page {{ pages.page }} of {{ pages.totalPages }}</span>
+    {% if pages.nextHref %}<a href="{{ pages.nextHref }}" class="admin-btn admin-btn--ghost">Next</a>{% endif %}
+</nav>
+{% endif %}
+{% endmacro %}
+
+{% macro deleteProduct(product) %}
+<button type="button" class="admin-btn admin-btn--danger admin-btn--small" command="show-modal" commandfor="delete-product-{{ product.productId }}">Delete<span class="visually-hidden"> {{ product.name }}</span></button>
+<dialog id="delete-product-{{ product.productId }}" class="admin-confirm" aria-labelledby="delete-title-{{ product.productId }}" closedby="any">
+    <h2 id="delete-title-{{ product.productId }}" class="admin-card__title">Delete {{ product.name }}</h2>
+    <p>Are you sure you wish to delete this product?</p>
+    <p>This cannot be undone. Products referenced by orders, baskets or reservations cannot be deleted.</p>
+    <form method="post" action="{{ product.href }}/delete" class="admin-card__actions">
+        <button type="button" class="admin-btn admin-btn--ghost" command="close" commandfor="delete-product-{{ product.productId }}" autofocus>Cancel</button>
+        <button type="submit" class="admin-btn admin-btn--danger" name="confirmDelete" value="yes">Confirm deletion</button>
+    </form>
+</dialog>
+{% endmacro %}
+
+{% macro field(name, label, values, errors, type="text", maxLength="", min="", max="", step="") %}
+<div class="admin-field">
+    <label for="{{ name }}">{{ label }}</label>
+    <input id="{{ name }}" name="{{ name }}" type="{{ type }}" value="{{ values[name] }}" required
+        {% if maxLength %}maxlength="{{ maxLength }}"{% endif %}
+        {% if min != "" %}min="{{ min }}"{% endif %}{% if max != "" %}max="{{ max }}"{% endif %}{% if step %}step="{{ step }}"{% endif %}
+        {% if errors[name] %}aria-invalid="true" aria-describedby="{{ name }}-error"{% endif %}>
+    {% if errors[name] %}<p id="{{ name }}-error" class="admin-field-error">{{ errors[name] | join(" ") }}</p>{% endif %}
+</div>
+{% endmacro %}

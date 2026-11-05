@@ -367,20 +367,6 @@ describe("admin", () => {
 		},
 	);
 
-	it.each(["/admin/inventory"])(
-		"returns a real 404 for the unimplemented %s page",
-		async (path) => {
-			const fetchApi = vi.fn<typeof fetch>();
-			const res = await request(createApp({ fetch: fetchApi }))
-				.get(path)
-				.set("Cookie", "accessToken=staff-access");
-
-			expect(res.status).toBe(404);
-			expect(res.headers.location).toBeUndefined();
-			expect(fetchApi).not.toHaveBeenCalled();
-		},
-	);
-
 	it("shows the baskets link in the admin navigation", async () => {
 		const dashboard = {
 			staff: { name: "Staff member" },
