@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { BackendApiError } from "../backendApi";
 import type { AdminUserStatusAction } from "../models/adminUser";
-import type { AdminAccess, AdminService } from "../services/adminService";
+import type { AdminContext, AdminService } from "../services/adminService";
 import {
 	CustomerSessionError,
 	SessionExpiredError,
@@ -282,7 +282,7 @@ export class AdminController {
 		req: Request,
 		res: Response,
 		page: Promise<T>,
-	): Promise<{ access: AdminAccess; result: PromiseSettledResult<T> }> {
+	): Promise<{ access: AdminContext; result: PromiseSettledResult<T> }> {
 		const [result, accessResult] = await Promise.allSettled([
 			page,
 			this.adminService.getAccess(req, res),
@@ -305,7 +305,7 @@ export class AdminController {
 		error: unknown,
 		req: Request,
 		res: Response,
-		access: AdminAccess,
+		access: AdminContext,
 	): boolean {
 		if (redirectToAdminLogin(error, req, res)) {
 			return true;
@@ -317,15 +317,15 @@ export class AdminController {
 		return false;
 	}
 
-	private renderForbidden(res: Response, access: AdminAccess): void {
+	private renderForbidden(res: Response, access: AdminContext): void {
 		res.status(403).render("admin", { ...access, forbidden: true });
 	}
 
-	private renderUserNotFound(res: Response, access?: AdminAccess): void {
+	private renderUserNotFound(res: Response, access?: AdminContext): void {
 		res.status(404).render("admin-user-details", { ...access, notFound: true });
 	}
 
-	private renderBasketNotFound(res: Response, access?: AdminAccess): void {
+	private renderBasketNotFound(res: Response, access?: AdminContext): void {
 		res
 			.status(404)
 			.render("partials/admin-basket-details", { ...access, notFound: true });
