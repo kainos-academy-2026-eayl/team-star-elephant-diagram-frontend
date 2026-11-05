@@ -1,12 +1,13 @@
 import { Router } from "express";
 import { rateLimit } from "express-rate-limit";
 import type { BasketController } from "../controllers/basketController";
+import { rateLimitMax } from "./rateLimitMax";
 
 export function createBasketRoutes(basketController: BasketController): Router {
 	const router = Router();
 	const basketChangeRateLimit = rateLimit({
 		windowMs: 15 * 60 * 1000,
-		limit: 60,
+		limit: rateLimitMax(60),
 		standardHeaders: "draft-8",
 		legacyHeaders: false,
 	});

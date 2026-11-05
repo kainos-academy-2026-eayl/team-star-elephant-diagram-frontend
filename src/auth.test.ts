@@ -167,6 +167,32 @@ describe("auth", () => {
 		expect(fetchApi).toHaveBeenCalledTimes(10);
 	});
 
+	it("lets RATE_LIMIT_MAX raise the login limit outside production only", async () => {
+		vi.stubEnv("RATE_LIMIT_MAX", "25");
+		try {
+			const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
+				new Response(JSON.stringify({ error: "Invalid email or password" }), {
+					status: 401,
+				}),
+			);
+			const login = (app: ReturnType<typeof createApp>) =>
+				request(app)
+					.post("/login")
+					.type("form")
+					.send({ email: "ada@example.com", password: "wrong-password" });
+
+			vi.stubEnv("NODE_ENV", "development");
+			const raised = await login(createApp({ fetch: fetchApi }));
+			expect(raised.headers.ratelimit).toMatch(/^"25-in-/);
+
+			vi.stubEnv("NODE_ENV", "production");
+			const unchanged = await login(createApp({ fetch: fetchApi }));
+			expect(unchanged.headers.ratelimit).toMatch(/^"10-in-/);
+		} finally {
+			vi.unstubAllEnvs();
+		}
+	});
+
 	it("keeps a failed login on the form", async () => {
 		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
 			new Response(JSON.stringify({ error: "Invalid email or password" }), {

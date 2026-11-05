@@ -98,6 +98,14 @@ and calls backend `GET /admin/baskets?search=` (`{ baskets }`) and
 characters) is passed to the backend, which matches basket ID, customer name or
 email. See `src/models/adminBasket.ts` for the response shapes.
 
+## End-to-end tests
+
+The sibling test harness repository runs Playwright tests against this frontend
+and the backend. Its suite logs in many times, which would trip the per-IP limits
+on login, registration and basket changes, so for local test runs start the
+server with `RATE_LIMIT_MAX=1000` (or set it in `.env`). It replaces every per-IP
+limit and is ignored when `NODE_ENV=production`.
+
 ## Continuous integration
 
 Use Node.js 22 (see [.nvmrc](.nvmrc)). To run the same checks as CI:

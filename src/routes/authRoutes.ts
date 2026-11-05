@@ -1,12 +1,13 @@
 import { Router } from "express";
 import { rateLimit } from "express-rate-limit";
 import type { AuthController } from "../controllers/authController";
+import { rateLimitMax } from "./rateLimitMax";
 
 export function createAuthRoutes(authController: AuthController): Router {
 	const router = Router();
 	const authRateLimit = rateLimit({
 		windowMs: 15 * 60 * 1000,
-		limit: 10,
+		limit: rateLimitMax(10),
 		standardHeaders: "draft-8",
 		legacyHeaders: false,
 	});
