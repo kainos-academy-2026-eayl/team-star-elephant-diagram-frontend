@@ -59,8 +59,10 @@ describe("CheckoutService", () => {
 			itemCount: 3,
 			subtotal: 1259.5,
 			displaySubtotal: "£1,259.50",
-			total: 1259.5,
-			displayTotal: "£1,259.50",
+			shippingFee: 30,
+			displayShippingFee: "£30.00",
+			total: 1289.5,
+			displayTotal: "£1,289.50",
 		});
 	});
 
@@ -71,7 +73,8 @@ describe("CheckoutService", () => {
 		});
 
 		expect(result.subtotal).toBe(6);
-		expect(result.total).toBe(6);
+		expect(result.shippingFee).toBe(20);
+		expect(result.total).toBe(26);
 	});
 
 	it("returns zero totals for an empty basket", async () => {
@@ -82,6 +85,8 @@ describe("CheckoutService", () => {
 			itemCount: 0,
 			subtotal: 0,
 			displaySubtotal: "£0.00",
+			shippingFee: 0,
+			displayShippingFee: "£0.00",
 			total: 0,
 			displayTotal: "£0.00",
 		});

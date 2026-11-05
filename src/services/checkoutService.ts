@@ -62,7 +62,8 @@ export class CheckoutService {
 
 		const itemCount = items.reduce((total, item) => total + item.quantity, 0);
 		const subtotal = items.reduce((total, item) => total + item.subtotal, 0);
-		const shippingFee = this.calculateShippingFee(subtotal);
+		const shippingFee =
+			items.length > 0 ? this.calculateShippingFee(subtotal) : 0;
 		const total = subtotal + shippingFee;
 
 		if (!Number.isFinite(itemCount) || !Number.isFinite(total)) {
