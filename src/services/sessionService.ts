@@ -46,7 +46,7 @@ export class CustomerSessionError extends BackendApiError {
 export class SessionService {
 	private readonly establishedResponses = new WeakSet<Response>();
 	private readonly clearedResponses = new WeakSet<Response>();
-	private readonly refreshing = new Map<string, RefreshOperation>();
+	private readonly refreshOperations = new Map<string, RefreshOperation>();
 	private readonly renewedForRequest = new WeakMap<
 		Request,
 		{ credentials: SessionCredentials; operation: RefreshOperation }
@@ -121,7 +121,7 @@ export class SessionService {
 		}
 		const refresh = cookieValue(req, "refreshToken");
 		if (!refresh) throw new BackendApiError(401, "Please log in.");
-		let operation = this.refreshing.get(refresh);
+		let operation = this.refreshOperations.get(refresh);
 		if (!operation) {
 			operation = {
 				promise: this.api.requestWithResponse<LoginResponse>(
@@ -134,7 +134,7 @@ export class SessionService {
 				invalidated: false,
 				users: 0,
 			};
-			this.refreshing.set(refresh, operation);
+			this.refreshOperations.set(refresh, operation);
 		}
 		operation.users += 1;
 		let credentials: SessionCredentials | undefined;
@@ -179,8 +179,11 @@ export class SessionService {
 			throw error;
 		} finally {
 			operation.users -= 1;
-			if (operation.users === 0 && this.refreshing.get(refresh) === operation)
-				this.refreshing.delete(refresh);
+			if (
+				operation.users === 0 &&
+				this.refreshOperations.get(refresh) === operation
+			)
+				this.refreshOperations.delete(refresh);
 		}
 	}
 
@@ -251,7 +254,7 @@ export class SessionService {
 	async logout(req: Request, res: Response): Promise<void> {
 		const refresh = cookieValue(req, "refreshToken");
 		if (refresh) {
-			const operation = this.refreshing.get(refresh);
+			const operation = this.refreshOperations.get(refresh);
 			if (operation) operation.invalidated = true;
 		}
 		await this.api.request(
@@ -260,7 +263,7 @@ export class SessionService {
 			refresh ? { Cookie: `refreshToken=${refresh}` } : {},
 		);
 		if (refresh) {
-			const operation = this.refreshing.get(refresh);
+			const operation = this.refreshOperations.get(refresh);
 			if (operation) operation.invalidated = true;
 		}
 		this.clear(res);
