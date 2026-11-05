@@ -149,7 +149,7 @@ describe("persistent authentication", () => {
 		expect(result.headers["set-cookie"]).toBeUndefined();
 	});
 
-	it("does not retry forbidden requests or loop when a replacement access token is rejected", async () => {
+	it("shows access denied for forbidden admin requests and does not retry them", async () => {
 		const api = vi
 			.fn<typeof fetch>()
 			.mockResolvedValueOnce(response({ error: "Forbidden" }, 403));
@@ -159,8 +159,9 @@ describe("persistent authentication", () => {
 				"Cookie",
 				"accessToken=customer-access; refreshToken=customer-refresh",
 			);
-		expect(result.status).toBe(303);
-		expect(result.headers.location).toBe("/admin/login?reason=forbidden");
+		expect(result.status).toBe(403);
+		expect(result.headers.location).toBeUndefined();
+		expect(result.text).toContain("Access denied");
 		expect(api).toHaveBeenCalledTimes(1);
 
 		const rejected = vi
@@ -176,22 +177,153 @@ describe("persistent authentication", () => {
 	});
 
 	it("persists refreshed credentials when a staff retry fails with a non-401 response", async () => {
-		const api = vi
-			.fn<typeof fetch>()
-			.mockResolvedValueOnce(credentials())
-			.mockResolvedValueOnce(response({ error: "Not found" }, 404));
+		const api = vi.fn<typeof fetch>((input) => {
+			const path = String(input);
+			if (path.endsWith("/auth/refresh")) return Promise.resolve(credentials());
+			if (path.endsWith("/admin/users/999")) {
+				return Promise.resolve(response({ error: "Not found" }, 404));
+			}
+			if (path.endsWith("/admin")) {
+				return Promise.resolve(
+					response({
+						staff: { name: "Ada" },
+						sections: [],
+						quickActions: [],
+					}),
+				);
+			}
+			return Promise.resolve(response({ error: "Unexpected URL" }, 500));
+		});
 		const result = await request(createApp({ fetch: api }))
 			.get("/admin/users/999")
 			.set("Cookie", "refreshToken=current-refresh");
-
 		expect(result.status).toBe(404);
-		expect(result.headers["set-cookie"]).toHaveLength(2);
 		expect(String(result.headers["set-cookie"])).toContain(
 			"accessToken=new-access",
 		);
 		expect(String(result.headers["set-cookie"])).toContain(
 			"refreshToken=new-refresh",
 		);
+	});
+
+	it("reuses refreshed credentials when a paired admin lookup returns a delayed 401", async () => {
+		let resolveDetailsRetry!: () => void;
+		const detailsRetry = new Promise<void>((resolve) => {
+			resolveDetailsRetry = resolve;
+		});
+		const api = vi.fn<typeof fetch>(async (input, init) => {
+			const path = String(input);
+			const authorization = (
+				init?.headers as Record<string, string> | undefined
+			)?.Authorization;
+			if (path.endsWith("/auth/refresh")) return credentials();
+			if (path.endsWith("/admin/users/7")) {
+				if (authorization === ["Bearer", "expired-access"].join(" ")) {
+					return response({ error: "Expired" }, 401);
+				}
+				resolveDetailsRetry();
+				return response({
+					user: {
+						id: 7,
+						name: "Ada Lovelace",
+						email: "ada@example.com",
+						registeredAt: "2026-01-01",
+						status: "active",
+					},
+					recentOrders: [],
+					basket: { itemCount: 0, subtotal: 0, items: [] },
+				});
+			}
+			if (path.endsWith("/admin")) {
+				if (authorization === ["Bearer", "expired-access"].join(" ")) {
+					await detailsRetry;
+					return response({ error: "Expired" }, 401);
+				}
+				return response({
+					staff: { name: "Ada" },
+					sections: [{ label: "Users" }],
+					quickActions: [{ label: "Suspend or reactivate customers" }],
+				});
+			}
+			return response({ error: "Unexpected URL" }, 500);
+		});
+		const result = await request(createApp({ fetch: api }))
+			.get("/admin/users/7")
+			.set(
+				"Cookie",
+				"accessToken=expired-access; refreshToken=current-refresh",
+			);
+
+		expect(result.status).toBe(200);
+		expect(
+			api.mock.calls.filter(([input]) =>
+				String(input).endsWith("/auth/refresh"),
+			),
+		).toHaveLength(1);
+		expect(
+			api.mock.calls.filter(
+				([input, init]) =>
+					(String(input).endsWith("/admin") ||
+						String(input).endsWith("/admin/users/7")) &&
+					(init?.headers as Record<string, string> | undefined)
+						?.Authorization === ["Bearer", "new-access"].join(" "),
+			),
+		).toHaveLength(2);
+		expect(String(result.headers["set-cookie"])).toContain(
+			"accessToken=new-access",
+		);
+		expect(String(result.headers["set-cookie"])).toContain(
+			"refreshToken=new-refresh",
+		);
+	});
+
+	it("preserves PUT when saving an address after refreshing an expired access token", async () => {
+		const api = vi.fn<typeof fetch>(async (input, init) => {
+			const path = String(input);
+			if (path.endsWith("/auth/refresh")) return credentials();
+			if (path.endsWith("/profile/shipping-address")) {
+				if (init?.method !== "PUT") {
+					return response({ error: "Expected PUT" }, 405);
+				}
+				const authorization = (
+					init.headers as Record<string, string> | undefined
+				)?.Authorization;
+				if (authorization === ["Bearer", "expired-access"].join(" ")) {
+					return response({ error: "Expired" }, 401);
+				}
+				return response({ status: "updated" });
+			}
+			return response({ error: "Unexpected URL" }, 500);
+		});
+		const result = await request(createApp({ fetch: api }))
+			.post("/payment_gateway")
+			.type("form")
+			.set("Cookie", "accessToken=expired-access; refreshToken=current-refresh")
+			.send({
+				useExistingAddress: "false",
+				fullName: "Ada Lovelace",
+				addressLine1: "1 St James Square",
+				city: "London",
+				postcode: "SW1A 1AA",
+				nameOnCard: "Ada Lovelace",
+				cardNumber: "4242424242424242",
+				expiry: "12/30",
+				cvc: "123",
+			});
+
+		expect(result.status).toBe(200);
+		const addressCalls = api.mock.calls.filter(([input]) =>
+			String(input).endsWith("/profile/shipping-address"),
+		);
+		expect(addressCalls).toHaveLength(2);
+		expect(addressCalls.map(([, init]) => init?.method)).toEqual([
+			"PUT",
+			"PUT",
+		]);
+		expect(
+			(addressCalls[1]?.[1]?.headers as Record<string, string> | undefined)
+				?.Authorization,
+		).toBe(["Bearer", "new-access"].join(" "));
 	});
 
 	it("offers a working separate admin login", async () => {
