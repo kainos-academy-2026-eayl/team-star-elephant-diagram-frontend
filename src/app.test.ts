@@ -270,6 +270,20 @@ describe("app", () => {
 		expect(res.text).not.toContain("Baskets (Unavailable)");
 	});
 
+	it("rate-limits repeated admin order requests", async () => {
+		const fetchApi = vi.fn<typeof fetch>();
+		const client = request(createApp({ fetch: fetchApi }));
+
+		for (let attempt = 0; attempt < 60; attempt++) {
+			const res = await client.get("/admin/orders");
+			expect(res.status).toBe(303);
+		}
+
+		const limited = await client.get("/admin/orders");
+		expect(limited.status).toBe(429);
+		expect(fetchApi).not.toHaveBeenCalled();
+	});
+
 	describe("admin baskets", () => {
 		const basketSummaries = [
 			{
