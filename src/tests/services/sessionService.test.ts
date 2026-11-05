@@ -301,6 +301,17 @@ describe("persistent authentication", () => {
 				}
 				return response({ status: "updated" });
 			}
+			if (path.endsWith("/orders/from-reservation")) {
+				return response({
+					order: {
+						orderId: 42,
+						orderStatus: "PROCESSING",
+						cost: "12.34",
+						orderPlacedAt: "2026-11-05T12:00:00.000Z",
+						items: [],
+					},
+				});
+			}
 			return response({ error: "Unexpected URL" }, 500);
 		});
 		const result = await request(createApp({ fetch: api }))
@@ -319,7 +330,7 @@ describe("persistent authentication", () => {
 				cvc: "123",
 			});
 
-		expect(result.status).toBe(200);
+		expect(result.status).toBe(201);
 		const addressCalls = api.mock.calls.filter(([input]) =>
 			String(input).endsWith("/profile/shipping-address"),
 		);
@@ -332,6 +343,11 @@ describe("persistent authentication", () => {
 			(addressCalls[1]?.[1]?.headers as Record<string, string> | undefined)
 				?.Authorization,
 		).toBe(["Bearer", "new-access"].join(" "));
+		expect(
+			api.mock.calls.find(([input]) =>
+				String(input).endsWith("/orders/from-reservation"),
+			)?.[1]?.method,
+		).toBe("POST");
 	});
 
 	it("offers a working separate admin login", async () => {
