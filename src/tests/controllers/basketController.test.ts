@@ -1,7 +1,7 @@
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
-import { createApp } from "./app";
-import { loginResponse } from "./testHelpers";
+import { createApp } from "../../app";
+import { loginResponse } from "../testHelpers";
 
 describe("basket", () => {
 	it("loads basket data and forwards browser credentials to the backend", async () => {

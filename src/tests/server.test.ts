@@ -1,7 +1,7 @@
 import { Server as HttpServer } from "node:http";
 import express from "express";
 import { describe, expect, it } from "vitest";
-import { createServer } from "./server";
+import { createServer } from "../server";
 
 describe("server transport", () => {
 	it("keeps HTTP available behind a deployment TLS proxy when no certificate is configured", () => {
