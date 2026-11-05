@@ -77,9 +77,7 @@ document.addEventListener("click", (event) => {
 	) {
 		return;
 	}
-	startLoading(
-		link.matches(".action-button, .btn, .error-message a") ? link : null,
-	);
+	startLoading(link.matches(".admin-btn, .admin-alert a") ? link : null);
 });
 
 // Restore the page when it is shown again from the back/forward cache.

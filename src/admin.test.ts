@@ -115,6 +115,35 @@ describe("admin", () => {
 		expect(res.text).not.toContain("Users (Unavailable)");
 	});
 
+	it("links quick actions the staff member can use and marks the rest unavailable", async () => {
+		const dashboard = {
+			staff: { name: "Staff member" },
+			sections: [{ label: "Users" }],
+			quickActions: [
+				{ label: "Suspend or reactivate customers" },
+				{ label: "Update order status" },
+			],
+			cards: [],
+			recentOrders: [],
+			newUsers: [],
+			stockChanges: [],
+		};
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(new Response(JSON.stringify(dashboard)));
+		const res = await request(createApp({ fetch: fetchApi }))
+			.get("/admin")
+			.set("Cookie", "accessToken=staff-access");
+
+		expect(res.text).toContain(
+			'<a href="/admin/users" class="admin-chip admin-chip--link">Suspend or reactivate customers</a>',
+		);
+		expect(res.text).not.toContain(
+			"Suspend or reactivate customers (Unavailable)",
+		);
+		expect(res.text).toContain("Update order status (Unavailable)");
+	});
+
 	it("shows the baskets link in the admin navigation", async () => {
 		const dashboard = {
 			staff: { name: "Staff member" },

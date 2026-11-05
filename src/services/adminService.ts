@@ -26,7 +26,7 @@ export interface AdminDashboard {
 	role?: string;
 	dashboard?: string;
 	sections: Array<{ label: string }>;
-	quickActions: Array<{ label: string }>;
+	quickActions: Array<{ label: string; href?: string }>;
 	cards: Array<{ label: string; value: string }>;
 	recentOrders: Array<{
 		id: number | string;
@@ -89,6 +89,25 @@ const toNav = (sections: AdminDashboard["sections"]): AdminNavItem[] => [
 				: [];
 		}),
 ];
+
+// Quick actions only link out when the frontend has a page that performs them.
+const toQuickActions = (
+	actions: unknown,
+	access: AdminAccess,
+): AdminDashboard["quickActions"] =>
+	(Array.isArray(actions) ? actions : [])
+		.filter(
+			(action): action is { label: string } =>
+				typeof action?.label === "string",
+		)
+		.map((action) => {
+			const usersHref = access.nav.find((item) => item.key === "users")?.href;
+			return action.label === USER_STATUS_QUICK_ACTION &&
+				access.canChangeUserStatus &&
+				usersHref
+				? { label: action.label, href: usersHref }
+				: { label: action.label };
+		});
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const MAX_SEARCH_LENGTH = 100;
@@ -172,7 +191,12 @@ export class AdminService {
 			req,
 			res,
 		);
-		return { ...dashboard, ...this.toAccess(dashboard) };
+		const access = this.toAccess(dashboard);
+		return {
+			...dashboard,
+			...access,
+			quickActions: toQuickActions(dashboard.quickActions, access),
+		};
 	}
 
 	async getAccess(req: Request, res: Response): Promise<AdminAccess> {
