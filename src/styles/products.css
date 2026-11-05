@@ -1,0 +1,549 @@
+/* Product catalogue (/products). Shared base, header and menu live in site.css. */
+
+.catalogue {
+	width: min(100% - 2rem, var(--content-width));
+	margin: 1.5rem auto 2.5rem;
+}
+
+.catalogue__header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 0.25rem 1rem;
+}
+
+.catalogue__title {
+	margin: 0;
+	font-size: 1.75rem;
+	font-weight: 800;
+	line-height: 1.2;
+}
+
+.catalogue__count {
+	margin: 0;
+	color: var(--sed-muted);
+	font-size: 0.9rem;
+}
+
+/* Layout: permanent filter sidebar + results */
+.catalogue__layout {
+	display: grid;
+	grid-template-columns: 15rem minmax(0, 1fr);
+	gap: 1.25rem;
+	align-items: start;
+	margin-top: 1rem;
+}
+
+.catalogue__layout--single {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.filters {
+	position: sticky;
+	top: 1rem;
+	padding: 1rem;
+	border-radius: 12px;
+	background: #fff;
+	box-shadow: 0 1px 3px rgba(45, 27, 105, 0.12);
+}
+
+.filters__form {
+	display: flex;
+	flex-direction: column;
+	gap: 1.1rem;
+}
+
+.filters__top {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+}
+
+.filters__title {
+	margin: 0;
+	font-size: 1.05rem;
+	font-weight: 800;
+}
+
+.site .filters__clear {
+	color: var(--sed-muted);
+	font-size: 0.8rem;
+	font-weight: 600;
+	text-decoration: underline;
+}
+
+.site .filters__clear:hover {
+	color: var(--sed-text);
+}
+
+.filters__group {
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.filters__group legend {
+	padding: 0;
+	margin-bottom: 0.5rem;
+	font-size: 0.75rem;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--sed-muted);
+}
+
+.site .filters__apply {
+	padding: 0.6rem 1rem;
+	border: 0;
+	border-radius: 999px;
+	background: var(--sed-purple);
+	color: #fff;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background-color 0.15s;
+}
+
+.site .filters__apply:hover {
+	background: var(--sed-purple-dark);
+}
+
+/* Dual-thumb price slider */
+.range__values {
+	display: flex;
+	justify-content: space-between;
+	margin-bottom: 0.15rem;
+	font-size: 0.95rem;
+	font-weight: 800;
+}
+
+/* overflow clips the thumbs' focus rings, so the height leaves room for them. */
+.range {
+	--thumb: 1.2rem;
+	--height: 2.2rem;
+	position: relative;
+	height: var(--height);
+	overflow: hidden;
+}
+
+.range__track {
+	position: absolute;
+	top: 50%;
+	right: calc(var(--thumb) / 2);
+	left: calc(var(--thumb) / 2);
+	height: 6px;
+	border-radius: 3px;
+	background: linear-gradient(
+		to right,
+		var(--sed-line) 0 var(--lo),
+		var(--sed-purple) var(--lo) var(--hi),
+		var(--sed-line) var(--hi) 100%
+	);
+	transform: translateY(-50%);
+}
+
+.range__input {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	margin: 0;
+	background: transparent;
+	pointer-events: none;
+	appearance: none;
+}
+
+.range__input::-webkit-slider-runnable-track {
+	height: 100%;
+	background: transparent;
+}
+
+.range__input::-moz-range-track {
+	height: 100%;
+	background: transparent;
+}
+
+.range__input::-webkit-slider-thumb {
+	width: var(--thumb);
+	height: var(--thumb);
+	margin-top: calc((var(--height) - var(--thumb)) / 2);
+	border: 2px solid #fff;
+	border-radius: 50%;
+	background: var(--sed-purple);
+	box-shadow: 0 1px 4px rgba(45, 27, 105, 0.45);
+	cursor: grab;
+	pointer-events: auto;
+	appearance: none;
+}
+
+.range__input::-moz-range-thumb {
+	box-sizing: border-box;
+	width: var(--thumb);
+	height: var(--thumb);
+	border: 2px solid #fff;
+	border-radius: 50%;
+	background: var(--sed-purple);
+	box-shadow: 0 1px 4px rgba(45, 27, 105, 0.45);
+	cursor: grab;
+	pointer-events: auto;
+}
+
+.range__input:focus-visible {
+	outline: none;
+}
+
+.range__input:focus-visible::-webkit-slider-thumb {
+	outline: 3px solid var(--sed-gold);
+	outline-offset: 2px;
+}
+
+.range__input:focus-visible::-moz-range-thumb {
+	outline: 3px solid var(--sed-gold);
+	outline-offset: 2px;
+}
+
+/*
+ * Live values without JS. Each thumb is the subject of a view timeline whose
+ * scroller is .range, so its position along the bar drives a number between
+ * --min and --max. Counters turn that number into text. Without support the
+ * labels keep the server-rendered values from the last applied filter.
+ */
+@property --a {
+	syntax: "<integer>";
+	inherits: true;
+	initial-value: 0;
+}
+
+@property --b {
+	syntax: "<integer>";
+	inherits: true;
+	initial-value: 0;
+}
+
+/* View progress runs right-to-left, hence max → min. */
+@keyframes range-a {
+	from {
+		--a: var(--max);
+	}
+
+	to {
+		--a: var(--min);
+	}
+}
+
+@keyframes range-b {
+	from {
+		--b: var(--max);
+	}
+
+	to {
+		--b: var(--min);
+	}
+}
+
+@supports (animation-timeline: --t) and (timeline-scope: --t) {
+	.range-field {
+		timeline-scope: --thumb-a, --thumb-b;
+		animation:
+			range-a linear both,
+			range-b linear both;
+		animation-timeline: --thumb-a, --thumb-b;
+		animation-range: contain 0% contain 100%;
+		counter-reset: lo min(var(--a), var(--b)) hi max(var(--a), var(--b));
+		--from: calc(
+			(min(var(--a), var(--b)) - var(--min)) /
+			(var(--max) - var(--min)) *
+			100%
+		);
+		--to: calc(
+			(max(var(--a), var(--b)) - var(--min)) /
+			(var(--max) - var(--min)) *
+			100%
+		);
+	}
+
+	.range__input--a::-webkit-slider-thumb {
+		view-timeline: --thumb-a inline;
+	}
+
+	.range__input--b::-webkit-slider-thumb {
+		view-timeline: --thumb-b inline;
+	}
+
+	.range-field .range__track {
+		background: linear-gradient(
+			to right,
+			var(--sed-line) 0 var(--from),
+			var(--sed-purple) var(--from) var(--to),
+			var(--sed-line) var(--to) 100%
+		);
+	}
+
+	.range__value {
+		font-size: 0;
+	}
+
+	.range__value::after {
+		content: "£" counter(lo);
+		font-size: 0.95rem;
+	}
+
+	.range__value--hi::after {
+		content: "£" counter(hi);
+	}
+}
+
+/* Category tags */
+.tags {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+}
+
+.tag {
+	position: relative;
+	cursor: pointer;
+}
+
+.tag input {
+	position: absolute;
+	opacity: 0;
+	inset: 0;
+	margin: 0;
+	cursor: pointer;
+}
+
+.tag span {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	padding: 0.3rem 0.75rem;
+	border: 1px solid var(--sed-line);
+	border-radius: 999px;
+	background: #fff;
+	font-size: 0.82rem;
+	font-weight: 600;
+	transition:
+		background-color 0.15s,
+		border-color 0.15s;
+}
+
+.tag small {
+	color: var(--sed-muted);
+	font-size: 0.72rem;
+	font-weight: 600;
+}
+
+.tag:hover span {
+	border-color: var(--sed-purple);
+	background: var(--sed-purple-soft);
+}
+
+.tag input:checked + span {
+	border-color: var(--sed-purple);
+	background: var(--sed-purple);
+	color: #fff;
+}
+
+.tag input:checked + span small {
+	color: rgba(255, 255, 255, 0.8);
+}
+
+.tag input:focus-visible + span {
+	outline: 3px solid var(--sed-gold);
+	outline-offset: 2px;
+}
+
+/* Active filter tags */
+.site .active-filters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	margin: 0 0 0.9rem;
+}
+
+.active-filter {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	padding: 0.3rem 0.5rem 0.3rem 0.8rem;
+	border-radius: 999px;
+	background: var(--sed-purple-soft);
+	font-size: 0.82rem;
+	font-weight: 600;
+}
+
+.active-filter:hover {
+	background: var(--sed-purple);
+	color: #fff;
+}
+
+.active-filter .icon {
+	width: 14px;
+	height: 14px;
+}
+
+/* Product grid */
+.product-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+	gap: 0.9rem;
+}
+
+.product-card {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	border-radius: 12px;
+	background: #fff;
+	box-shadow: 0 1px 3px rgba(45, 27, 105, 0.12);
+	transition:
+		transform 0.15s,
+		box-shadow 0.15s;
+}
+
+.product-card:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 6px 16px rgba(45, 27, 105, 0.2);
+}
+
+.product-card__media {
+	position: relative;
+	display: grid;
+	place-items: center;
+	aspect-ratio: 4 / 3;
+	background: linear-gradient(160deg, #f8eee2, #f1e4d3);
+}
+
+.product-card__media img {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	padding: 0.75rem;
+	object-fit: contain;
+	mix-blend-mode: multiply;
+}
+
+.product-card__placeholder {
+	color: var(--sed-purple);
+	opacity: 0.35;
+}
+
+.product-card__placeholder .icon {
+	width: 3rem;
+	height: 3rem;
+}
+
+.product-card__body {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 0.3rem;
+	padding: 0.85rem 1rem 1rem;
+}
+
+.product-card__category {
+	margin: 0;
+	color: var(--sed-muted);
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.product-card__title {
+	margin: 0;
+	font-size: 1rem;
+	font-weight: 700;
+	line-height: 1.3;
+}
+
+.product-card__title a:hover {
+	text-decoration: underline;
+}
+
+.product-card__description {
+	display: -webkit-box;
+	margin: 0;
+	overflow: hidden;
+	color: var(--sed-muted);
+	font-size: 0.82rem;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+}
+
+.product-card__footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+	margin-top: auto;
+	padding-top: 0.75rem;
+}
+
+.product-price {
+	margin: 0;
+	font-size: 1.1rem;
+	font-weight: 800;
+}
+
+.site .product-card__link {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	padding: 0.4rem 0.85rem;
+	border-radius: 999px;
+	background: var(--sed-purple);
+	color: #fff;
+	font-size: 0.8rem;
+	font-weight: 600;
+	white-space: nowrap;
+	transition: background-color 0.15s;
+}
+
+.site .product-card__link:hover {
+	background: var(--sed-purple-dark);
+}
+
+.site .product-card__link .icon {
+	width: 14px;
+	height: 14px;
+}
+
+/* Empty and error states */
+.notice {
+	grid-column: 1 / -1;
+	margin: 0;
+	padding: 2rem 1rem;
+	border-radius: 12px;
+	background: #fff;
+	box-shadow: 0 1px 3px rgba(45, 27, 105, 0.12);
+	color: var(--sed-muted);
+	text-align: center;
+}
+
+.notice--error {
+	border-left: 4px solid #b3261e;
+	color: #8a1c1c;
+	text-align: left;
+}
+
+@media (max-width: 860px) {
+	.catalogue__layout {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.filters {
+		position: static;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.tag span,
+	.filters__apply,
+	.product-card,
+	.product-card__link {
+		transition: none;
+	}
+}

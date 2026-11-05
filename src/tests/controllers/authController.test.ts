@@ -1,8 +1,8 @@
 import { readdirSync } from "node:fs";
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
-import { createApp } from "./app";
-import { loginResponse } from "./testHelpers";
+import { createApp } from "../../app";
+import { loginResponse } from "../testHelpers";
 
 const app = createApp();
 
@@ -274,5 +274,153 @@ describe("auth", () => {
 		expect(res.text).toContain("Too short");
 		expect(res.text).not.toContain('value="secret"');
 		expect(res.text).not.toContain("<script>");
+	});
+
+	it.each(["/login", "/register", "/forgot-password", "/reset-password"])(
+		"handles an unavailable backend for %s",
+		async (path) => {
+			const fetchApi = vi
+				.fn<typeof fetch>()
+				.mockRejectedValue(new Error("Connection refused"));
+			const res = await request(createApp({ fetch: fetchApi }))
+				.post(path)
+				.type("form")
+				.send({ password: "correct-horse", confirmPassword: "correct-horse" });
+			expect(res.status).toBe(503);
+			expect(res.text).toContain("temporarily unavailable");
+			expect(res.text).not.toContain("Connection refused");
+		},
+	);
+});
+
+describe("admin login return path", () => {
+	const jsonResponse = (body: unknown, status = 200) =>
+		new Response(JSON.stringify(body), { status });
+
+	it("keeps the requested admin page through the login form", async () => {
+		const form = await request(createApp()).get(
+			"/admin/login?reason=expired&returnTo=%2Fadmin%2Fusers%3Fq%3Dada%26page%3D2",
+		);
+
+		expect(form.text).toContain(
+			"Your session has expired. Please log in again.",
+		);
+		expect(form.text).toContain(
+			'<input type="hidden" name="returnTo" value="/admin/users?q=ada&amp;page=2">',
+		);
+	});
+
+	it("explains forbidden access on the admin login", async () => {
+		const form = await request(createApp()).get(
+			"/admin/login?reason=forbidden",
+		);
+
+		expect(form.text).toContain(
+			"You need a staff account to access that page.",
+		);
+		expect(form.text).not.toContain("Your session has expired.");
+	});
+
+	it("shows no reason message for an unknown reason", async () => {
+		const form = await request(createApp()).get(
+			"/admin/login?reason=%3Cscript%3E",
+		);
+
+		expect(form.text).not.toContain("Your session has expired.");
+		expect(form.text).not.toContain("You need a staff account");
+		expect(form.text).not.toContain("<script>");
+	});
+
+	it("drops unsafe return paths from the admin login form", async () => {
+		const form = await request(createApp()).get(
+			"/admin/login?returnTo=https%3A%2F%2Fevil.example",
+		);
+
+		expect(form.text).not.toContain('name="returnTo"');
+	});
+
+	it("returns the admin to the requested page after logging in", async () => {
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValueOnce(loginResponse());
+		const res = await request(createApp({ fetch: fetchApi }))
+			.post("/admin/login")
+			.type("form")
+			.send({
+				email: "admin@example.com",
+				password: "correct-horse",
+				returnTo: "/admin/users?q=ada&page=2",
+			});
+
+		expect(res.status).toBe(303);
+		expect(res.headers.location).toBe("/admin/users?q=ada&page=2");
+		expect(JSON.parse(String(fetchApi.mock.calls[0]?.[1]?.body))).toEqual({
+			email: "admin@example.com",
+			password: "correct-horse",
+		});
+	});
+
+	it.each([
+		"https://evil.example",
+		"//evil.example",
+		"/admin/login",
+		"/products",
+	])("ignores the unsafe return path %s after logging in", async (returnTo) => {
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValueOnce(loginResponse());
+		const res = await request(createApp({ fetch: fetchApi }))
+			.post("/admin/login")
+			.type("form")
+			.send({
+				email: "admin@example.com",
+				password: "correct-horse",
+				returnTo,
+			});
+
+		expect(res.status).toBe(303);
+		expect(res.headers.location).toBe("/admin");
+	});
+
+	it("keeps the return path when an admin login fails", async () => {
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValueOnce(
+				jsonResponse({ error: "Invalid email or password" }, 401),
+			);
+		const res = await request(createApp({ fetch: fetchApi }))
+			.post("/admin/login")
+			.type("form")
+			.send({
+				email: "admin@example.com",
+				password: "wrong",
+				returnTo: "/admin/users/7",
+			});
+
+		expect(res.status).toBe(401);
+		expect(res.text).toContain(
+			'<input type="hidden" name="returnTo" value="/admin/users/7">',
+		);
+	});
+
+	it("leaves the customer login unchanged", async () => {
+		const form = await request(createApp()).get(
+			"/login?reason=expired&returnTo=%2Fadmin%2Fusers",
+		);
+		expect(form.text).not.toContain('name="returnTo"');
+		expect(form.text).not.toContain("Your session has expired.");
+
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValueOnce(loginResponse());
+		const res = await request(createApp({ fetch: fetchApi }))
+			.post("/login")
+			.type("form")
+			.send({
+				email: "ada@example.com",
+				password: "correct-horse",
+				returnTo: "/admin/users",
+			});
+		expect(res.headers.location).toBe("/products");
 	});
 });

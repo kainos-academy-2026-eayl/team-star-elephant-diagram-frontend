@@ -1,7 +1,7 @@
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
-import { createApp } from "./app";
-import { loginResponse } from "./testHelpers";
+import { createApp } from "../../app";
+import { loginResponse } from "../testHelpers";
 
 describe("basket", () => {
 	it("loads basket data and forwards browser credentials to the backend", async () => {
@@ -459,5 +459,17 @@ describe("basket", () => {
 			.get("/basket?basket=invalid")
 			.set("Cookie", "accessToken=access-one");
 		expect(invalid.text).toContain("Please enter a quantity between 1 and 99.");
+	});
+
+	it("handles an unavailable backend for /basket", async () => {
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockRejectedValue(new Error("Connection refused"));
+		const res = await request(createApp({ fetch: fetchApi }))
+			.get("/basket")
+			.set("Authorization", ["Bearer", "test-token"].join(" "));
+		expect(res.status).toBe(503);
+		expect(res.text).toContain("temporarily unavailable");
+		expect(res.text).not.toContain("Connection refused");
 	});
 });
