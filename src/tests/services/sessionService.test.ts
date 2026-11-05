@@ -1,6 +1,14 @@
+import type { Response as ExpressResponse, Request } from "express";
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
-import { createApp } from "./app";
+import { createApp } from "../../app";
+import { BackendApi, BackendApiError } from "../../backendApi";
+import {
+	CustomerSessionError,
+	type LoginResponse,
+	SessionExpiredError,
+	SessionService,
+} from "../../services/sessionService";
 
 const profile = {
 	user: {
@@ -435,5 +443,468 @@ describe("persistent authentication", () => {
 			.set("Cookie", "tracking=value");
 		expect(result.status).toBe(303);
 		expect(api).not.toHaveBeenCalled();
+	});
+});
+
+describe("SessionService", () => {
+	const bearer = (token: string) => ["Bearer", token].join(" ");
+	const token = (claims: Record<string, unknown>) =>
+		`header.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.sig`;
+	const refreshCookie =
+		"refreshToken=refresh-two; Domain=backend.local; Max-Age=604800; Path=/; HttpOnly; Secure; SameSite=Strict";
+	const refreshResponse = (accessToken = "access-two") =>
+		new Response(JSON.stringify({ accessToken, expiresIn: 900 }), {
+			headers: { "Set-Cookie": refreshCookie },
+		});
+	const fakeRequest = (headers: Record<string, string> = {}) =>
+		({
+			get: (name: string) => headers[name.toLowerCase()],
+		}) as unknown as Request;
+	const fakeResponse = () => {
+		const mocks = {
+			set: vi.fn(),
+			cookie: vi.fn(),
+			append: vi.fn(),
+			clearCookie: vi.fn(),
+		};
+		return { mocks, res: mocks as unknown as ExpressResponse };
+	};
+	const setup = () => {
+		const fetchMock = vi.fn<typeof fetch>();
+		const service = new SessionService(
+			new BackendApi("http://backend:4000", fetchMock),
+		);
+		return { fetchMock, service };
+	};
+	const sent = (
+		fetchMock: ReturnType<typeof vi.fn<typeof fetch>>,
+		index = 0,
+	) => {
+		const [url, init] = fetchMock.mock.calls[index] ?? [];
+		return {
+			url: String(url),
+			method: init?.method,
+			headers: init?.headers,
+			body:
+				init?.body === undefined ? undefined : JSON.parse(String(init.body)),
+		};
+	};
+	const cookieOptions = {
+		httpOnly: true,
+		secure: true,
+		sameSite: "strict",
+		path: "/",
+	};
+
+	describe("establish", () => {
+		it("writes the access cookie and the refresh cookie without its domain", () => {
+			const { service } = setup();
+			const { mocks, res } = fakeResponse();
+
+			service.establish(res, {
+				result: { accessToken: "access-one", expiresIn: 900 },
+				cookies: ["other=value; Path=/", refreshCookie],
+			});
+
+			expect(mocks.set).toHaveBeenCalledWith("Cache-Control", "no-store");
+			expect(mocks.cookie).toHaveBeenCalledExactlyOnceWith(
+				"accessToken",
+				"access-one",
+				{ ...cookieOptions, maxAge: 900_000 },
+			);
+			expect(mocks.append).toHaveBeenCalledExactlyOnceWith(
+				"Set-Cookie",
+				"refreshToken=refresh-two; Max-Age=604800; Path=/; HttpOnly; Secure; SameSite=Strict",
+			);
+		});
+
+		it.each([
+			[
+				"a non-string access token",
+				{ accessToken: 1, expiresIn: 900 },
+				[refreshCookie],
+			],
+			[
+				"an unexpected expiry",
+				{ accessToken: "a", expiresIn: 60 },
+				[refreshCookie],
+			],
+			["no refresh cookie", { accessToken: "a", expiresIn: 900 }, ["other=x"]],
+		])("rejects credentials with %s", (_label, result, cookies) => {
+			const { service } = setup();
+			const { mocks, res } = fakeResponse();
+
+			expect(() =>
+				service.establish(res, {
+					result: result as unknown as LoginResponse,
+					cookies,
+				}),
+			).toThrow("Backend returned incomplete session credentials");
+			expect(mocks.cookie).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("request", () => {
+		it("forwards an Authorization header with the body, method and headers", async () => {
+			const { fetchMock, service } = setup();
+			const { mocks, res } = fakeResponse();
+			fetchMock.mockResolvedValueOnce(response({ ok: true }));
+
+			const result = await service.request(
+				"/admin/orders/1/status",
+				fakeRequest({ authorization: bearer("header-token") }),
+				res,
+				{ "X-Trace": "1" },
+				{ status: "SHIPPED" },
+				"PUT",
+			);
+
+			expect(result).toEqual({ ok: true });
+			expect(sent(fetchMock)).toEqual({
+				url: "http://backend:4000/admin/orders/1/status",
+				method: "PUT",
+				headers: {
+					"Content-Type": "application/json",
+					"X-Trace": "1",
+					Authorization: bearer("header-token"),
+				},
+				body: { status: "SHIPPED" },
+			});
+			expect(mocks.set).toHaveBeenCalledWith("Cache-Control", "no-store");
+			expect(mocks.cookie).not.toHaveBeenCalled();
+			expect(mocks.clearCookie).not.toHaveBeenCalled();
+		});
+
+		it("turns the access-token cookie into a bearer header", async () => {
+			const { fetchMock, service } = setup();
+			fetchMock.mockResolvedValueOnce(response(profile));
+
+			await service.request(
+				"/profile",
+				fakeRequest({ cookie: "theme=dark; accessToken=cookie-token" }),
+				fakeResponse().res,
+			);
+
+			expect(sent(fetchMock)).toMatchObject({
+				method: "GET",
+				headers: { Authorization: bearer("cookie-token") },
+			});
+		});
+
+		it.each([
+			["no cookies", {}],
+			["an unrelated cookie", { cookie: "tracking=value" }],
+			[
+				"duplicate refresh cookies",
+				{ cookie: "refreshToken=one; refreshToken=two" },
+			],
+			["a malformed refresh cookie", { cookie: "refreshToken=bad%20value" }],
+		])("asks the user to log in when there is %s", async (_label, headers) => {
+			const { fetchMock, service } = setup();
+
+			const error = await service
+				.request("/profile", fakeRequest(headers), fakeResponse().res)
+				.catch((caught: unknown) => caught);
+
+			expect(error).toBeInstanceOf(BackendApiError);
+			expect(error).toMatchObject({ status: 401, message: "Please log in." });
+			expect(fetchMock).not.toHaveBeenCalled();
+		});
+
+		it("does not refresh when the access token fails for another reason", async () => {
+			const { fetchMock, service } = setup();
+			fetchMock.mockResolvedValueOnce(response({ error: "Boom" }, 500));
+
+			await expect(
+				service.request(
+					"/profile",
+					fakeRequest({ cookie: "accessToken=a; refreshToken=r" }),
+					fakeResponse().res,
+				),
+			).rejects.toMatchObject({ status: 500, message: "Boom" });
+			expect(fetchMock).toHaveBeenCalledTimes(1);
+		});
+
+		it("refreshes an expired access token, retries and stores the new session", async () => {
+			const { fetchMock, service } = setup();
+			const { mocks, res } = fakeResponse();
+			fetchMock
+				.mockResolvedValueOnce(response({ error: "Expired" }, 401))
+				.mockResolvedValueOnce(refreshResponse())
+				.mockResolvedValueOnce(response(profile));
+
+			const result = await service.request(
+				"/profile",
+				fakeRequest({ cookie: "accessToken=old; refreshToken=refresh-one" }),
+				res,
+			);
+
+			expect(result).toEqual(profile);
+			expect(sent(fetchMock, 1)).toEqual({
+				url: "http://backend:4000/auth/refresh",
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Cookie: "refreshToken=refresh-one",
+				},
+				body: {},
+			});
+			expect(sent(fetchMock, 2)).toMatchObject({
+				url: "http://backend:4000/profile",
+				headers: { Authorization: bearer("access-two") },
+			});
+			expect(mocks.cookie).toHaveBeenCalledWith(
+				"accessToken",
+				"access-two",
+				expect.objectContaining({ maxAge: 900_000 }),
+			);
+			expect(mocks.append).toHaveBeenCalledWith(
+				"Set-Cookie",
+				expect.stringMatching(/^refreshToken=refresh-two;/),
+			);
+		});
+
+		it("shares one refresh between concurrent requests with the same token", async () => {
+			const { fetchMock, service } = setup();
+			fetchMock.mockImplementation(async (url) =>
+				String(url).endsWith("/auth/refresh")
+					? refreshResponse()
+					: response(profile),
+			);
+			const req = fakeRequest({ cookie: "refreshToken=shared" });
+
+			await Promise.all([
+				service.request("/profile", req, fakeResponse().res),
+				service.request("/profile", req, fakeResponse().res),
+			]);
+
+			const refreshCalls = fetchMock.mock.calls.filter(([url]) =>
+				String(url).endsWith("/auth/refresh"),
+			);
+			expect(refreshCalls).toHaveLength(1);
+			expect(fetchMock).toHaveBeenCalledTimes(3);
+		});
+
+		it("reports an expired session when the refresh token is rejected", async () => {
+			const { fetchMock, service } = setup();
+			const { mocks, res } = fakeResponse();
+			fetchMock.mockResolvedValueOnce(response({ error: "Invalid" }, 401));
+
+			const error = await service
+				.request("/profile", fakeRequest({ cookie: "refreshToken=r" }), res)
+				.catch((caught: unknown) => caught);
+
+			expect(error).toBeInstanceOf(SessionExpiredError);
+			expect(error).toMatchObject({
+				status: 401,
+				message: "Your session has expired.",
+			});
+			expect(mocks.clearCookie).toHaveBeenCalledWith(
+				"accessToken",
+				cookieOptions,
+			);
+			expect(mocks.clearCookie).toHaveBeenCalledWith(
+				"refreshToken",
+				cookieOptions,
+			);
+		});
+
+		it("propagates non-401 refresh failures without clearing cookies", async () => {
+			const { fetchMock, service } = setup();
+			const { mocks, res } = fakeResponse();
+			fetchMock.mockRejectedValueOnce(new TypeError("fetch failed"));
+
+			await expect(
+				service.request(
+					"/profile",
+					fakeRequest({ cookie: "refreshToken=r" }),
+					res,
+				),
+			).rejects.toThrow("fetch failed");
+			expect(mocks.clearCookie).not.toHaveBeenCalled();
+		});
+
+		it("clears the session when the retried request is still unauthorised", async () => {
+			const { fetchMock, service } = setup();
+			const { mocks, res } = fakeResponse();
+			fetchMock
+				.mockResolvedValueOnce(refreshResponse())
+				.mockResolvedValueOnce(response({ error: "Nope" }, 401));
+
+			await expect(
+				service.request(
+					"/profile",
+					fakeRequest({ cookie: "refreshToken=r" }),
+					res,
+				),
+			).rejects.toMatchObject({ status: 401, message: "Nope" });
+			expect(mocks.clearCookie).toHaveBeenCalledTimes(2);
+			expect(mocks.cookie).not.toHaveBeenCalled();
+		});
+
+		it("keeps the refreshed session when the retried request fails otherwise", async () => {
+			const { fetchMock, service } = setup();
+			const { mocks, res } = fakeResponse();
+			fetchMock
+				.mockResolvedValueOnce(refreshResponse())
+				.mockResolvedValueOnce(response({ error: "Missing" }, 404));
+
+			await expect(
+				service.request(
+					"/profile",
+					fakeRequest({ cookie: "refreshToken=r" }),
+					res,
+				),
+			).rejects.toMatchObject({ status: 404 });
+			expect(mocks.cookie).toHaveBeenCalledWith(
+				"accessToken",
+				"access-two",
+				expect.anything(),
+			);
+			expect(mocks.clearCookie).not.toHaveBeenCalled();
+		});
+
+		it("rejects refreshed customer sessions on staff resources", async () => {
+			const { fetchMock, service } = setup();
+			const { mocks, res } = fakeResponse();
+			fetchMock
+				.mockResolvedValueOnce(refreshResponse(token({ kind: "customer" })))
+				.mockResolvedValueOnce(response({ error: "Forbidden" }, 403));
+
+			const error = await service
+				.request("/admin", fakeRequest({ cookie: "refreshToken=r" }), res)
+				.catch((caught: unknown) => caught);
+
+			expect(error).toBeInstanceOf(CustomerSessionError);
+			expect(error).toMatchObject({ status: 403 });
+			expect(mocks.cookie).toHaveBeenCalledTimes(1);
+		});
+
+		it("passes through 403s for refreshed staff sessions", async () => {
+			const { fetchMock, service } = setup();
+			fetchMock
+				.mockResolvedValueOnce(refreshResponse(token({ kind: "staff" })))
+				.mockResolvedValueOnce(response({ error: "Forbidden" }, 403));
+
+			const error = await service
+				.request(
+					"/admin/users",
+					fakeRequest({ cookie: "refreshToken=r" }),
+					fakeResponse().res,
+				)
+				.catch((caught: unknown) => caught);
+
+			expect(error).not.toBeInstanceOf(CustomerSessionError);
+			expect(error).toMatchObject({ status: 403, message: "Forbidden" });
+		});
+	});
+
+	describe("accessTokenKind", () => {
+		it("reads the kind claim from a bearer header", () => {
+			const { service } = setup();
+
+			expect(
+				service.accessTokenKind(
+					fakeRequest({ authorization: bearer(token({ kind: "staff" })) }),
+				),
+			).toBe("staff");
+		});
+
+		it("falls back to the access-token cookie", () => {
+			const { service } = setup();
+
+			expect(
+				service.accessTokenKind(
+					fakeRequest({
+						authorization: "Basic abc",
+						cookie: `accessToken=${token({ kind: "customer" })}`,
+					}),
+				),
+			).toBe("customer");
+		});
+
+		it.each([
+			["no token", {}],
+			["a token without a payload", { authorization: bearer("opaque") }],
+			["a non-JSON payload", { authorization: bearer("a.bm90LWpzb24.c") }],
+			["a missing kind claim", { authorization: bearer(token({ sub: 1 })) }],
+			["a non-string kind", { authorization: bearer(token({ kind: 1 })) }],
+		])("returns undefined for %s", (_label, headers) => {
+			expect(setup().service.accessTokenKind(fakeRequest(headers))).toBe(
+				undefined,
+			);
+		});
+	});
+
+	describe("logout", () => {
+		it("revokes the refresh token and clears both cookies", async () => {
+			const { fetchMock, service } = setup();
+			const { mocks, res } = fakeResponse();
+			fetchMock.mockResolvedValueOnce(response({ ok: true }));
+
+			await service.logout(fakeRequest({ cookie: "refreshToken=r1" }), res);
+
+			expect(sent(fetchMock)).toEqual({
+				url: "http://backend:4000/auth/logout",
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Cookie: "refreshToken=r1",
+				},
+				body: {},
+			});
+			expect(mocks.clearCookie).toHaveBeenCalledWith(
+				"accessToken",
+				cookieOptions,
+			);
+			expect(mocks.clearCookie).toHaveBeenCalledWith(
+				"refreshToken",
+				cookieOptions,
+			);
+		});
+
+		it("still calls the backend without a refresh cookie", async () => {
+			const { fetchMock, service } = setup();
+			const { mocks, res } = fakeResponse();
+			fetchMock.mockResolvedValueOnce(response({ ok: true }));
+
+			await service.logout(fakeRequest(), res);
+
+			expect(sent(fetchMock).headers).toEqual({
+				"Content-Type": "application/json",
+			});
+			expect(mocks.clearCookie).toHaveBeenCalledTimes(2);
+		});
+
+		it("does not let an in-flight refresh re-establish a logged-out session", async () => {
+			const { fetchMock, service } = setup();
+			const { mocks, res } = fakeResponse();
+			let resolveRefresh: (value: Response) => void = () => {};
+			fetchMock.mockImplementation((url) => {
+				const path = new URL(String(url)).pathname;
+				if (path === "/auth/refresh")
+					return new Promise<Response>((resolve) => {
+						resolveRefresh = resolve;
+					});
+				return Promise.resolve(response(path === "/profile" ? profile : {}));
+			});
+			const req = fakeRequest({ cookie: "refreshToken=r1" });
+
+			const pending = service.request("/profile", req, res);
+			await service.logout(req, fakeResponse().res);
+			resolveRefresh(refreshResponse());
+
+			await expect(pending).resolves.toEqual(profile);
+			expect(mocks.cookie).not.toHaveBeenCalled();
+		});
+
+		it("propagates backend failures", async () => {
+			const { fetchMock, service } = setup();
+			fetchMock.mockRejectedValueOnce(new TypeError("fetch failed"));
+
+			await expect(
+				service.logout(fakeRequest(), fakeResponse().res),
+			).rejects.toThrow("fetch failed");
+		});
 	});
 });
