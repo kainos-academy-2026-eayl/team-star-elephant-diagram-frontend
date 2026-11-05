@@ -504,36 +504,6 @@ body:has(.admin-menu[open]) {
 	font-weight: 700;
 }
 
-/* Quick action chips */
-.admin-chips {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0.5rem;
-}
-
-.admin-chip {
-	padding: 0.45rem 0.9rem;
-	border: 1px dashed var(--sed-line);
-	border-radius: 999px;
-	background: #fff;
-	color: var(--sed-muted);
-	font-size: 0.85rem;
-	cursor: not-allowed;
-}
-
-.admin-chip--link {
-	border: 1px solid var(--sed-purple);
-	background: var(--sed-purple);
-	color: #fff;
-	font-weight: 700;
-	text-decoration: none;
-	cursor: pointer;
-}
-
-.admin-chip--link:hover {
-	background: var(--sed-purple-dark);
-}
-
 /* Summary stats: a 12-column tile grid like the home page. */
 .admin-stats {
 	display: grid;

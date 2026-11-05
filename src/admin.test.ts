@@ -282,11 +282,11 @@ describe("admin", () => {
 
 		expect(res.status).toBe(200);
 		expect(res.text).toContain('<a href="/admin/users">Users</a>');
-		expect(res.text).not.toContain('<a href="/admin/orders">Orders</a>');
+		expect(res.text).toContain('<a href="/admin/orders">Orders</a>');
 		expect(res.text).not.toContain("Users (Unavailable)");
 	});
 
-	it("links quick actions the staff member can use and marks the rest unavailable", async () => {
+	it("removes all dashboard quick actions while keeping user navigation", async () => {
 		const dashboard = {
 			staff: { name: "Staff member" },
 			sections: [{ label: "Users" }],
@@ -294,6 +294,8 @@ describe("admin", () => {
 				{ label: "Suspend or reactivate customers" },
 				{ label: "Update order status" },
 				{ label: "Update finance records" },
+				{ label: "Permanently delete customers" },
+				{ label: "Add product" },
 			],
 			cards: [],
 			recentOrders: [],
@@ -307,27 +309,38 @@ describe("admin", () => {
 			.get("/admin")
 			.set("Cookie", "accessToken=staff-access");
 
-		expect(res.text).toContain(
-			'<a href="/admin/users" class="admin-chip admin-chip--link">Manage users</a>',
-		);
-		expect(res.text).not.toContain(
-			"Suspend or reactivate customers (Unavailable)",
-		);
-		expect(res.text).toContain("Update order status (Unavailable)");
-		expect(res.text).not.toContain("Update finance records");
+		expect(res.text).toContain('<a href="/admin/users">Users</a>');
+		expect(res.text).not.toContain("Quick actions");
+		expect(res.text).not.toContain("admin-chip");
+		expect(res.text).not.toContain("Manage users");
+		for (const action of dashboard.quickActions) {
+			expect(res.text).not.toContain(action.label);
+		}
 	});
 
 	it.each([
-		["Suspend or reactivate customers"],
-		["Permanently delete customers"],
-		["Suspend or reactivate customers", "Permanently delete customers"],
+		{
+			role: "SuperAdmin",
+			sections: ["Users", "Baskets", "Orders", "Inventory", "Finance"],
+		},
+		{
+			role: "Admin",
+			sections: ["Users", "Baskets", "Orders", "Inventory", "Finance"],
+		},
+		{
+			role: "CustomerService",
+			sections: ["Users", "Baskets", "Orders", "Inventory"],
+		},
+		{ role: "InventoryManager", sections: ["Orders", "Inventory"] },
+		{ role: "FinanceManager", sections: [] },
 	])(
-		"shows one Manage users action for granted actions %j",
-		async (...labels) => {
+		"shows only granted operational navigation for $role",
+		async ({ role, sections }) => {
 			const dashboard = {
 				staff: { name: "Staff member" },
-				sections: [{ label: "Users" }],
-				quickActions: labels.map((label) => ({ label })),
+				role,
+				sections: sections.map((label) => ({ label })),
+				quickActions: [],
 				cards: [],
 				recentOrders: [],
 				newUsers: [],
@@ -341,10 +354,30 @@ describe("admin", () => {
 				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.status).toBe(200);
-			expect(res.text.match(/>Manage users<\/a>/g)).toHaveLength(1);
-			for (const label of labels) {
-				expect(res.text).not.toContain(label);
+			for (const label of ["Users", "Baskets", "Orders", "Inventory"]) {
+				const href = `href="/admin/${label.toLowerCase()}"`;
+				if (sections.includes(label)) {
+					expect(res.text).toContain(href);
+				} else {
+					expect(res.text).not.toContain(href);
+				}
 			}
+			expect(res.text).not.toContain('href="/admin/finance"');
+			expect(res.text).not.toContain("Quick actions");
+		},
+	);
+
+	it.each(["/admin/orders", "/admin/inventory"])(
+		"returns a real 404 for the unimplemented %s page",
+		async (path) => {
+			const fetchApi = vi.fn<typeof fetch>();
+			const res = await request(createApp({ fetch: fetchApi }))
+				.get(path)
+				.set("Cookie", "accessToken=staff-access");
+
+			expect(res.status).toBe(404);
+			expect(res.headers.location).toBeUndefined();
+			expect(fetchApi).not.toHaveBeenCalled();
 		},
 	);
 
@@ -368,7 +401,7 @@ describe("admin", () => {
 		expect(res.text).toContain('<a href="/admin" class="active"');
 		expect(res.text).toContain('<a href="/admin/baskets">Baskets</a>');
 		expect(res.text).not.toContain('<a href="/admin/users">Users</a>');
-		expect(res.text).not.toContain('<a href="/admin/orders">Orders</a>');
+		expect(res.text).toContain('<a href="/admin/orders">Orders</a>');
 		expect(res.text).not.toContain("Baskets (Unavailable)");
 	});
 

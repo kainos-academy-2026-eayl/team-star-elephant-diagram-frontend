@@ -107,6 +107,13 @@ customer/inventory panels. Other roles retain
 their existing dashboard. The backend denies finance staff access to other
 admin resources.
 
+Staff sections are accessed through the top navigation and its matching menu,
+not dashboard quick-action buttons. Users, Baskets, Orders and Inventory links
+only appear when granted by the backend's role-scoped sections. Users and Baskets
+open their existing pages; Orders (`/admin/orders`) and Inventory
+(`/admin/inventory`) currently return the standard 404 until those pages exist.
+Finance remains dashboard-only.
+
 Dashboard summary cards include a green role badge under "Your access"; its
 glow is disabled for reduced-motion preferences. Staff whose backend-granted
 sections include Inventory also see "Low in stock", showing up to five stock

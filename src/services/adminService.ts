@@ -26,7 +26,7 @@ export interface AdminDashboard {
 	role?: string;
 	dashboard?: string;
 	sections: Array<{ label: string }>;
-	quickActions: Array<{ label: string; href?: string }>;
+	quickActions: Array<{ label: string }>;
 	cards: Array<{ label: string; value: string }>;
 	recentOrders: Array<{
 		id: number | string;
@@ -93,9 +93,11 @@ const DASHBOARD_NAV_ITEM: AdminNavItem = {
 	href: "/admin",
 };
 
-const IMPLEMENTED_SECTION_HREFS = new Map([
+const SECTION_HREFS = new Map([
 	["users", "/admin/users"],
 	["baskets", "/admin/baskets"],
+	["orders", "/admin/orders"],
+	["inventory", "/admin/inventory"],
 ]);
 
 const toNavKey = (label: string): string =>
@@ -111,36 +113,12 @@ const toNav = (sections: AdminDashboard["sections"]): AdminNavItem[] => [
 		.filter((section) => typeof section?.label === "string")
 		.flatMap((section) => {
 			const key = toNavKey(section.label);
-			const href = IMPLEMENTED_SECTION_HREFS.get(key);
+			const href = SECTION_HREFS.get(key);
 			return key && key !== DASHBOARD_NAV_ITEM.key && href
 				? [{ key, label: section.label, href }]
 				: [];
 		}),
 ];
-
-// Quick actions only link out when the frontend has a page that performs them.
-const toQuickActions = (
-	actions: unknown,
-	access: AdminAccess,
-): AdminDashboard["quickActions"] => {
-	const otherActions = (Array.isArray(actions) ? actions : [])
-		.filter(
-			(action): action is { label: string } =>
-				typeof action?.label === "string" &&
-				!STAFF_MANAGEMENT_LABELS.has(action.label) &&
-				action.label !== "Update finance records" &&
-				action.label !== USER_STATUS_QUICK_ACTION &&
-				action.label !== USER_DELETE_QUICK_ACTION,
-		)
-		.map((action) => ({ label: action.label }));
-	const usersHref = access.nav.find((item) => item.key === "users")?.href;
-	return [
-		...(usersHref && (access.canChangeUserStatus || access.canDeleteUsers)
-			? [{ label: "Manage users", href: usersHref }]
-			: []),
-		...otherActions,
-	];
-};
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const MAX_SEARCH_LENGTH = 100;
@@ -232,9 +210,7 @@ export class AdminService {
 			sections: (dashboard.sections ?? []).filter(
 				(section) => !STAFF_MANAGEMENT_LABELS.has(section.label),
 			),
-			quickActions: access.isFinanceDashboard
-				? []
-				: toQuickActions(dashboard.quickActions, access),
+			quickActions: [],
 		};
 	}
 

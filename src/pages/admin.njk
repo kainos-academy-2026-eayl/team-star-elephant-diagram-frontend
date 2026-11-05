@@ -40,18 +40,6 @@
         </div>
         {% else %}
 
-        {% if not isFinanceDashboard and quickActions | length %}
-        <section class="admin-chips" aria-label="Quick actions">
-            {% for action in quickActions %}
-            {% if action.href %}
-            <a href="{{ action.href }}" class="admin-chip admin-chip--link">{{ action.label }}</a>
-            {% else %}
-            <span class="admin-chip" aria-disabled="true">{{ action.label }} (Unavailable)</span>
-            {% endif %}
-            {% endfor %}
-        </section>
-        {% endif %}
-
         {% if isFinanceDashboard %}
         <p class="admin-hero__lead">All-time figures. Revenue is the total value of non-cancelled orders, not confirmed payments. Order counts include all orders; pending orders are awaiting processing.</p>
         {% endif %}
