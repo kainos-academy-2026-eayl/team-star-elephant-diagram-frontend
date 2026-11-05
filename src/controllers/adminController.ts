@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { BackendApiError } from "../backendApi";
+import type { BasketAction } from "../models/adminBasket";
 import type { AdminUserStatusAction } from "../models/adminUser";
 import type { AdminContext, AdminService } from "../services/adminService";
 import {
@@ -13,6 +14,36 @@ const isAuthError = (error: unknown): error is BackendApiError =>
 
 const isNotFound = (error: unknown): boolean =>
 	error instanceof BackendApiError && error.status === 404;
+
+const BASKET_NOTICES: Record<string, string> = {
+	created: "Basket created.",
+	exists: "This customer already has a basket.",
+	added: "Product added to the basket.",
+	updated: "Quantity updated.",
+	removed: "Product removed from the basket.",
+	cleared: "Basket emptied.",
+	deleted: "Basket deleted.",
+};
+
+const BASKET_ACTION_PERMISSION = {
+	add: "update",
+	update: "update",
+	remove: "update",
+	clear: "update",
+	delete: "delete",
+} as const satisfies Record<BasketAction, "update" | "delete">;
+
+const BASKET_ACTION_NOTICE: Record<Exclude<BasketAction, "delete">, string> = {
+	add: "added",
+	update: "updated",
+	remove: "removed",
+	clear: "cleared",
+};
+
+const noticeFrom = (value: unknown): string | undefined =>
+	typeof value === "string" ? BASKET_NOTICES[value] : undefined;
+
+const MAX_EMAIL_LENGTH = 255;
 
 const ADMIN_LOGIN_PATH = "/admin/login";
 const CUSTOMER_HOME_PATH = "/products";
@@ -172,7 +203,12 @@ export class AdminController {
 			this.adminService.getBaskets(req, res, search),
 		);
 		if (result.status === "fulfilled") {
-			res.render("admin-baskets", { ...access, search, baskets: result.value });
+			res.render("admin-baskets", {
+				...access,
+				search,
+				baskets: result.value,
+				notice: noticeFrom(req.query.notice),
+			});
 			return;
 		}
 		const error: unknown = result.reason;
@@ -205,8 +241,9 @@ export class AdminController {
 		if (result.status === "fulfilled") {
 			res.render("partials/admin-basket-details", {
 				...access,
-				basket: result.value,
+				...result.value,
 				basketId: id,
+				notice: noticeFrom(req.query.notice),
 			});
 			return;
 		}
@@ -223,6 +260,75 @@ export class AdminController {
 			basketId: id,
 			error: "Basket details are temporarily unavailable. Please try again.",
 		});
+	}
+
+	async postCreateBasket(req: Request, res: Response): Promise<void> {
+		if (!this.checkMutation(req, res)) return;
+		const rawEmail: unknown = req.body?.email;
+		const email =
+			typeof rawEmail === "string"
+				? rawEmail.trim().slice(0, MAX_EMAIL_LENGTH + 1)
+				: "";
+		let access = this.adminService.getRestrictedAccess();
+		try {
+			access = await this.adminService.getAccess(req, res);
+			if (!access.basketPermissions.create) {
+				this.renderForbidden(res, access);
+				return;
+			}
+			if (!email || email.length > MAX_EMAIL_LENGTH) {
+				throw new BackendApiError(400, "Enter the customer's email address.");
+			}
+			const basketId = await this.adminService.createBasket(req, res, email);
+			res.redirect(
+				303,
+				`${this.adminService.getBasketDetailsHref(basketId)}?notice=created`,
+			);
+		} catch (error) {
+			if (this.handleAuthError(error, req, res, access, "/admin/baskets")) {
+				return;
+			}
+			if (error instanceof BackendApiError && error.status === 409) {
+				const params = new URLSearchParams({ q: email, notice: "exists" });
+				res.redirect(303, `/admin/baskets?${params}`);
+				return;
+			}
+			const rejected =
+				error instanceof BackendApiError && [400, 404].includes(error.status);
+			if (!rejected) console.error("Admin basket creation failed", error);
+			const baskets = await this.adminService
+				.getBaskets(req, res)
+				.catch(() => []);
+			res.status(rejected ? error.status : 503).render("admin-baskets", {
+				...access,
+				search: "",
+				baskets,
+				createEmail: email,
+				createError: rejected
+					? error.message
+					: "The basket could not be created. Please try again.",
+			});
+		}
+	}
+
+	async postAddBasketItem(req: Request, res: Response): Promise<void> {
+		await this.performBasketAction("add", req, res);
+	}
+
+	async postUpdateBasketItem(req: Request, res: Response): Promise<void> {
+		await this.performBasketAction("update", req, res);
+	}
+
+	async postRemoveBasketItem(req: Request, res: Response): Promise<void> {
+		await this.performBasketAction("remove", req, res);
+	}
+
+	async postClearBasket(req: Request, res: Response): Promise<void> {
+		await this.performBasketAction("clear", req, res);
+	}
+
+	async postDeleteBasket(req: Request, res: Response): Promise<void> {
+		await this.performBasketAction("delete", req, res);
 	}
 
 	async getOrders(req: Request, res: Response): Promise<void> {
@@ -423,6 +529,140 @@ export class AdminController {
 		}
 	}
 
+	// Shared guard for state-changing basket requests; returns false once a response has been sent.
+	private checkMutation(req: Request, res: Response): boolean {
+		if (
+			!this.adminService.isSameOrigin(
+				req.get("origin"),
+				req.get("host"),
+				req.protocol,
+			)
+		) {
+			res.sendStatus(403);
+			return false;
+		}
+		return !this.redirectCustomer(req, res);
+	}
+
+	private async performBasketAction(
+		action: BasketAction,
+		req: Request,
+		res: Response,
+	): Promise<void> {
+		if (!this.checkMutation(req, res)) return;
+		const id = String(req.params.id ?? "");
+		if (!this.adminService.isValidId(id)) {
+			this.renderBasketNotFound(res);
+			return;
+		}
+		const detailsPath = this.adminService.getBasketDetailsHref(id);
+		let access = this.adminService.getRestrictedAccess();
+		try {
+			access = await this.adminService.getAccess(req, res);
+			if (!access.basketPermissions[BASKET_ACTION_PERMISSION[action]]) {
+				this.renderForbidden(res, access);
+				return;
+			}
+			const productId = this.adminService.parsePositiveInt(
+				action === "add" ? req.body?.productId : req.params.productId,
+			);
+			const quantity = this.adminService.parsePositiveInt(req.body?.quantity);
+			if (["add", "update", "remove"].includes(action) && !productId) {
+				throw new BackendApiError(400, "Choose a product.");
+			}
+			if ((action === "add" || action === "update") && !quantity) {
+				throw new BackendApiError(400, "Enter a quantity of at least 1.");
+			}
+			if (
+				(action === "clear" || action === "delete") &&
+				req.body?.confirm !== "yes"
+			) {
+				throw new BackendApiError(
+					400,
+					action === "clear"
+						? "Confirm before emptying this basket."
+						: "Confirm before deleting this basket.",
+				);
+			}
+			switch (action) {
+				case "add":
+					await this.adminService.addBasketItem(
+						req,
+						res,
+						id,
+						productId as number,
+						quantity as number,
+					);
+					break;
+				case "update":
+					await this.adminService.updateBasketItem(
+						req,
+						res,
+						id,
+						productId as number,
+						quantity as number,
+					);
+					break;
+				case "remove":
+					await this.adminService.removeBasketItem(
+						req,
+						res,
+						id,
+						productId as number,
+					);
+					break;
+				case "clear":
+					await this.adminService.clearBasket(req, res, id);
+					break;
+				case "delete":
+					await this.adminService.deleteBasket(req, res, id);
+					res.redirect(303, "/admin/baskets?notice=deleted");
+					return;
+			}
+			res.redirect(
+				303,
+				`${detailsPath}?notice=${BASKET_ACTION_NOTICE[action]}`,
+			);
+		} catch (error) {
+			if (this.handleAuthError(error, req, res, access, detailsPath)) {
+				return;
+			}
+			if (
+				error instanceof BackendApiError &&
+				error.status === 404 &&
+				error.message === "Basket not found"
+			) {
+				this.renderBasketNotFound(res, access);
+				return;
+			}
+			// Validation, stock and missing-item errors are shown on the basket so the admin can correct them.
+			const rejected =
+				error instanceof BackendApiError &&
+				[400, 404, 409].includes(error.status);
+			if (!rejected) console.error(`Admin basket ${action} failed`, error);
+			const page = await this.adminService
+				.getBasketById(req, res, id)
+				.catch(() => undefined);
+			res
+				.status(rejected ? error.status : 503)
+				.render("partials/admin-basket-details", {
+					...access,
+					...page,
+					basketId: id,
+					...(page
+						? {
+								actionError: rejected
+									? error.message
+									: "The basket could not be updated. Please try again.",
+							}
+						: {
+								error:
+									"Basket details are temporarily unavailable. Please try again.",
+							}),
+				});
+		}
+	}
+
 	// Customer sessions are sent back to the shop so they are never logged out or shown the staff login.
 	private redirectCustomer(req: Request, res: Response): boolean {
 		if (!this.adminService.isCustomerSession(req)) {
@@ -461,8 +701,9 @@ export class AdminController {
 		req: Request,
 		res: Response,
 		access: AdminContext,
+		returnTo?: string,
 	): boolean {
-		if (redirectToAdminLogin(error, req, res)) {
+		if (redirectToAdminLogin(error, req, res, returnTo)) {
 			return true;
 		}
 		if (isAuthError(error)) {

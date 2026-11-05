@@ -29,10 +29,16 @@
             <a href="/admin/baskets/{{ basketId | string | urlencode }}">Retry</a>
         </div>
         {% else %}
+        {% set basketHref = "/admin/baskets/" + (basket.basketId | string | urlencode) %}
+        {% set canEditBasket = basketPermissions and basketPermissions.update %}
+        {% set canDeleteBasket = basketPermissions and basketPermissions.delete %}
         <header class="admin-page-head">
             <p class="admin-page-head__eyebrow">Basket</p>
             <h1 class="admin-page-head__title">Basket #{{ basket.basketId }}</h1>
         </header>
+
+        {% if notice %}<div class="admin-alert admin-alert--success" role="status">{{ notice }}</div>{% endif %}
+        {% if actionError %}<div class="admin-alert admin-alert--error" role="alert"><span>{{ actionError }}</span></div>{% endif %}
 
         <div class="admin-grid admin-grid--two">
             <section class="admin-card" aria-labelledby="basket-information">
@@ -52,7 +58,7 @@
                     </div>
                     <div class="admin-details__row">
                         <dt>Status</dt>
-                        <dd><span class="admin-status admin-status--success">{{ basket.status }}</span></dd>
+                        <dd><span class="admin-status admin-status--{{ 'success' if basket.itemCount else 'warning' }}">{{ basket.status }}</span></dd>
                     </div>
                 </dl>
             </section>
@@ -62,7 +68,7 @@
                 <dl class="admin-details">
                     <div class="admin-details__row">
                         <dt>Name</dt>
-                        <dd>{{ basket.customer.name }}</dd>
+                        <dd>{% if basket.customer.id %}<a href="/admin/users/{{ basket.customer.id }}" class="admin-link">{{ basket.customer.name }}</a>{% else %}{{ basket.customer.name }}{% endif %}</dd>
                     </div>
                     <div class="admin-details__row">
                         <dt>Email</dt>
@@ -81,17 +87,51 @@
                         <tr>
                             <th scope="col">Product</th>
                             <th scope="col" class="admin-numeric">Quantity</th>
+                            <th scope="col" class="admin-numeric">Available stock</th>
                             <th scope="col" class="admin-numeric">Unit price</th>
                             <th scope="col" class="admin-numeric">Total price</th>
+                            {% if canEditBasket %}<th scope="col"><span class="visually-hidden">Actions</span></th>{% endif %}
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in basket.items %}
                         <tr>
                             <td>{{ item.productName }}</td>
-                            <td class="admin-numeric">{{ item.quantity }}</td>
+                            <td class="admin-numeric">
+                                {% if canEditBasket and item.productId and item.maxQuantity >= 1 %}
+                                <form action="{{ basketHref }}/items/{{ item.productId }}" method="post" class="admin-basket-qty">
+                                    <input type="hidden" name="{{ submissionField }}" value="{{ submissionToken() }}">
+                                    <label for="qty-{{ item.productId }}" class="visually-hidden">Quantity of {{ item.productName }}</label>
+                                    <input id="qty-{{ item.productId }}" name="quantity" type="number" inputmode="numeric" value="{{ item.quantity }}" min="1" max="{{ item.maxQuantity }}" step="1" required>
+                                    <button type="submit" class="admin-btn admin-btn--ghost admin-btn--small">Update<span class="visually-hidden"> {{ item.productName }}</span></button>
+                                </form>
+                                {% else %}
+                                {{ item.quantity }}
+                                {% endif %}
+                            </td>
+                            <td class="admin-numeric">
+                                {% if item.availableStock is defined %}
+                                {% if item.exceedsStock %}
+                                <span class="admin-status admin-status--danger">{{ item.availableStock }} &ndash; exceeds stock</span>
+                                {% elif item.availableStock == 0 %}
+                                <span class="admin-status admin-status--danger">Out of stock</span>
+                                {% else %}
+                                {{ item.availableStock }}
+                                {% endif %}
+                                {% else %}&ndash;{% endif %}
+                            </td>
                             <td class="admin-numeric">{{ item.unitPrice }}</td>
                             <td class="admin-numeric">{{ item.totalPrice }}</td>
+                            {% if canEditBasket %}
+                            <td class="admin-table__action">
+                                {% if item.productId %}
+                                <form action="{{ basketHref }}/items/{{ item.productId }}/remove" method="post">
+                                    <input type="hidden" name="{{ submissionField }}" value="{{ submissionToken() }}">
+                                    <button type="submit" class="admin-btn admin-btn--danger admin-btn--small">Remove<span class="visually-hidden"> {{ item.productName }}</span></button>
+                                </form>
+                                {% endif %}
+                            </td>
+                            {% endif %}
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -112,6 +152,66 @@
                 </div>
             </dl>
         </section>
+
+        {% if canEditBasket %}
+        <section class="admin-card" aria-labelledby="add-basket-item">
+            <h2 id="add-basket-item" class="admin-card__title">Add a product</h2>
+            {% if products and products | length %}
+            <p class="admin-card__note">Only products with available stock are listed. Quantities are limited to what is in stock (maximum 99 per product).</p>
+            <form action="{{ basketHref }}/items" method="post" class="admin-basket-add">
+                <input type="hidden" name="{{ submissionField }}" value="{{ submissionToken() }}">
+                <div class="admin-field">
+                    <label for="add-product">Product</label>
+                    <select id="add-product" name="productId" required>
+                        <option value="">Choose a product</option>
+                        {% for product in products %}
+                        <option value="{{ product.productId }}">{{ product.name }} &ndash; {{ product.unitPrice }} ({{ product.availableStock }} in stock)</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="admin-field">
+                    <label for="add-quantity">Quantity</label>
+                    <input id="add-quantity" name="quantity" type="number" inputmode="numeric" value="1" min="1" max="99" step="1" required>
+                </div>
+                <button type="submit" class="admin-btn admin-btn--primary">Add to basket</button>
+            </form>
+            {% else %}
+            <p class="admin-empty" role="status">No other products are currently in stock.</p>
+            {% endif %}
+        </section>
+        {% endif %}
+
+        {% if (canEditBasket and basket.items | length) or canDeleteBasket %}
+        <section class="admin-card" aria-labelledby="basket-management">
+            <h2 id="basket-management" class="admin-card__title">Manage basket</h2>
+            <div class="admin-card__actions">
+                {% if canEditBasket and basket.items | length %}
+                <button type="button" class="admin-btn admin-btn--ghost" command="show-modal" commandfor="clear-basket">Empty basket</button>
+                <dialog id="clear-basket" class="admin-confirm" aria-labelledby="clear-basket-title" closedby="any">
+                    <h2 id="clear-basket-title" class="admin-card__title">Empty basket #{{ basket.basketId }}</h2>
+                    <p>This removes every product from {{ basket.customer.name }}'s basket. The basket itself is kept.</p>
+                    <form method="post" action="{{ basketHref }}/clear" class="admin-card__actions">
+                        <input type="hidden" name="{{ submissionField }}" value="{{ submissionToken() }}">
+                        <button type="button" class="admin-btn admin-btn--ghost" command="close" commandfor="clear-basket" autofocus>Cancel</button>
+                        <button type="submit" class="admin-btn admin-btn--danger" name="confirm" value="yes">Confirm empty basket</button>
+                    </form>
+                </dialog>
+                {% endif %}
+                {% if canDeleteBasket %}
+                <button type="button" class="admin-btn admin-btn--danger" command="show-modal" commandfor="delete-basket">Delete basket</button>
+                <dialog id="delete-basket" class="admin-confirm" aria-labelledby="delete-basket-title" closedby="any">
+                    <h2 id="delete-basket-title" class="admin-card__title">Delete basket #{{ basket.basketId }}</h2>
+                    <p>This permanently deletes {{ basket.customer.name }}'s basket and its contents. This cannot be undone.</p>
+                    <form method="post" action="{{ basketHref }}/delete" class="admin-card__actions">
+                        <input type="hidden" name="{{ submissionField }}" value="{{ submissionToken() }}">
+                        <button type="button" class="admin-btn admin-btn--ghost" command="close" commandfor="delete-basket" autofocus>Cancel</button>
+                        <button type="submit" class="admin-btn admin-btn--danger" name="confirm" value="yes">Confirm deletion</button>
+                    </form>
+                </dialog>
+                {% endif %}
+            </div>
+        </section>
+        {% endif %}
         {% endif %}
     </main>
 </body>

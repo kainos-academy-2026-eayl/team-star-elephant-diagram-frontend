@@ -1344,3 +1344,46 @@ body:has(.admin-menu[open]) {
 		animation: none;
 	}
 }
+
+/* Admin basket management */
+.admin-basket-add {
+	display: grid;
+	grid-template-columns: minmax(0, 2fr) minmax(6rem, 8rem) auto;
+	gap: 0.75rem;
+	align-items: end;
+}
+
+.admin-basket-add .admin-field:only-of-type {
+	grid-column: span 2;
+}
+
+.admin-basket-qty {
+	display: inline-flex;
+	gap: 0.4rem;
+	align-items: center;
+	justify-content: flex-end;
+}
+
+.admin-basket-qty input {
+	box-sizing: border-box;
+	width: 4.5rem;
+	padding: 0.4rem;
+	border: 1px solid var(--sed-line);
+	border-radius: 8px;
+	font: inherit;
+	text-align: right;
+}
+
+.admin-basket-qty input:invalid {
+	border-color: var(--sed-danger);
+}
+
+@media (max-width: 40rem) {
+	.admin-basket-add {
+		grid-template-columns: 1fr;
+	}
+
+	.admin-basket-add .admin-field:only-of-type {
+		grid-column: auto;
+	}
+}

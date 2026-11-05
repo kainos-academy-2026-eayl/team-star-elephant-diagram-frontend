@@ -1,8 +1,9 @@
 import type { Request, Response } from "express";
 import type {
-	BasketDetails,
 	BasketDetailsResponse,
 	BasketListResponse,
+	BasketPage,
+	BasketPermissions,
 	BasketSummary,
 	BasketSummaryView,
 } from "../models/adminBasket";
@@ -40,6 +41,7 @@ import type { SessionService } from "./sessionService";
 
 export interface AdminDashboard {
 	inventoryPermissions?: InventoryPermissions;
+	basketPermissions?: BasketPermissions;
 	inventorySummary?: InventorySummary | null;
 	staff: { name: string };
 	role?: string;
@@ -80,6 +82,7 @@ export interface AdminNavItem {
 // What the logged-in role may see, derived only from the backend's role-scoped dashboard response.
 export interface AdminContext {
 	inventoryPermissions: InventoryPermissions;
+	basketPermissions: BasketPermissions;
 	staff: { name: string };
 	role: string;
 	roleLabel: string;
@@ -142,6 +145,8 @@ const toNav = (sections: AdminDashboard["sections"]): AdminNavItem[] => [
 ];
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+// Backend per-line basket limit; also enforced server-side together with available stock.
+const MAX_BASKET_QUANTITY = 99;
 const MAX_SEARCH_LENGTH = 100;
 
 const STATUS_UPDATES: Record<AdminUserStatusAction, AdminUserStatusUpdate> = {
@@ -314,6 +319,12 @@ export class AdminService {
 				update: dashboard.inventoryPermissions?.update === true,
 				delete: dashboard.inventoryPermissions?.delete === true,
 			},
+			basketPermissions: {
+				view: dashboard.basketPermissions?.view === true,
+				create: dashboard.basketPermissions?.create === true,
+				update: dashboard.basketPermissions?.update === true,
+				delete: dashboard.basketPermissions?.delete === true,
+			},
 			staff: { name: dashboard.staff?.name ?? "" },
 			role: dashboard.role ?? "",
 			roleLabel: ROLE_LABELS[dashboard.role ?? ""] ?? dashboard.role ?? "",
@@ -480,13 +491,127 @@ export class AdminService {
 		req: Request,
 		res: Response,
 		id: string,
-	): Promise<BasketDetails> {
-		const { basket } = await this.sessions.request<BasketDetailsResponse>(
+	): Promise<BasketPage> {
+		return this.toBasketPage(
+			await this.sessions.request<BasketDetailsResponse>(
+				basketPath(id),
+				req,
+				res,
+			),
+		);
+	}
+
+	getBasketDetailsHref(id: string): string {
+		return basketPath(id);
+	}
+
+	// Returns the new basket ID; a 409 from the backend carries the existing basket's ID.
+	async createBasket(
+		req: Request,
+		res: Response,
+		email: string,
+	): Promise<string> {
+		const { basketId } = await this.sessions.request<{ basketId: number }>(
+			"/admin/baskets",
+			req,
+			res,
+			{},
+			{ email },
+		);
+		return String(basketId);
+	}
+
+	async addBasketItem(
+		req: Request,
+		res: Response,
+		id: string,
+		productId: number,
+		quantity: number,
+	): Promise<void> {
+		await this.sessions.request(
+			`${basketPath(id)}/items`,
+			req,
+			res,
+			{},
+			{ productId, quantity },
+		);
+	}
+
+	async updateBasketItem(
+		req: Request,
+		res: Response,
+		id: string,
+		productId: number,
+		quantity: number,
+	): Promise<void> {
+		await this.sessions.request(
+			`${basketPath(id)}/items/${productId}`,
+			req,
+			res,
+			{},
+			{ quantity },
+			"PATCH",
+		);
+	}
+
+	async removeBasketItem(
+		req: Request,
+		res: Response,
+		id: string,
+		productId: number,
+	): Promise<void> {
+		await this.sessions.request(
+			`${basketPath(id)}/items/${productId}`,
+			req,
+			res,
+			{},
+			undefined,
+			"DELETE",
+		);
+	}
+
+	async clearBasket(req: Request, res: Response, id: string): Promise<void> {
+		await this.sessions.request(
+			`${basketPath(id)}/items`,
+			req,
+			res,
+			{},
+			undefined,
+			"DELETE",
+		);
+	}
+
+	async deleteBasket(req: Request, res: Response, id: string): Promise<void> {
+		await this.sessions.request(
 			basketPath(id),
 			req,
 			res,
+			{},
+			undefined,
+			"DELETE",
 		);
-		return basket;
+	}
+
+	// Positive whole numbers within the Postgres INTEGER range, or undefined.
+	parsePositiveInt(value: unknown): number | undefined {
+		const text = typeof value === "string" ? value.trim() : "";
+		if (!/^[1-9]\d{0,9}$/.test(text)) return undefined;
+		const number = Number(text);
+		return number <= 2_147_483_647 ? number : undefined;
+	}
+
+	private toBasketPage(response: BasketDetailsResponse): BasketPage {
+		const basket = response.basket;
+		return {
+			basket: {
+				...basket,
+				items: (basket.items ?? []).map((item) => ({
+					...item,
+					maxQuantity: item.maxQuantity ?? MAX_BASKET_QUANTITY,
+				})),
+			},
+			products: response.products ?? [],
+		};
 	}
 
 	getOrderDetailsHref(id: string): string {

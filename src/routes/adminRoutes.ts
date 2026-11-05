@@ -24,5 +24,23 @@ export function createAdminRoutes(adminController: AdminController): Router {
 	router.get("/admin/baskets/:id", (req, res) =>
 		adminController.getBasketDetails(req, res),
 	);
+	router.post("/admin/baskets", (req, res) =>
+		adminController.postCreateBasket(req, res),
+	);
+	router.post("/admin/baskets/:id/items", (req, res) =>
+		adminController.postAddBasketItem(req, res),
+	);
+	router.post("/admin/baskets/:id/items/:productId", (req, res) =>
+		adminController.postUpdateBasketItem(req, res),
+	);
+	router.post("/admin/baskets/:id/items/:productId/remove", (req, res) =>
+		adminController.postRemoveBasketItem(req, res),
+	);
+	router.post("/admin/baskets/:id/clear", (req, res) =>
+		adminController.postClearBasket(req, res),
+	);
+	router.post("/admin/baskets/:id/delete", (req, res) =>
+		adminController.postDeleteBasket(req, res),
+	);
 	return router;
 }
