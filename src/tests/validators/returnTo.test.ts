@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { safeAdminReturnTo } from "./returnTo";
+import { safeAdminReturnTo } from "../../validators/returnTo";
 
 describe("safeAdminReturnTo", () => {
 	it.each([
