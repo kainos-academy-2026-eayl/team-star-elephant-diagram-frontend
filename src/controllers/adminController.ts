@@ -199,6 +199,130 @@ export class AdminController {
 		}
 	}
 
+	async getOrders(req: Request, res: Response): Promise<void> {
+		if (this.redirectCustomer(req, res)) {
+			return;
+		}
+		const search = this.adminService.normaliseSearch(req.query.q);
+		const page = this.adminService.normalisePage(req.query.page);
+
+		try {
+			const orderList = await this.adminService.getOrders(req, res, {
+				search,
+				page,
+			});
+			res.render("admin-orders", { search, ...orderList });
+		} catch (error) {
+			if (redirectToAdminLogin(error, req, res)) {
+				return;
+			}
+			res.status(503).render("admin-orders", {
+				search,
+				orders: [],
+				error: "Orders are temporarily unavailable. Please try again.",
+			});
+		}
+	}
+
+	async getOrderDetails(req: Request, res: Response): Promise<void> {
+		if (this.redirectCustomer(req, res)) {
+			return;
+		}
+		const id = String(req.params.id ?? "");
+		if (!this.adminService.isValidId(id)) {
+			this.renderOrderNotFound(res);
+			return;
+		}
+
+		try {
+			const orderDetails = await this.adminService.getOrderById(req, res, id);
+			const updated = this.adminService.isOrderStatus(req.query.updated)
+				? this.adminService.formatOrderStatus(req.query.updated)
+				: undefined;
+			res.render("admin-order-details", {
+				...orderDetails,
+				updated,
+				statusError: this.adminService.parseOrderStatusError(
+					req.query.statusError,
+				),
+			});
+		} catch (error) {
+			if (redirectToAdminLogin(error, req, res)) {
+				return;
+			}
+			if (isNotFound(error)) {
+				this.renderOrderNotFound(res);
+				return;
+			}
+			res.status(503).render("admin-order-details", {
+				orderId: id,
+				error: "Order details are temporarily unavailable. Please try again.",
+			});
+		}
+	}
+
+	async postOrderStatus(req: Request, res: Response): Promise<void> {
+		if (
+			!this.adminService.isSameOrigin(
+				req.get("origin"),
+				req.get("host"),
+				req.protocol,
+			)
+		) {
+			res.sendStatus(403);
+			return;
+		}
+		if (this.redirectCustomer(req, res)) {
+			return;
+		}
+		const id = String(req.params.id ?? "");
+		if (!this.adminService.isValidId(id)) {
+			this.renderOrderNotFound(res);
+			return;
+		}
+
+		const detailsPath = this.adminService.getOrderDetailsHref(id);
+		const rawStatus: unknown = req.body?.status;
+		const status =
+			typeof rawStatus === "string" ? rawStatus.trim().toUpperCase() : "";
+		if (!this.adminService.isOrderStatus(status)) {
+			res.redirect(303, `${detailsPath}?statusError=invalid`);
+			return;
+		}
+
+		try {
+			const updated = await this.adminService.updateOrderStatus(
+				req,
+				res,
+				id,
+				status,
+			);
+			res.redirect(303, `${detailsPath}?updated=${updated}`);
+		} catch (error) {
+			// Staff without orders:update stay on the order with a message instead of being sent to login.
+			if (
+				!(error instanceof CustomerSessionError) &&
+				error instanceof BackendApiError &&
+				error.status === 403
+			) {
+				res.redirect(303, `${detailsPath}?statusError=forbidden`);
+				return;
+			}
+			if (redirectToAdminLogin(error, req, res, detailsPath)) {
+				return;
+			}
+			if (isNotFound(error)) {
+				this.renderOrderNotFound(res);
+				return;
+			}
+			const reason =
+				error instanceof BackendApiError && error.status === 400
+					? "invalid"
+					: "failed";
+			res.redirect(303, `${detailsPath}?statusError=${reason}`);
+		}
+	}
+
 	private async changeUserStatus(
 		action: AdminUserStatusAction,
 		req: Request,
@@ -266,5 +390,9 @@ export class AdminController {
 
 	private renderBasketNotFound(res: Response): void {
 		res.status(404).render("admin-basket-details", { notFound: true });
+	}
+
+	private renderOrderNotFound(res: Response): void {
+		res.status(404).render("admin-order-details", { notFound: true });
 	}
 }

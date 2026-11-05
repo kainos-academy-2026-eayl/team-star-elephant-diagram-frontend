@@ -1,6 +1,13 @@
 import type { Request, Response } from "express";
 import { BackendApiError } from "../backendApi";
+import {
+	buildCatalogueView,
+	CATALOGUE_TITLE,
+	parseFilters,
+} from "../catalogueFilters";
 import type { ProductService } from "../services/productService";
+import type { SessionService } from "../services/sessionService";
+import { getCartCount } from "./cartCount";
 
 const BASKET_MESSAGES: Record<string, { type: "error"; text: string }> = {
 	invalid: { type: "error", text: "Please choose a valid quantity." },
@@ -21,16 +28,22 @@ export const isValidProductId = (value: unknown): value is string =>
 	Number.isSafeInteger(Number(value));
 
 export class ProductController {
-	constructor(private readonly productService: ProductService) {}
+	constructor(
+		private readonly productService: ProductService,
+		private readonly sessions: SessionService,
+	) {}
 
 	async getProduct(
 		req: Request<{ productId: string }>,
 		res: Response,
 	): Promise<void> {
 		const { productId } = req.params;
+		// Started up front so the basket lookup overlaps the product request; it never rejects.
+		const cartCount = getCartCount(this.sessions, req, res);
 		if (!isValidProductId(productId)) {
 			res.status(400).render("product_expanded", {
 				error: "Invalid product ID.",
+				cartCount: await cartCount,
 			});
 			return;
 		}
@@ -45,48 +58,38 @@ export class ProductController {
 			res.render("product_expanded", {
 				product,
 				basketMessage: BASKET_MESSAGES[status],
+				cartCount: await cartCount,
 			});
 		} catch (error) {
 			if (error instanceof BackendApiError && error.status === 404) {
-				res.status(404).render("product_expanded");
+				res
+					.status(404)
+					.render("product_expanded", { cartCount: await cartCount });
 				return;
 			}
 			res.status(503).render("product_expanded", {
 				error: "Product is temporarily unavailable. Please try again.",
+				cartCount: await cartCount,
 			});
 		}
 	}
 
 	async getProducts(req: Request, res: Response): Promise<void> {
-		const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
-		const category =
-			typeof req.query.category === "string" ? req.query.category : "";
+		const filters = parseFilters(req.query);
+		// Started up front so the basket lookup overlaps the product request; it never rejects.
+		const cartCount = getCartCount(this.sessions, req, res);
 		try {
 			const products = await this.productService.getProducts();
-			const categories = [
-				...new Set(products.map((product) => product.category)),
-			].sort();
-			const filtered = products.filter(
-				(product) =>
-					(!category || product.category === category) &&
-					`${product.name} ${product.category} ${product.description}`
-						.toLowerCase()
-						.includes(query.toLowerCase()),
-			);
 			res.render("product_catalogue", {
-				products: filtered,
-				categories: categories.map((name) => ({
-					name,
-					query: encodeURIComponent(name),
-				})),
-				query,
-				category,
+				...buildCatalogueView(products, filters),
+				cartCount: await cartCount,
 			});
 		} catch {
 			res.status(503).render("product_catalogue", {
 				error: "Products are temporarily unavailable. Please try again.",
-				query,
-				category,
+				query: filters.query,
+				title: CATALOGUE_TITLE,
+				cartCount: await cartCount,
 			});
 		}
 	}

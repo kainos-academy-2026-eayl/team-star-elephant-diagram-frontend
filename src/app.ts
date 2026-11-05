@@ -25,6 +25,7 @@ import { PaymentGatewayService } from "./services/paymentGatewayService";
 import { ProductService } from "./services/productService";
 import { ProfileService } from "./services/profileService";
 import { SessionService } from "./services/sessionService";
+import { menuCategories } from "./siteMenu";
 
 export function createApp({
 	apiBaseUrl = process.env.API_BASE_URL ?? "http://localhost:3001",
@@ -47,9 +48,9 @@ export function createApp({
 		new BasketService(api),
 		sessions,
 	);
-	const pageController = new PageController();
+	const pageController = new PageController(sessions);
 	const productService = new ProductService(api);
-	const productController = new ProductController(productService);
+	const productController = new ProductController(productService, sessions);
 	const checkoutController = new CheckoutController(
 		new CheckoutService(),
 		sessions,
@@ -57,18 +58,21 @@ export function createApp({
 	const paymentGatewayController = new PaymentGatewayController(
 		new PaymentGatewayService(),
 		new BasketService(api),
+		sessions,
 	);
 	const profileController = new ProfileController(new ProfileService(sessions));
 
-	nunjucks.configure("src/pages", {
+	const templates = nunjucks.configure("src/pages", {
 		autoescape: true,
 		express: app,
 	});
+	templates.addGlobal("menuCategories", menuCategories);
 
 	app.set("view engine", "njk");
 
 	app.use(express.static("src/pages"));
 	app.use(express.static("src/styles"));
+	app.use(express.static("src/assets"));
 	app.use(express.json({ limit: "100kb" }));
 	app.use(express.urlencoded({ extended: false, limit: "100kb" }));
 

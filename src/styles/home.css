@@ -1,0 +1,271 @@
+/* Homepage-only styles. Shared base, header and menu live in site.css. */
+
+/* Carousel */
+.carousel {
+	position: relative;
+	height: clamp(150px, 30vw, 340px);
+	background: #262626;
+	box-shadow: 0 3px 6px rgba(0, 0, 0, 0.25);
+	overflow: hidden;
+}
+
+.carousel__track {
+	position: relative;
+	height: 100%;
+}
+
+/* Visually hidden but focusable, so keyboard users can arrow between slides. */
+.carousel__radio {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+/*
+ * Autoplay is a pure CSS cycle over three slides, 6s each. Picking a slide
+ * (dot, arrow or keyboard) checks a radio, which switches autoplay off.
+ */
+.carousel__slide {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	justify-content: center;
+	visibility: hidden;
+	animation: carousel-slide 18s step-end infinite;
+}
+
+.carousel__slide:nth-child(1) {
+	animation-delay: -18s;
+}
+
+.carousel__slide:nth-child(2) {
+	animation-delay: -12s;
+}
+
+.carousel__slide:nth-child(3) {
+	animation-delay: -6s;
+}
+
+@keyframes carousel-slide {
+	0% {
+		visibility: visible;
+	}
+
+	33.333% {
+		visibility: hidden;
+	}
+}
+
+.carousel__slide > a {
+	display: flex;
+	justify-content: center;
+	height: 100%;
+}
+
+.carousel__slide img {
+	height: 100%;
+	width: auto;
+	max-width: 100%;
+	object-fit: cover;
+}
+
+.carousel__arrow {
+	position: absolute;
+	top: 50%;
+	display: grid;
+	place-items: center;
+	width: 2.5rem;
+	height: 3rem;
+	transform: translateY(-50%);
+	cursor: pointer;
+}
+
+.carousel__arrow::before {
+	content: "";
+	display: block;
+	border: 0.5rem solid transparent;
+}
+
+.carousel__arrow--prev {
+	left: 0;
+}
+
+.carousel__arrow--prev::before {
+	border-right: 0.8rem solid #e6d3a0;
+	border-left: 0;
+}
+
+.carousel__arrow--next {
+	right: 0;
+}
+
+.carousel__arrow--next::before {
+	border-left: 0.8rem solid #e6d3a0;
+	border-right: 0;
+}
+
+.carousel__arrow:hover::before {
+	filter: brightness(1.2);
+}
+
+.carousel__dots {
+	position: absolute;
+	bottom: 0.4rem;
+	left: 50%;
+	display: flex;
+	gap: 0.35rem;
+	transform: translateX(-50%);
+}
+
+.carousel__dot {
+	width: 0.6rem;
+	height: 0.6rem;
+	border: 1px solid #fff;
+	border-radius: 50%;
+	background: rgba(255, 255, 255, 0.85);
+	cursor: pointer;
+	animation: carousel-dot 18s step-end infinite;
+}
+
+.carousel__dot:nth-child(1) {
+	animation-delay: -18s;
+}
+
+.carousel__dot:nth-child(2) {
+	animation-delay: -12s;
+}
+
+.carousel__dot:nth-child(3) {
+	animation-delay: -6s;
+}
+
+@keyframes carousel-dot {
+	0% {
+		background: #6a5acd;
+	}
+
+	33.333% {
+		background: rgba(255, 255, 255, 0.85);
+	}
+}
+
+/* Manual selection: stop autoplay and show the checked slide. */
+.carousel:has(.carousel__radio:checked) .carousel__slide,
+.carousel:has(.carousel__radio:checked) .carousel__dot {
+	animation: none;
+}
+
+.carousel:has(.carousel__radio:checked) .carousel__dot {
+	background: rgba(255, 255, 255, 0.85);
+}
+
+.carousel__radio:nth-of-type(1):checked
+	~ .carousel__track
+	.carousel__slide:nth-child(1),
+.carousel__radio:nth-of-type(2):checked
+	~ .carousel__track
+	.carousel__slide:nth-child(2),
+.carousel__radio:nth-of-type(3):checked
+	~ .carousel__track
+	.carousel__slide:nth-child(3) {
+	visibility: visible;
+}
+
+.carousel__radio:nth-of-type(1):checked
+	~ .carousel__dots
+	.carousel__dot:nth-child(1),
+.carousel__radio:nth-of-type(2):checked
+	~ .carousel__dots
+	.carousel__dot:nth-child(2),
+.carousel__radio:nth-of-type(3):checked
+	~ .carousel__dots
+	.carousel__dot:nth-child(3) {
+	background: #6a5acd;
+}
+
+.carousel__radio:nth-of-type(1):focus-visible
+	~ .carousel__dots
+	.carousel__dot:nth-child(1),
+.carousel__radio:nth-of-type(2):focus-visible
+	~ .carousel__dots
+	.carousel__dot:nth-child(2),
+.carousel__radio:nth-of-type(3):focus-visible
+	~ .carousel__dots
+	.carousel__dot:nth-child(3) {
+	outline: 3px solid var(--sed-gold);
+	outline-offset: 2px;
+}
+
+/* Tiles */
+.tiles {
+	display: grid;
+	grid-template-columns: repeat(12, 1fr);
+	gap: 0.6rem;
+	width: min(100% - 2rem, var(--content-width));
+	margin: 0.6rem auto 1.25rem;
+}
+
+.tile {
+	overflow: hidden;
+	border-radius: 10px;
+	background: #fff;
+	box-shadow: 0 1px 3px rgba(45, 27, 105, 0.12);
+	transition:
+		transform 0.15s,
+		box-shadow 0.15s;
+}
+
+.tile:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 6px 16px rgba(45, 27, 105, 0.2);
+}
+
+.tile img {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.tile--small {
+	grid-column: span 3;
+	aspect-ratio: 188 / 118;
+}
+
+.tile--large {
+	grid-column: span 6;
+	aspect-ratio: 377 / 201;
+}
+
+@media (max-width: 720px) {
+	.tile--small {
+		grid-column: span 6;
+	}
+
+	.tile--large {
+		grid-column: span 12;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.tile {
+		transition: none;
+	}
+
+	.carousel__slide,
+	.carousel__dot {
+		animation: none;
+	}
+
+	.carousel:not(:has(.carousel__radio:checked)) .carousel__slide:first-child {
+		visibility: visible;
+	}
+
+	.carousel:not(:has(.carousel__radio:checked)) .carousel__dot:first-child {
+		background: #6a5acd;
+	}
+}

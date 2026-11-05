@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orders | Admin | Shop</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+
+<body>
+    {% set activeNav = "orders" %}
+    {% include "partials/admin-nav.njk" %}
+
+    <div class="search-bar">
+        <form action="/admin/orders" method="get" class="search-form" role="search">
+            <label for="order-search" class="visually-hidden">Search orders by order ID, customer name or email</label>
+            <input type="search" id="order-search" name="q" maxlength="100" placeholder="Search by order ID, customer or email" value="{{ search }}">
+            <button type="submit">Search</button>
+        </form>
+    </div>
+
+    <main class="container">
+        <h1 class="section-heading">Orders</h1>
+
+        {% if error %}
+        <div class="error-message" role="alert">
+            {{ error }}
+            <a href="/admin/orders{% if search %}?q={{ search | urlencode }}{% endif %}">Retry</a>
+        </div>
+        {% else %}
+
+        <section class="order-card admin-users" aria-label="Orders">
+            {% if orders | length %}
+            <table class="order-items admin-users-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Order ID</th>
+                        <th scope="col">Customer</th>
+                        <th scope="col">Order date</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Total</th>
+                        <th scope="col"><span class="visually-hidden">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for order in orders %}
+                    <tr>
+                        <td>#{{ order.orderId }}</td>
+                        <td>
+                            {{ order.customer.name }}
+                            <br><small>{{ order.customer.email }}</small>
+                        </td>
+                        <td>{{ order.displayOrderDate }}</td>
+                        <td><span class="order-status{% if order.status == "CANCELLED" %} status-suspended{% endif %}">{{ order.statusLabel }}</span></td>
+                        <td>{{ order.displayTotal }}</td>
+                        <td><a href="{{ order.detailsHref }}" class="action-button admin-view-button">View details<span class="visually-hidden"> for order #{{ order.orderId }}</span></a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="order-empty admin-users-empty">
+                {% if search %}No orders match "{{ search }}".{% else %}No orders found.{% endif %}
+            </p>
+            {% endif %}
+        </section>
+
+        {% if pagination %}
+        <nav class="pagination" aria-label="Order list pages">
+            {% if pagination.previousHref %}<a href="{{ pagination.previousHref }}" class="action-button">Previous</a>{% endif %}
+            <span>Page {{ pagination.page }} of {{ pagination.totalPages }}</span>
+            {% if pagination.nextHref %}<a href="{{ pagination.nextHref }}" class="action-button">Next</a>{% endif %}
+        </nav>
+        {% endif %}
+
+        {% endif %}
+    </main>
+</body>
+
+</html>

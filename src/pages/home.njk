@@ -1,0 +1,51 @@
+{%- set currentNav = "home" -%}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sedshed | Home</title>
+    <link rel="stylesheet" href="/site.css">
+    <link rel="stylesheet" href="/home.css">
+</head>
+
+<body class="site">
+    {% include "partials/site-header.njk" %}
+
+    <main>
+        <section class="carousel" aria-roledescription="carousel" aria-label="Featured">
+            {% set count = slides | length %}
+            {% for slide in slides %}
+            <input type="radio" class="carousel__radio" name="slide" id="slide-{{ loop.index0 }}" aria-label="Show slide {{ loop.index }}">
+            {% endfor %}
+            <div class="carousel__track">
+                {% for slide in slides %}
+                <div class="carousel__slide">
+                    <a href="{{ slide.href }}"><img src="{{ slide.image }}" alt="{{ slide.label }}"></a>
+                    <label class="carousel__arrow carousel__arrow--prev" for="slide-{{ (loop.index0 - 1 + count) % count }}" aria-hidden="true"></label>
+                    <label class="carousel__arrow carousel__arrow--next" for="slide-{{ (loop.index0 + 1) % count }}" aria-hidden="true"></label>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="carousel__dots">
+                {% for slide in slides %}
+                <label class="carousel__dot" for="slide-{{ loop.index0 }}" aria-hidden="true"></label>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="tiles" aria-label="Shop highlights">
+            {% for tile in smallTiles %}
+            <a class="tile tile--small" href="{{ tile.href }}"><img src="{{ tile.image }}" alt="{{ tile.label }}" loading="lazy"></a>
+            {% endfor %}
+            {% for tile in largeTiles %}
+            <a class="tile tile--large" href="{{ tile.href }}"><img src="{{ tile.image }}" alt="{{ tile.label }}" loading="lazy"></a>
+            {% endfor %}
+        </section>
+    </main>
+
+    {% include "partials/site-menu.njk" %}
+</body>
+
+</html>
