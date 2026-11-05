@@ -2,6 +2,7 @@ import { readdirSync } from "node:fs";
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "./app";
+import { loginResponse } from "./testHelpers";
 
 describe("admin", () => {
 	it("loads admin dashboard data from the backend", async () => {
@@ -137,6 +138,125 @@ describe("admin", () => {
 		expect(res.text).toContain('<a href="/admin/orders">Orders</a>');
 		expect(res.text).not.toContain('<a href="/admin/users">Users</a>');
 		expect(res.text).not.toContain("Baskets (Unavailable)");
+	});
+
+	it("rate-limits order lookups", async () => {
+		const fetchApi = vi.fn<typeof fetch>(() =>
+			Promise.resolve(new Response(JSON.stringify({ orders: [] }))),
+		);
+		const client = request(createApp({ fetch: fetchApi }));
+		let result = await client
+			.get("/admin/orders")
+			.set("Cookie", "accessToken=staff-access");
+
+		for (let i = 1; i < 60; i += 1) {
+			result = await client
+				.get("/admin/orders")
+				.set("Cookie", "accessToken=staff-access");
+		}
+		const limited = await client
+			.get("/admin/orders")
+			.set("Cookie", "accessToken=staff-access");
+
+		expect(result.status).toBe(200);
+		expect(limited.status).toBe(429);
+		expect(fetchApi).toHaveBeenCalledTimes(60);
+	});
+
+	it.each(["/admin", "/admin/baskets", "/admin/users"])(
+		"returns a customer from %s to the shop without logging them out",
+		async (path) => {
+			const customerToken = [
+				"e30",
+				Buffer.from(
+					JSON.stringify({ kind: "customer", tokenUse: "access" }),
+				).toString("base64url"),
+				"signature",
+			].join(".");
+			const fetchApi = vi.fn<typeof fetch>();
+			const res = await request(createApp({ fetch: fetchApi }))
+				.get(path)
+				.set(
+					"Cookie",
+					`accessToken=${customerToken}; refreshToken=customer-refresh`,
+				);
+
+			expect(res.status).toBe(303);
+			expect(res.headers.location).toBe("/products");
+			expect(res.headers["set-cookie"]).toBeUndefined();
+			expect(fetchApi).not.toHaveBeenCalled();
+		},
+	);
+
+	it("returns a refresh-only customer to the shop with renewed credentials", async () => {
+		const refreshedCustomerToken = [
+			"e30",
+			Buffer.from(
+				JSON.stringify({ kind: "customer", tokenUse: "access" }),
+			).toString("base64url"),
+			"signature",
+		].join(".");
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValueOnce(
+				new Response(
+					JSON.stringify({
+						accessToken: refreshedCustomerToken,
+						expiresIn: 900,
+					}),
+					{
+						headers: {
+							"Set-Cookie":
+								"refreshToken=new-customer-refresh; Path=/; HttpOnly; Secure; SameSite=Strict",
+						},
+					},
+				),
+			)
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 }),
+			);
+		const res = await request(createApp({ fetch: fetchApi }))
+			.get("/admin")
+			.set("Cookie", "refreshToken=customer-refresh");
+
+		expect(res.status).toBe(303);
+		expect(res.headers.location).toBe("/products");
+		expect(res.headers["set-cookie"]).toHaveLength(2);
+		expect(res.headers["set-cookie"]).toEqual(
+			expect.arrayContaining([
+				expect.stringContaining(`accessToken=${refreshedCustomerToken}`),
+				expect.stringContaining("refreshToken=new-customer-refresh"),
+			]),
+		);
+		expect(fetchApi).toHaveBeenCalledTimes(2);
+	});
+
+	it("keeps the requested admin page through the login form", async () => {
+		const form = await request(createApp()).get(
+			"/admin/login?reason=expired&returnTo=%2Fadmin%2Fusers%3Fq%3Dada%26page%3D2",
+		);
+
+		expect(form.text).toContain(
+			"Your session has expired. Please log in again.",
+		);
+		expect(form.text).toContain(
+			'<input type="hidden" name="returnTo" value="/admin/users?q=ada&amp;page=2">',
+		);
+
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValueOnce(loginResponse());
+		const res = await request(createApp({ fetch: fetchApi }))
+			.post("/admin/login")
+			.type("form")
+			.send({
+				email: "admin@example.com",
+				password: "correct-horse",
+				returnTo: "/admin/users?q=ada&page=2",
+			});
+
+		expect(res.status).toBe(303);
+		expect(res.headers.location).toBe("/admin/users?q=ada&page=2");
 	});
 
 	describe("admin baskets", () => {
@@ -702,6 +822,30 @@ describe("admin", () => {
 			expect(res.text).toContain("The basket is empty.");
 		});
 
+		it.each(["active", "suspended"])(
+			"does not offer status changes for a read-only role with an %s user",
+			async (status) => {
+				const fetchApi = vi.fn<typeof fetch>((input) =>
+					Promise.resolve(
+						String(input).endsWith("/admin")
+							? jsonResponse({
+									role: "Read-only staff",
+									sections: [{ label: "Users" }],
+									quickActions: [],
+								})
+							: jsonResponse(userDetails({ status })),
+					),
+				);
+				const res = await request(createApp({ fetch: fetchApi }))
+					.get("/admin/users/7")
+					.set("Cookie", "accessToken=staff-access");
+
+				expect(res.status).toBe(200);
+				expect(res.text).not.toContain("Suspend account");
+				expect(res.text).not.toContain("Reactivate account");
+			},
+		);
+
 		it.each(["/admin/users", "/admin/users/7"])(
 			"requires staff credentials before requesting %s",
 			async (path) => {
@@ -715,6 +859,37 @@ describe("admin", () => {
 				expect(fetchApi).not.toHaveBeenCalled();
 			},
 		);
+
+		it.each([
+			[
+				"/admin/users?q=ada&page=2",
+				"/admin/login?returnTo=%2Fadmin%2Fusers%3Fq%3Dada%26page%3D2",
+			],
+			["/admin/users/7", "/admin/login?returnTo=%2Fadmin%2Fusers%2F7"],
+		])(
+			"preserves the requested user page when redirecting to login",
+			async (path, location) => {
+				const fetchApi = vi.fn<typeof fetch>();
+				const res = await request(createApp({ fetch: fetchApi })).get(path);
+
+				expect(res.status).toBe(303);
+				expect(res.headers.location).toBe(location);
+				expect(fetchApi).not.toHaveBeenCalled();
+			},
+		);
+
+		it("ignores unrelated browser cookies on protected user pages", async () => {
+			const fetchApi = vi.fn<typeof fetch>();
+			const res = await request(createApp({ fetch: fetchApi }))
+				.get("/admin/users")
+				.set("Cookie", "session=staff-session");
+
+			expect(res.status).toBe(303);
+			expect(res.headers.location).toBe(
+				"/admin/login?returnTo=%2Fadmin%2Fusers",
+			);
+			expect(fetchApi).not.toHaveBeenCalled();
+		});
 
 		it.each([
 			["/admin/users", 401],
@@ -910,6 +1085,84 @@ describe("admin", () => {
 			expect(res.headers.location).toBeUndefined();
 			expect(res.text).toContain("Access denied");
 		});
+
+		it("reuses refreshed credentials when checking access after a forbidden status change", async () => {
+			const fetchApi = vi.fn<typeof fetch>((input, init) => {
+				const url = String(input);
+				const authorization = (
+					init?.headers as Record<string, string> | undefined
+				)?.Authorization;
+				if (url.endsWith("/auth/refresh")) {
+					return Promise.resolve(loginResponse());
+				}
+				if (url.endsWith("/admin/users/7/suspend")) {
+					return Promise.resolve(
+						authorization === ["Bearer", "expired-access"].join(" ")
+							? jsonResponse({ error: "Expired" }, 401)
+							: jsonResponse({ error: "Forbidden" }, 403),
+					);
+				}
+				if (url.endsWith("/admin")) {
+					return Promise.resolve(
+						jsonResponse({
+							role: "Read-only staff",
+							sections: [{ label: "Users" }],
+							quickActions: [],
+						}),
+					);
+				}
+				return Promise.resolve(jsonResponse({ error: "Unexpected URL" }, 500));
+			});
+			const res = await request(createApp({ fetch: fetchApi }))
+				.post("/admin/users/7/suspend")
+				.set("Host", "shop.example")
+				.set("Origin", "http://shop.example")
+				.set(
+					"Cookie",
+					"accessToken=expired-access; refreshToken=current-refresh",
+				);
+
+			expect(res.status).toBe(403);
+			expect(res.headers.location).toBeUndefined();
+			expect(res.text).toContain("Access denied");
+			expect(
+				fetchApi.mock.calls.filter(([url]) =>
+					String(url).endsWith("/auth/refresh"),
+				),
+			).toHaveLength(1);
+			expect(fetchApi.mock.calls[3]?.[1]?.headers).toMatchObject({
+				Authorization: ["Bearer", "access-one"].join(" "),
+			});
+			expect(String(res.headers["set-cookie"])).toContain(
+				"accessToken=access-one",
+			);
+			expect(String(res.headers["set-cookie"])).toContain(
+				"refreshToken=refresh-one",
+			);
+		});
+
+		it.each(["suspend", "reactivate"])(
+			"returns a customer's %s request to the shop",
+			async (action) => {
+				const customerToken = [
+					"e30",
+					Buffer.from(
+						JSON.stringify({ kind: "customer", tokenUse: "access" }),
+					).toString("base64url"),
+					"signature",
+				].join(".");
+				const fetchApi = vi.fn<typeof fetch>();
+				const res = await request(createApp({ fetch: fetchApi }))
+					.post(`/admin/users/7/${action}`)
+					.set("Host", "shop.example")
+					.set("Origin", "http://shop.example")
+					.set("Cookie", `accessToken=${customerToken}`);
+
+				expect(res.status).toBe(303);
+				expect(res.headers.location).toBe("/products");
+				expect(fetchApi).not.toHaveBeenCalled();
+			},
+		);
 
 		it("reports a failed status change when the backend is unavailable", async () => {
 			const fetchApi = vi

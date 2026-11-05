@@ -3,6 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 import { createApp } from "./app";
 
 describe("products", () => {
+	it("does not serve the removed legacy catalogue path", async () => {
+		const res = await request(createApp()).get("/product_catalogue");
+
+		expect(res.status).toBe(404);
+	});
+
 	it("loads products from the backend", async () => {
 		const fetchApi = vi
 			.fn<typeof fetch>()
