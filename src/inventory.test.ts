@@ -258,6 +258,56 @@ describe("admin inventory", () => {
 		);
 	});
 
+	it("renders the sort dropdown, status pills and sortable headers preserving other filters", async () => {
+		const { get } = fixture();
+		const res = await get(
+			"/admin/inventory?q=tea&status=LOW_STOCK&sort=price&direction=desc",
+		);
+		expect(res.text).toContain(
+			'<select id="inventory-order" name="order" data-autosubmit>',
+		);
+		expect(res.text).toContain(
+			'<option value="price-desc" selected>Price (high → low)</option>',
+		);
+		expect(res.text).toContain(
+			'<input type="hidden" name="status" value="LOW_STOCK">',
+		);
+		expect(res.text).toMatch(
+			/href="\/admin\/inventory\?q=tea&amp;sort=price&amp;direction=desc" class="admin-pill"/,
+		);
+		expect(res.text).toMatch(
+			/class="admin-pill is-active admin-pill--low-stock" aria-current="true">Low Stock/,
+		);
+		expect(res.text).toContain('<th scope="col" aria-sort="descending">');
+		// Clicking the active descending column flips to ascending; other columns start ascending.
+		expect(res.text).toContain(
+			'href="/admin/inventory?q=tea&amp;status=LOW_STOCK&amp;sort=price&amp;direction=asc" class="admin-sort-link is-active"',
+		);
+		expect(res.text).toContain(
+			'href="/admin/inventory?q=tea&amp;status=LOW_STOCK&amp;sort=name&amp;direction=asc" class="admin-sort-link"',
+		);
+		expect(res.text).toContain("Clear search");
+	});
+
+	it("applies the combined dropdown order value and rejects malformed values", async () => {
+		const { get, fetchApi } = fixture();
+		expect((await get("/admin/inventory?order=stockQuantity-asc")).status).toBe(
+			200,
+		);
+		const url = new URL(
+			String(
+				fetchApi.mock.calls.find(
+					([u]) => new URL(String(u)).pathname === "/api/admin/inventory",
+				)?.[0],
+			),
+		);
+		expect(url.searchParams.get("sort")).toBe("stockQuantity");
+		expect(url.searchParams.get("direction")).toBe("asc");
+		for (const order of ["price", "price-sideways", "bogus-asc"]) {
+			expect((await get(`/admin/inventory?order=${order}`)).status).toBe(400);
+		}
+	});
+
 	it("creates a supplier-backed product using the shared session API", async () => {
 		const { get, post, fetchApi } = fixture();
 		expect((await get("/admin/inventory/new")).text).toContain("Tea supplier");

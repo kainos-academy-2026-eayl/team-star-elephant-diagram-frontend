@@ -82,3 +82,8 @@ document.addEventListener("click", (event) => {
 
 // Restore the page when it is shown again from the back/forward cache.
 window.addEventListener("pageshow", stopLoading);
+
+// Selects marked data-autosubmit (e.g. the inventory sort) apply immediately.
+document.addEventListener("change", (event) => {
+	event.target.closest?.("select[data-autosubmit]")?.form?.requestSubmit();
+});

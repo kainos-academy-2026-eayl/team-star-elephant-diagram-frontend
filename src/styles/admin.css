@@ -1005,15 +1005,149 @@ body:has(.admin-menu[open]) {
 	color: var(--sed-danger);
 }
 
-.admin-inventory-filters {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: end;
-	gap: 1rem;
+.admin-page-head > .admin-btn {
+	align-self: flex-start;
+	margin-top: 0.75rem;
 }
 
-.admin-inventory-filters .admin-field {
-	flex: 1 1 10rem;
+.admin-inventory-toolbar {
+	display: grid;
+	gap: 0.9rem;
+}
+
+.admin-inventory-toolbar__row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.75rem 1rem;
+}
+
+.admin-inventory-search {
+	display: flex;
+	flex: 1 1 18rem;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.3rem 0.3rem 0.3rem 0.8rem;
+	border: 1px solid var(--sed-line);
+	border-radius: 10px;
+	background: #fff;
+	color: var(--sed-muted);
+}
+
+.admin-inventory-search:focus-within {
+	border-color: var(--sed-purple);
+	box-shadow: 0 0 0 3px var(--sed-purple-soft);
+}
+
+.admin-inventory-search input {
+	flex: 1;
+	min-width: 0;
+	padding: 0.45rem 0;
+	border: 0;
+	background: transparent;
+	color: var(--sed-text);
+	font: inherit;
+}
+
+.admin-inventory-search input:focus-visible {
+	outline: none;
+}
+
+.admin-inventory-sort {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	color: var(--sed-muted);
+	font-size: 0.9rem;
+	font-weight: 600;
+}
+
+.admin-inventory-sort select {
+	padding: 0.6rem 0.8rem;
+	border: 1px solid var(--sed-line);
+	border-radius: 10px;
+	background: #fff;
+	color: var(--sed-text);
+	font: inherit;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.admin-inventory-sort select:focus-visible {
+	outline: 3px solid var(--sed-purple-soft);
+	border-color: var(--sed-purple);
+}
+
+.admin-inventory-status {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+}
+
+.admin-pill {
+	padding: 0.4rem 0.9rem;
+	border: 1px solid var(--sed-line);
+	border-radius: 999px;
+	background: #fff;
+	color: var(--sed-muted);
+	font-size: 0.85rem;
+	font-weight: 700;
+	text-decoration: none;
+}
+
+.admin-pill:hover {
+	border-color: var(--sed-purple);
+	color: var(--sed-purple);
+}
+
+.admin-pill.is-active {
+	border-color: var(--sed-purple);
+	background: var(--sed-purple);
+	color: #fff;
+}
+
+.admin-pill--in-stock.is-active {
+	border-color: var(--sed-success);
+	background: var(--sed-success);
+}
+
+.admin-pill--low-stock.is-active {
+	border-color: #8a5a00;
+	background: #8a5a00;
+}
+
+.admin-pill--out-of-stock.is-active {
+	border-color: var(--sed-danger);
+	background: var(--sed-danger);
+}
+
+.admin-inventory-active {
+	margin: 0;
+	color: var(--sed-muted);
+	font-size: 0.9rem;
+}
+
+.admin-sort-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	color: inherit;
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+.admin-sort-link:hover,
+.admin-sort-link.is-active {
+	color: var(--sed-purple);
+}
+
+.admin-sort-link__arrow {
+	opacity: 0.45;
+	font-size: 0.7rem;
+}
+
+.admin-sort-link.is-active .admin-sort-link__arrow {
+	opacity: 1;
 }
 
 .admin-confirm {

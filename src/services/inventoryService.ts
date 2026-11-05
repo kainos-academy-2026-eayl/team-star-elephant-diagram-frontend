@@ -26,6 +26,41 @@ const STATUS_VIEWS = {
 	LOW_STOCK: { statusLabel: "Low Stock", statusClass: "warning" },
 	OUT_OF_STOCK: { statusLabel: "Out Of Stock", statusClass: "danger" },
 };
+const STATUS_TABS = [
+	{ value: "", label: "All" },
+	{ value: "IN_STOCK", label: "In Stock" },
+	{ value: "LOW_STOCK", label: "Low Stock" },
+	{ value: "OUT_OF_STOCK", label: "Out Of Stock" },
+];
+const SORT_OPTIONS = [
+	{ sort: "name", direction: "asc", label: "Name (A–Z)" },
+	{ sort: "name", direction: "desc", label: "Name (Z–A)" },
+	{ sort: "price", direction: "asc", label: "Price (low → high)" },
+	{ sort: "price", direction: "desc", label: "Price (high → low)" },
+	{ sort: "stockQuantity", direction: "asc", label: "Stock (low → high)" },
+	{ sort: "stockQuantity", direction: "desc", label: "Stock (high → low)" },
+	{
+		sort: "lowStockThreshold",
+		direction: "asc",
+		label: "Threshold (low → high)",
+	},
+	{
+		sort: "lowStockThreshold",
+		direction: "desc",
+		label: "Threshold (high → low)",
+	},
+	{ sort: "stockStatus", direction: "asc", label: "Status" },
+	{ sort: "sku", direction: "asc", label: "SKU (A–Z)" },
+	{ sort: "sku", direction: "desc", label: "SKU (Z–A)" },
+];
+const SORTABLE_COLUMNS = [
+	{ key: "name", label: "Name" },
+	{ key: "sku", label: "SKU" },
+	{ key: "price", label: "Price" },
+	{ key: "stockQuantity", label: "Current Stock" },
+	{ key: "lowStockThreshold", label: "Threshold" },
+	{ key: "stockStatus", label: "Status" },
+];
 const price = new Intl.NumberFormat("en-GB", {
 	style: "currency",
 	currency: "GBP",
@@ -50,11 +85,15 @@ export class InventoryService {
 		};
 		const search = text("q");
 		const status = text("status");
-		const sort = text("sort", "name");
-		const direction = text("direction", "asc");
+		// The sort dropdown submits a combined "field-direction" value.
+		const rawOrder = text("order");
+		const order = /^(\w+)-(asc|desc)$/.exec(rawOrder);
+		const sort = order?.[1] ?? text("sort", "name");
+		const direction = order?.[2] ?? text("direction", "asc");
 		const rawPage = text("page", "1");
 		const page = Number(rawPage);
 		if (
+			(rawOrder && !order) ||
 			search.length > 100 ||
 			(status && !STOCK_STATUSES.some((value) => value === status)) ||
 			!SORT_FIELDS.includes(sort) ||
@@ -84,6 +123,7 @@ export class InventoryService {
 		return {
 			...result,
 			items: result.items.map(productView),
+			filters: this.filters(query),
 			pagination: this.pagination(
 				result,
 				PAGE_PATH,
@@ -94,6 +134,44 @@ export class InventoryService {
 					direction: query.direction,
 				}),
 			),
+		};
+	}
+
+	private filters(query: InventoryQuery) {
+		const href = (changes: Partial<InventoryQuery>): string => {
+			const next = { ...query, ...changes };
+			const params = new URLSearchParams();
+			if (next.search) params.set("q", next.search);
+			if (next.status) params.set("status", next.status);
+			params.set("sort", next.sort);
+			params.set("direction", next.direction);
+			return `${PAGE_PATH}?${params}`;
+		};
+		return {
+			order: `${query.sort}-${query.direction}`,
+			sortOptions: SORT_OPTIONS.map((option) => ({
+				value: `${option.sort}-${option.direction}`,
+				label: option.label,
+			})),
+			statusTabs: STATUS_TABS.map((tab) => ({
+				...tab,
+				href: href({ status: tab.value }),
+				active: query.status === tab.value,
+			})),
+			columns: SORTABLE_COLUMNS.map((column) => {
+				const active = query.sort === column.key;
+				const ascending = active && query.direction === "asc";
+				return {
+					...column,
+					active,
+					ariaSort: active ? (ascending ? "ascending" : "descending") : "none",
+					href: href({
+						sort: column.key,
+						direction: ascending ? "desc" : "asc",
+					}),
+				};
+			}),
+			clearSearchHref: href({ search: "" }),
 		};
 	}
 
