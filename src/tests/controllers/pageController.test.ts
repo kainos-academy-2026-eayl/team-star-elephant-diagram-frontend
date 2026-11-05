@@ -21,6 +21,7 @@ describe("pages", () => {
 		expect(res.text).toContain('commandfor="site-menu"');
 		expect(res.text).not.toContain("<script");
 		expect(res.text).toContain("Electronics Shop");
+		expect(res.text).toContain('aria-current="page"');
 	});
 
 	it("GET / shows no cart badge and skips the backend when logged out", async () => {
@@ -105,7 +106,7 @@ describe("pages", () => {
 		expect(res.text).not.toContain("cart-link__badge");
 	});
 
-	it.each(["/home.css", "/images/home/slide.png"])(
+	it.each(["/site.css", "/home.css", "/images/home/slide.png"])(
 		"serves the homepage asset %s",
 		async (path) => {
 			const res = await request(app).get(path);

@@ -1,0 +1,51 @@
+{%- import "partials/icons.njk" as i -%}
+<dialog class="side-menu" id="site-menu" aria-label="Site menu" closedby="any">
+    <div class="side-menu__top">
+        <a href="/" class="side-menu__brand">
+            <img src="/images/home/logo-menu.png" alt="" width="56" height="36">
+            <span>Sedshed</span>
+        </a>
+        <button type="button" class="icon-link icon-link--dark" command="close" commandfor="site-menu" aria-label="Close menu" autofocus>{{ i.icon("close") }}</button>
+    </div>
+
+    <nav class="side-menu__nav" aria-label="Main">
+        <ul>
+            <li><a class="menu-item{% if currentNav == 'home' %} is-current{% endif %}" href="/"{% if currentNav == 'home' %} aria-current="page"{% endif %}>{{ i.icon("home") }}<span>Home</span></a></li>
+            {% for category in menuCategories %}
+            <li><a class="menu-item{% if currentNav == category.id %} is-current{% endif %}" href="{{ category.href }}"{% if currentNav == category.id %} aria-current="page"{% endif %}>{{ i.icon(category.icon) }}<span>{{ category.label }}</span></a></li>
+            {% endfor %}
+            <li><a class="menu-item" href="/products">{{ i.icon("tag") }}<span>Deals &amp; Offers</span></a></li>
+        </ul>
+
+        <ul class="menu-section">
+            <li><a class="menu-item" href="/profile">{{ i.icon("user") }}<span>Account</span></a></li>
+            <li><a class="menu-item" href="/profile">{{ i.icon("box") }}<span>Orders</span></a></li>
+            <li><a class="menu-item" href="/products">{{ i.icon("heart") }}<span>Wishlist</span></a></li>
+            <li><a class="menu-item" href="/basket">{{ i.icon("cart") }}<span>Cart</span>{% if cartCount %}<span class="menu-item__badge">{{ '99+' if cartCount > 99 else cartCount }}</span>{% endif %}</a></li>
+        </ul>
+    </nav>
+
+    <a class="shipping-banner" href="/products">
+        {{ i.icon("truck") }}
+        <span><strong>Free Shipping</strong><small>On orders over £50</small></span>
+        {{ i.icon("arrow") }}
+    </a>
+
+    <div class="help">
+        <p class="help__title">Need Help?</p>
+        <ul>
+            <li><a href="/products">{{ i.icon("help") }}<span>FAQs</span></a></li>
+            <li><a href="/products">{{ i.icon("mail") }}<span>Contact Us</span></a></li>
+            <li><a href="/profile">{{ i.icon("pin") }}<span>Track Order</span></a></li>
+        </ul>
+    </div>
+
+    <ul class="social" aria-label="Social media">
+        <li><a href="/" aria-label="Instagram">{{ i.icon("instagram") }}</a></li>
+        <li><a href="/" aria-label="Facebook">{{ i.icon("facebook") }}</a></li>
+        <li><a href="/" aria-label="X">{{ i.icon("x") }}</a></li>
+        <li><a href="/" aria-label="YouTube">{{ i.icon("youtube") }}</a></li>
+    </ul>
+
+    <p class="side-menu__copyright">© 2026 Sedshed. All rights reserved.</p>
+</dialog>
