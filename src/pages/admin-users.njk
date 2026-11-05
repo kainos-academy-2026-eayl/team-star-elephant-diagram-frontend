@@ -23,6 +23,9 @@
             {% if search %}<p class="admin-page-head__meta">Showing results for "{{ search }}"</p>{% endif %}
         </header>
 
+        {% if deleted %}
+        <div class="admin-alert admin-alert--success" role="status">The customer and their associated data have been permanently deleted.</div>
+        {% endif %}
         {% if error %}
         <div class="admin-alert admin-alert--error" role="alert">
             <span>{{ error }}</span>
@@ -50,7 +53,10 @@
                             <td>{{ user.email }}</td>
                             <td>{{ user.displayRegisteredAt }}</td>
                             <td><span class="admin-status{% if user.isSuspended %} admin-status--danger{% else %} admin-status--success{% endif %}">{{ user.statusLabel }}</span></td>
-                            <td class="admin-table__action"><a href="{{ user.detailsHref }}" class="admin-btn admin-btn--ghost admin-btn--small">View details<span class="visually-hidden"> for {{ user.name }}</span></a></td>
+                            <td class="admin-table__action">
+                                <a href="{{ user.detailsHref }}" class="admin-btn admin-btn--ghost admin-btn--small">View details<span class="visually-hidden"> for {{ user.name }}</span></a>
+                                {% include "partials/admin-user-actions.njk" %}
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>

@@ -83,8 +83,17 @@ Admin user management (`/admin/users`, `/admin/users/:id`) forwards the staff
 `Authorization`/`Cookie` headers to backend `GET /admin/users?search=&page=`
 (`{ users, pagination? }`), `GET /admin/users/:id`
 (`{ user, recentOrders, basket }`), and `POST /admin/users/:id/suspend` or
-`/reactivate`. These backend endpoints are not implemented yet; see
-`src/models/adminUser.ts` for the expected shapes.
+`/reactivate`. Admin and SuperAdmin can also permanently delete customers from
+either user-management page after expanding "Delete permanently" and checking
+the confirmation box. The frontend posts to backend
+`POST /admin/users/:id/delete`; the backend atomically deletes the customer,
+orders and order items, payment details, basket/items and customer refresh
+sessions. This cannot be undone. Other staff roles cannot delete customers.
+See `src/models/adminUser.ts` for the user response shapes.
+Unimplemented staff-account and permission-management controls are not shown.
+Staff login uses an email address, not a separate username; incorrect credentials
+keep the staff login form visible with HTTP 401 and an accessible
+"Invalid email or password" error, without redisplaying the password.
 When deployed behind a TLS-terminating reverse proxy, set `TRUSTED_PROXY` to
 the proxy's IP address or CIDR (comma-separated for multiple proxies) so HTTPS
 origin checks use the forwarded protocol. Only trust the actual proxy addresses
@@ -92,10 +101,19 @@ and prevent untrusted clients from connecting directly to the frontend.
 
 FinanceManager staff use the same `/admin` page with a read-only finance
 dashboard: all-time revenue, total orders and pending orders. Revenue excludes
-cancelled orders and does not represent confirmed payments. This view has no
-buttons, menus, quick actions or customer/inventory panels. Other roles retain
+cancelled orders and does not represent confirmed payments. Its menu provides
+dashboard navigation and logout, but no operational quick actions or
+customer/inventory panels. Other roles retain
 their existing dashboard. The backend denies finance staff access to other
 admin resources.
+
+Dashboard summary cards include a green role badge under "Your access"; its
+glow is disabled for reduced-motion preferences. Staff whose backend-granted
+sections include Inventory also see "Low in stock", showing up to five stock
+lines at or below their individual reorder levels (including zero stock).
+The list includes suppliers because a product can have multiple stock lines.
+Roles without inventory access do not see this panel. Missing inventory data
+is shown as unavailable, rather than as an empty list.
 
 Admin basket viewing (`/admin/baskets`, `/admin/baskets/:id`) uses the same
 staff session handling as user management (access-token cookie, automatic

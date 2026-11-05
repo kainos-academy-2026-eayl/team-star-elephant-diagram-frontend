@@ -40,6 +40,16 @@ export interface AdminDashboard {
 		amount: string;
 		reason: string;
 	}>;
+	lowStock?: {
+		total: number;
+		items: Array<{
+			inventoryId: number;
+			product: string;
+			supplier: string;
+			quantity: number;
+			reorderLevel: number;
+		}>;
+	} | null;
 }
 
 export interface AdminNavItem {
@@ -52,13 +62,30 @@ export interface AdminNavItem {
 export interface AdminAccess {
 	staff: { name: string };
 	role: string;
+	roleLabel: string;
 	isFinanceDashboard: boolean;
+	canViewInventory: boolean;
 	nav: AdminNavItem[];
 	canChangeUserStatus: boolean;
+	canDeleteUsers: boolean;
 }
 
 // Backend quick action label granted to roles holding users:suspend.
 const USER_STATUS_QUICK_ACTION = "Suspend or reactivate customers";
+const USER_DELETE_QUICK_ACTION = "Permanently delete customers";
+const ROLE_LABELS: Record<string, string> = {
+	SuperAdmin: "Super Admin",
+	Admin: "Admin",
+	InventoryManager: "Inventory Manager",
+	FinanceManager: "Finance Manager",
+	CustomerService: "Customer Service",
+};
+const STAFF_MANAGEMENT_LABELS = new Set([
+	"Admin accounts",
+	"Permissions",
+	"Manage admin accounts",
+	"Manage permissions",
+]);
 
 const DASHBOARD_NAV_ITEM: AdminNavItem = {
 	key: "dashboard",
@@ -95,20 +122,25 @@ const toNav = (sections: AdminDashboard["sections"]): AdminNavItem[] => [
 const toQuickActions = (
 	actions: unknown,
 	access: AdminAccess,
-): AdminDashboard["quickActions"] =>
-	(Array.isArray(actions) ? actions : [])
+): AdminDashboard["quickActions"] => {
+	const otherActions = (Array.isArray(actions) ? actions : [])
 		.filter(
 			(action): action is { label: string } =>
-				typeof action?.label === "string",
+				typeof action?.label === "string" &&
+				!STAFF_MANAGEMENT_LABELS.has(action.label) &&
+				action.label !== "Update finance records" &&
+				action.label !== USER_STATUS_QUICK_ACTION &&
+				action.label !== USER_DELETE_QUICK_ACTION,
 		)
-		.map((action) => {
-			const usersHref = access.nav.find((item) => item.key === "users")?.href;
-			return action.label === USER_STATUS_QUICK_ACTION &&
-				access.canChangeUserStatus &&
-				usersHref
-				? { label: action.label, href: usersHref }
-				: { label: action.label };
-		});
+		.map((action) => ({ label: action.label }));
+	const usersHref = access.nav.find((item) => item.key === "users")?.href;
+	return [
+		...(usersHref && (access.canChangeUserStatus || access.canDeleteUsers)
+			? [{ label: "Manage users", href: usersHref }]
+			: []),
+		...otherActions,
+	];
+};
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const MAX_SEARCH_LENGTH = 100;
@@ -196,6 +228,10 @@ export class AdminService {
 		return {
 			...dashboard,
 			...access,
+			lowStock: access.canViewInventory ? (dashboard.lowStock ?? null) : null,
+			sections: (dashboard.sections ?? []).filter(
+				(section) => !STAFF_MANAGEMENT_LABELS.has(section.label),
+			),
 			quickActions: access.isFinanceDashboard
 				? []
 				: toQuickActions(dashboard.quickActions, access),
@@ -219,12 +255,25 @@ export class AdminService {
 		return {
 			staff: { name: dashboard.staff?.name ?? "" },
 			role: dashboard.role ?? "",
+			roleLabel: ROLE_LABELS[dashboard.role ?? ""] ?? dashboard.role ?? "",
 			isFinanceDashboard,
+			canViewInventory:
+				!isFinanceDashboard &&
+				sections.some(
+					(section) =>
+						typeof section?.label === "string" &&
+						toNavKey(section.label) === "inventory",
+				),
 			nav: isFinanceDashboard ? [DASHBOARD_NAV_ITEM] : toNav(sections),
 			canChangeUserStatus:
 				!isFinanceDashboard &&
 				quickActions.some(
 					(action) => action?.label === USER_STATUS_QUICK_ACTION,
+				),
+			canDeleteUsers:
+				!isFinanceDashboard &&
+				quickActions.some(
+					(action) => action?.label === USER_DELETE_QUICK_ACTION,
 				),
 		};
 	}
@@ -334,6 +383,10 @@ export class AdminService {
 			{},
 		);
 		return STATUS_UPDATES[action];
+	}
+
+	async deleteUser(req: Request, res: Response, id: string): Promise<void> {
+		await this.sessions.request(`${userPath(id)}/delete`, req, res, {}, {});
 	}
 
 	parseStatusUpdate(value: unknown): AdminUserStatusUpdate | undefined {

@@ -65,19 +65,7 @@
                 </div>
             </dl>
 
-            {% if canChangeUserStatus %}
-            <div class="admin-card__actions">
-                {% if user.isSuspended %}
-                <form action="{{ user.detailsHref }}/reactivate" method="post">
-                    <button type="submit" class="admin-btn admin-btn--primary">Reactivate account</button>
-                </form>
-                {% else %}
-                <form action="{{ user.detailsHref }}/suspend" method="post">
-                    <button type="submit" class="admin-btn admin-btn--danger">Suspend account</button>
-                </form>
-                {% endif %}
-            </div>
-            {% endif %}
+            {% include "partials/admin-user-actions.njk" %}
         </section>
 
         <div class="admin-grid admin-grid--two">

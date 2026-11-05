@@ -32,9 +32,7 @@
         {% if staff and staff.name %}
         <span class="admin-staff-chip">{{ i.icon("user") }}<span class="admin-staff-chip__name">{{ staff.name }}</span></span>
         {% endif %}
-        {% if not isFinanceDashboard %}
         <button type="button" class="admin-icon-link" command="show-modal" commandfor="admin-menu" aria-label="Open admin menu">{{ i.icon("menu") }}</button>
-        {% endif %}
     </div>
 </header>
 
@@ -47,12 +45,13 @@
         {% endfor %}
     </ul>
 </nav>
+{% endif %}
 
 <dialog class="admin-menu" id="admin-menu" aria-label="Admin menu" closedby="any">
     <div class="admin-menu__top">
         <a href="/admin" class="admin-menu__brand">
             <img src="/images/home/logo-menu.png" alt="" width="56" height="36">
-            <span>Sedshed Admin</span>
+            <span>Sedshed {% if isFinanceDashboard %}Finance{% else %}Admin{% endif %}</span>
         </a>
         <button type="button" class="admin-icon-link admin-icon-link--dark" command="close" commandfor="admin-menu" aria-label="Close menu" autofocus>{{ i.icon("close") }}</button>
     </div>
@@ -70,9 +69,11 @@
             <li><a class="admin-menu-item{% if activeNav == item.key %} is-current{% endif %}" href="{{ item.href }}"{% if activeNav == item.key %} aria-current="page"{% endif %}>{{ i.icon(navIcons[item.key] or "arrow") }}<span>{{ item.label }}</span></a></li>
             {% endfor %}
         </ul>
+        {% if not isFinanceDashboard %}
         <ul class="admin-menu__section">
             <li><a class="admin-menu-item" href="/">{{ i.icon("home") }}<span>View the shop</span></a></li>
         </ul>
+        {% endif %}
     </nav>
 
     <form action="/logout" method="post" class="admin-menu__logout">
@@ -81,4 +82,3 @@
 
     <p class="admin-menu__copyright">© 2026 Sedshed. Staff portal.</p>
 </dialog>
-{% endif %}

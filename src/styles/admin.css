@@ -589,6 +589,40 @@ body:has(.admin-menu[open]) {
 	grid-column: 1 / -1;
 }
 
+.admin-role-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin: 0.7rem 0 0;
+	padding: 0.4rem 0.65rem;
+	border: 1px solid #b9e2c7;
+	border-radius: 999px;
+	background: var(--sed-success-bg);
+	color: var(--sed-success);
+	font-size: 0.95rem;
+	font-weight: 800;
+	animation: admin-role-glow 3s ease-in-out infinite;
+}
+
+.admin-role-badge__dot {
+	flex: none;
+	width: 0.5rem;
+	height: 0.5rem;
+	border-radius: 50%;
+	background: currentColor;
+}
+
+@keyframes admin-role-glow {
+	0%,
+	100% {
+		box-shadow: 0 0 0 0 rgba(29, 107, 58, 0.05);
+	}
+
+	50% {
+		box-shadow: 0 0 12px 3px rgba(29, 107, 58, 0.22);
+	}
+}
+
 /* Cards */
 .admin-grid {
 	display: grid;
@@ -604,12 +638,20 @@ body:has(.admin-menu[open]) {
 	grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
 }
 
+.admin-dashboard-grid {
+	grid-template-columns: minmax(0, 1fr);
+}
+
 .admin-card {
 	min-width: 0;
 	padding: 1.1rem 1.2rem;
 	border-radius: 10px;
 	background: #fff;
 	box-shadow: var(--sed-shadow);
+}
+
+.admin-card--wide {
+	grid-column: 1 / -1;
 }
 
 .admin-card--flush {
@@ -634,9 +676,56 @@ body:has(.admin-menu[open]) {
 	border-top: 1px solid var(--sed-line);
 }
 
+.admin-card__note {
+	margin: 0 0 0.75rem;
+	color: var(--sed-muted);
+	font-size: 0.8rem;
+}
+
+.admin-card--low-stock {
+	grid-column: 1 / -1;
+	align-self: stretch;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.admin-stock-supplier {
+	display: block;
+	margin-top: 0.2rem;
+	color: var(--sed-muted);
+	overflow-wrap: anywhere;
+}
+
+.admin-stock-count {
+	margin: 0.75rem 0 0;
+}
+
 /* Tables */
 .admin-table-wrap {
 	overflow-x: auto;
+}
+
+.admin-card--low-stock .admin-table-wrap {
+	max-height: 24rem;
+	overflow-y: auto;
+}
+
+.admin-card--orders {
+	display: flex;
+	flex-direction: column;
+	align-self: stretch;
+	min-height: 0;
+}
+
+.admin-card--orders .admin-card__title {
+	flex: none;
+}
+
+.admin-card--orders .admin-table-wrap {
+	min-height: 0;
+	max-height: 24rem;
+	overflow-y: auto;
 }
 
 .admin-table {
@@ -1015,6 +1104,36 @@ body:has(.admin-menu[open]) {
 }
 
 /* Responsive */
+/* Two 22rem activity columns fit once the page gutters and gap are included. */
+@media (min-width: 47rem) {
+	.admin-dashboard-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.admin-card--orders .admin-table-wrap {
+		flex: 1;
+		max-height: none;
+		/* Orders scroll within the row height established by registrations. */
+		contain: size;
+	}
+}
+
+@media (min-width: 72rem) {
+	.admin-dashboard-grid--inventory {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+
+	.admin-card--low-stock {
+		grid-column: auto;
+	}
+
+	.admin-card--low-stock .admin-table-wrap {
+		flex: 1;
+		max-height: none;
+		contain: size;
+	}
+}
+
 @media (max-width: 860px) {
 	.admin-header {
 		grid-template-columns: 1fr auto;
@@ -1064,7 +1183,8 @@ body:has(.admin-menu[open]) {
 	}
 
 	.admin-loading .admin-progress,
-	[data-loading-label]::after {
+	[data-loading-label]::after,
+	.admin-role-badge {
 		animation: none;
 	}
 }

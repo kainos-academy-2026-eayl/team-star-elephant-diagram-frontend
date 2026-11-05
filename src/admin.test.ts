@@ -4,7 +4,97 @@ import { describe, expect, it, vi } from "vitest";
 import { createApp } from "./app";
 
 describe("admin", () => {
-	it("shows finance staff a read-only financial dashboard without menus, buttons or operational panels", async () => {
+	it.each([
+		{ role: "SuperAdmin", label: "Super Admin", inventory: true },
+		{ role: "Admin", label: "Admin", inventory: true },
+		{ role: "InventoryManager", label: "Inventory Manager", inventory: true },
+		{ role: "CustomerService", label: "Customer Service", inventory: true },
+		{ role: "FinanceManager", label: "Finance Manager", inventory: false },
+		{ role: "Admin", label: "Admin", inventory: false },
+	])(
+		"shows the role badge and permission-scoped stock for $role (inventory=$inventory)",
+		async ({ role, label, inventory }) => {
+			const dashboard = {
+				staff: { name: "Staff member" },
+				role,
+				sections: inventory ? [{ label: "Inventory" }] : [],
+				quickActions: [],
+				cards: [],
+				recentOrders: [],
+				newUsers: [],
+				stockChanges: [],
+				lowStock: {
+					total: 1,
+					items: [
+						{
+							inventoryId: 7,
+							product: "Tea <special>",
+							supplier: "Tea supplier",
+							quantity: 0,
+							reorderLevel: 5,
+						},
+					],
+				},
+			};
+			const fetchApi = vi
+				.fn<typeof fetch>()
+				.mockResolvedValue(new Response(JSON.stringify(dashboard)));
+			const res = await request(createApp({ fetch: fetchApi }))
+				.get("/admin")
+				.set("Cookie", "accessToken=staff-access");
+
+			expect(res.status).toBe(200);
+			expect(res.text).toContain("Your access");
+			expect(res.text).toContain(`</span>${label}</p>`);
+			if (inventory) {
+				expect(res.text).toContain("Low in stock");
+				expect(res.text).toContain("Tea &lt;special&gt;");
+				expect(res.text).toContain("Tea supplier");
+				expect(res.text).toContain("Showing 1 of 1 low-stock lines.");
+				expect(res.text).toContain('admin-status--danger">0</span>');
+			} else {
+				expect(res.text).not.toContain("Low in stock");
+				expect(res.text).not.toContain("Tea supplier");
+				expect(res.text).not.toContain("admin-dashboard-grid--inventory");
+			}
+		},
+	);
+
+	it.each([
+		{
+			lowStock: { total: 0, items: [] },
+			message: "No stock lines are at or below their reorder level.",
+		},
+		{
+			lowStock: null,
+			message: "Low-stock information is currently unavailable.",
+		},
+	])(
+		"distinguishes empty stock from unavailable data: $message",
+		async ({ lowStock, message }) => {
+			const dashboard = {
+				staff: { name: "Staff member" },
+				role: "InventoryManager",
+				sections: [{ label: "Inventory" }],
+				quickActions: [],
+				cards: [],
+				recentOrders: [],
+				newUsers: [],
+				stockChanges: [],
+				lowStock,
+			};
+			const fetchApi = vi
+				.fn<typeof fetch>()
+				.mockResolvedValue(new Response(JSON.stringify(dashboard)));
+			const res = await request(createApp({ fetch: fetchApi }))
+				.get("/admin")
+				.set("Cookie", "accessToken=staff-access");
+
+			expect(res.text).toContain(message);
+		},
+	);
+
+	it("shows finance staff a read-only dashboard with a menu and logout but no operational panels", async () => {
 		const dashboard = {
 			staff: { name: "Finance staff" },
 			role: "FinanceManager",
@@ -51,13 +141,15 @@ describe("admin", () => {
 			"£367.49",
 			"Pending orders",
 			"non-cancelled orders",
+			"Open admin menu",
+			'commandfor="admin-menu"',
+			'<dialog class="admin-menu" id="admin-menu"',
+			'<form action="/logout" method="post"',
+			"Log out",
 		]) {
 			expect(res.text).toContain(text);
 		}
 		for (const text of [
-			"<button",
-			"<form",
-			"<dialog",
 			"Admin sections",
 			"Quick actions",
 			"Update finance records",
@@ -104,6 +196,10 @@ describe("admin", () => {
 		expect(res.text).toContain("Open admin menu");
 		expect(res.text).toContain("New registrations");
 		expect(res.text).toContain("Recent stock changes");
+		expect(res.text).toContain('class="admin-card admin-card--orders"');
+		expect(res.text).toContain(
+			'tabindex="0" role="region" aria-label="Latest orders table"',
+		);
 		expect(String(fetchApi.mock.calls[0]?.[0])).toBe(
 			"http://backend:4000/admin",
 		);
@@ -197,6 +293,7 @@ describe("admin", () => {
 			quickActions: [
 				{ label: "Suspend or reactivate customers" },
 				{ label: "Update order status" },
+				{ label: "Update finance records" },
 			],
 			cards: [],
 			recentOrders: [],
@@ -211,13 +308,45 @@ describe("admin", () => {
 			.set("Cookie", "accessToken=staff-access");
 
 		expect(res.text).toContain(
-			'<a href="/admin/users" class="admin-chip admin-chip--link">Suspend or reactivate customers</a>',
+			'<a href="/admin/users" class="admin-chip admin-chip--link">Manage users</a>',
 		);
 		expect(res.text).not.toContain(
 			"Suspend or reactivate customers (Unavailable)",
 		);
 		expect(res.text).toContain("Update order status (Unavailable)");
+		expect(res.text).not.toContain("Update finance records");
 	});
+
+	it.each([
+		["Suspend or reactivate customers"],
+		["Permanently delete customers"],
+		["Suspend or reactivate customers", "Permanently delete customers"],
+	])(
+		"shows one Manage users action for granted actions %j",
+		async (...labels) => {
+			const dashboard = {
+				staff: { name: "Staff member" },
+				sections: [{ label: "Users" }],
+				quickActions: labels.map((label) => ({ label })),
+				cards: [],
+				recentOrders: [],
+				newUsers: [],
+				stockChanges: [],
+			};
+			const fetchApi = vi
+				.fn<typeof fetch>()
+				.mockResolvedValue(new Response(JSON.stringify(dashboard)));
+			const res = await request(createApp({ fetch: fetchApi }))
+				.get("/admin")
+				.set("Cookie", "accessToken=staff-access");
+
+			expect(res.status).toBe(200);
+			expect(res.text.match(/>Manage users<\/a>/g)).toHaveLength(1);
+			for (const label of labels) {
+				expect(res.text).not.toContain(label);
+			}
+		},
+	);
 
 	it("shows the baskets link in the admin navigation", async () => {
 		const dashboard = {

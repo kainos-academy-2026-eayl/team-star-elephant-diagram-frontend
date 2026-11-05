@@ -15,6 +15,9 @@ export function createAdminRoutes(adminController: AdminController): Router {
 	router.post("/admin/users/:id/reactivate", (req, res) =>
 		adminController.postReactivateUser(req, res),
 	);
+	router.post("/admin/users/:id/delete", (req, res) =>
+		adminController.postDeleteUser(req, res),
+	);
 	router.get("/admin/baskets", (req, res) =>
 		adminController.getBaskets(req, res),
 	);
