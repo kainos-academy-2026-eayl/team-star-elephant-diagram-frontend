@@ -52,6 +52,7 @@ export interface AdminNavItem {
 export interface AdminAccess {
 	staff: { name: string };
 	role: string;
+	isFinanceDashboard: boolean;
 	nav: AdminNavItem[];
 	canChangeUserStatus: boolean;
 }
@@ -195,7 +196,9 @@ export class AdminService {
 		return {
 			...dashboard,
 			...access,
-			quickActions: toQuickActions(dashboard.quickActions, access),
+			quickActions: access.isFinanceDashboard
+				? []
+				: toQuickActions(dashboard.quickActions, access),
 		};
 	}
 
@@ -212,13 +215,17 @@ export class AdminService {
 		const quickActions = Array.isArray(dashboard.quickActions)
 			? dashboard.quickActions
 			: [];
+		const isFinanceDashboard = dashboard.role === "FinanceManager";
 		return {
 			staff: { name: dashboard.staff?.name ?? "" },
 			role: dashboard.role ?? "",
-			nav: toNav(sections),
-			canChangeUserStatus: quickActions.some(
-				(action) => action?.label === USER_STATUS_QUICK_ACTION,
-			),
+			isFinanceDashboard,
+			nav: isFinanceDashboard ? [DASHBOARD_NAV_ITEM] : toNav(sections),
+			canChangeUserStatus:
+				!isFinanceDashboard &&
+				quickActions.some(
+					(action) => action?.label === USER_STATUS_QUICK_ACTION,
+				),
 		};
 	}
 

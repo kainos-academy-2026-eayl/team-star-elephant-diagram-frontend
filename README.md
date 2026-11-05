@@ -90,6 +90,13 @@ the proxy's IP address or CIDR (comma-separated for multiple proxies) so HTTPS
 origin checks use the forwarded protocol. Only trust the actual proxy addresses
 and prevent untrusted clients from connecting directly to the frontend.
 
+FinanceManager staff use the same `/admin` page with a read-only finance
+dashboard: all-time revenue, total orders and pending orders. Revenue excludes
+cancelled orders and does not represent confirmed payments. This view has no
+buttons, menus, quick actions or customer/inventory panels. Other roles retain
+their existing dashboard. The backend denies finance staff access to other
+admin resources.
+
 Admin basket viewing (`/admin/baskets`, `/admin/baskets/:id`) uses the same
 staff session handling as user management (access-token cookie, automatic
 refresh, admin-login redirects with `returnTo`, customers sent to `/products`)

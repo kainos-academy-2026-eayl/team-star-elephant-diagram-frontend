@@ -4,13 +4,21 @@
 <a href="#main" class="admin-skip-link">Skip to main content</a>
 
 <header class="admin-header">
+    {% if isFinanceDashboard %}
+    <div class="admin-brand">
+        <img src="/images/home/logo.png" alt="" width="80" height="42">
+        <span class="admin-brand__name">SEDSHED</span>
+        <span class="admin-brand__tag">Finance</span>
+    </div>
+    {% else %}
     <a href="/admin" class="admin-brand" aria-label="Sedshed admin dashboard">
         <img src="/images/home/logo.png" alt="" width="80" height="42">
         <span class="admin-brand__name">SEDSHED</span>
         <span class="admin-brand__tag">Admin</span>
     </a>
+    {% endif %}
 
-    {% if searchAction %}
+    {% if searchAction and not isFinanceDashboard %}
     <form action="{{ searchAction }}" method="get" class="admin-search" role="search">
         <label for="admin-search-input" class="visually-hidden">{{ searchLabel }}</label>
         <input type="search" id="admin-search-input" name="q" maxlength="100" placeholder="{{ searchPlaceholder }}" value="{{ search }}">
@@ -24,10 +32,13 @@
         {% if staff and staff.name %}
         <span class="admin-staff-chip">{{ i.icon("user") }}<span class="admin-staff-chip__name">{{ staff.name }}</span></span>
         {% endif %}
+        {% if not isFinanceDashboard %}
         <button type="button" class="admin-icon-link" command="show-modal" commandfor="admin-menu" aria-label="Open admin menu">{{ i.icon("menu") }}</button>
+        {% endif %}
     </div>
 </header>
 
+{% if not isFinanceDashboard %}
 <nav class="admin-tabs" aria-label="Admin sections">
     <ul>
         {# Items come from the backend's role-scoped sections; the backend still enforces access. #}
@@ -70,3 +81,4 @@
 
     <p class="admin-menu__copyright">© 2026 Sedshed. Staff portal.</p>
 </dialog>
+{% endif %}

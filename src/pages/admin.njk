@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% if forbidden %}Access denied{% else %}Admin Dashboard{% endif %} | Sedshed</title>
+    <title>{% if forbidden %}Access denied{% elif isFinanceDashboard %}Finance Dashboard{% else %}Admin Dashboard{% endif %} | Sedshed</title>
     <link rel="stylesheet" href="/admin.css">
     <script src="/admin.js" defer></script>
 </head>
@@ -26,21 +26,21 @@
         </section>
         {% else %}
         <section class="admin-hero" aria-labelledby="dashboard-title">
-            <p class="admin-hero__eyebrow">Staff portal</p>
-            <h1 id="dashboard-title" class="admin-hero__title">Admin dashboard</h1>
+            <p class="admin-hero__eyebrow">{% if isFinanceDashboard %}Finance overview{% else %}Staff portal{% endif %}</p>
+            <h1 id="dashboard-title" class="admin-hero__title">{% if isFinanceDashboard %}Finance dashboard{% else %}Admin dashboard{% endif %}</h1>
             {% if staff and staff.name %}
-            <p class="admin-hero__lead">Welcome back, <strong>{{ staff.name }}</strong>. Here is what is happening in the shop today.</p>
+            <p class="admin-hero__lead">Welcome back, <strong>{{ staff.name }}</strong>. {% if isFinanceDashboard %}Here is your read-only financial summary.{% else %}Here is what is happening in the shop today.{% endif %}</p>
             {% endif %}
         </section>
 
         {% if error %}
         <div class="admin-alert admin-alert--error" role="alert">
             <span>{{ error }}</span>
-            <a href="/admin">Retry</a>
+            {% if not isFinanceDashboard %}<a href="/admin">Retry</a>{% endif %}
         </div>
         {% else %}
 
-        {% if quickActions | length %}
+        {% if not isFinanceDashboard and quickActions | length %}
         <section class="admin-chips" aria-label="Quick actions">
             {% for action in quickActions %}
             {% if action.href %}
@@ -52,7 +52,11 @@
         </section>
         {% endif %}
 
-        <section class="admin-stats" aria-label="Summary">
+        {% if isFinanceDashboard %}
+        <p class="admin-hero__lead">All-time figures. Revenue is the total value of non-cancelled orders, not confirmed payments. Order counts include all orders; pending orders are awaiting processing.</p>
+        {% endif %}
+
+        <section class="admin-stats" aria-label="{% if isFinanceDashboard %}Financial summary{% else %}Summary{% endif %}">
             {% for card in cards %}
             <div class="admin-stat">
                 <h2 class="admin-stat__label">{{ card.label }}</h2>
@@ -63,6 +67,7 @@
             {% endfor %}
         </section>
 
+        {% if not isFinanceDashboard %}
         <div class="admin-grid admin-grid--three">
             <section class="admin-card" aria-labelledby="latest-orders">
                 <h2 id="latest-orders" class="admin-card__title">Latest orders</h2>
@@ -150,6 +155,7 @@
                 </div>
             </section>
         </div>
+        {% endif %}
 
         {% endif %}
         {% endif %}

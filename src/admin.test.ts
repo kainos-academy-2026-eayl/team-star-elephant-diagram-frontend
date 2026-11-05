@@ -4,6 +4,77 @@ import { describe, expect, it, vi } from "vitest";
 import { createApp } from "./app";
 
 describe("admin", () => {
+	it("shows finance staff a read-only financial dashboard without menus, buttons or operational panels", async () => {
+		const dashboard = {
+			staff: { name: "Finance staff" },
+			role: "FinanceManager",
+			dashboard: "finance",
+			sections: [{ label: "Users" }, { label: "Baskets" }],
+			quickActions: [{ label: "Update finance records" }],
+			cards: [
+				{ label: "Revenue", value: "£367.49" },
+				{ label: "Orders", value: "3" },
+				{ label: "Pending orders", value: "1" },
+			],
+			recentOrders: [
+				{
+					id: 12,
+					customer: "Hidden customer",
+					date: "2026-04-02",
+					status: "Pending",
+				},
+			],
+			newUsers: [
+				{
+					name: "Hidden user",
+					email: "hidden@example.com",
+					joined: "2026-04-02",
+				},
+			],
+			stockChanges: [
+				{ product: "Hidden stock", amount: "40", reason: "Updated" },
+			],
+		};
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(new Response(JSON.stringify(dashboard)));
+		const res = await request(createApp({ fetch: fetchApi }))
+			.get("/admin")
+			.set("Cookie", "accessToken=staff-access");
+
+		expect(res.status).toBe(200);
+		for (const text of [
+			"Finance dashboard",
+			"Finance staff",
+			"Financial summary",
+			"Revenue",
+			"£367.49",
+			"Pending orders",
+			"non-cancelled orders",
+		]) {
+			expect(res.text).toContain(text);
+		}
+		for (const text of [
+			"<button",
+			"<form",
+			"<dialog",
+			"Admin sections",
+			"Quick actions",
+			"Update finance records",
+			"/admin/users",
+			"/admin/baskets",
+			"View the shop",
+			"Latest orders",
+			"New registrations",
+			"Recent stock changes",
+			"Hidden customer",
+			"Hidden user",
+			"Hidden stock",
+		]) {
+			expect(res.text).not.toContain(text);
+		}
+	});
+
 	it("loads admin dashboard data from the backend", async () => {
 		const dashboard = {
 			staff: { name: "Staff member" },
@@ -29,6 +100,10 @@ describe("admin", () => {
 		expect(res.text).toContain("Orders today");
 		expect(res.text).toContain(">4</p>");
 		expect(res.text).toContain("Ada Lovelace");
+		expect(res.text).toContain("Admin dashboard");
+		expect(res.text).toContain("Open admin menu");
+		expect(res.text).toContain("New registrations");
+		expect(res.text).toContain("Recent stock changes");
 		expect(String(fetchApi.mock.calls[0]?.[0])).toBe(
 			"http://backend:4000/admin",
 		);
