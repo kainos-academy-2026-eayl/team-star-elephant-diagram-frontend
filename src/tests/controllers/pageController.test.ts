@@ -1,10 +1,10 @@
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
-import { createApp } from "./app";
+import { createApp } from "../../app";
 
 const app = createApp();
 
-describe("app", () => {
+describe("pages", () => {
 	it("GET /health returns ok", async () => {
 		const res = await request(app).get("/health");
 
@@ -21,6 +21,7 @@ describe("app", () => {
 		expect(res.text).toContain('commandfor="site-menu"');
 		expect(res.text).not.toContain("<script");
 		expect(res.text).toContain("Electronics Shop");
+		expect(res.text).toContain('aria-current="page"');
 	});
 
 	it("GET / shows no cart badge and skips the backend when logged out", async () => {
@@ -105,7 +106,7 @@ describe("app", () => {
 		expect(res.text).not.toContain("cart-link__badge");
 	});
 
-	it.each(["/home.css", "/images/home/slide.png"])(
+	it.each(["/site.css", "/home.css", "/images/home/slide.png"])(
 		"serves the homepage asset %s",
 		async (path) => {
 			const res = await request(app).get(path);
@@ -113,11 +114,4 @@ describe("app", () => {
 			expect(res.status).toBe(200);
 		},
 	);
-
-	it("serves the stylesheet", async () => {
-		const res = await request(app).get("/styles.css");
-
-		expect(res.status).toBe(200);
-		expect(res.headers["content-type"]).toContain("text/css");
-	});
 });

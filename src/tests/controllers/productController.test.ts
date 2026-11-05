@@ -1,6 +1,6 @@
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
-import { createApp } from "./app";
+import { createApp } from "../../app";
 
 describe("products", () => {
 	it("does not serve the removed legacy catalogue path", async () => {
@@ -56,7 +56,184 @@ describe("products", () => {
 		expect(res.text).toContain("£12.99");
 		expect(res.text).toContain('src="https://example.com/tea.jpg"');
 		expect(res.text).not.toContain("Coffee");
-		expect(res.text).toContain("Food%20%26%20Drink");
+		expect(res.text).toContain('value="Food &amp; Drink" checked');
+		expect(res.text).toContain('href="/products?q=tea"');
+	});
+
+	it("GET /products uses the shared storefront header and menu without client-side JS", async () => {
+		const products = [
+			{
+				productId: 7,
+				name: "Green tea",
+				category: "Food & Drink",
+				description: "Fresh tea",
+				price: 12.99,
+				imageURL: "",
+			},
+		];
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(new Response(JSON.stringify(products)));
+		const res = await request(createApp({ fetch: fetchApi }))
+			.get("/products")
+			.query({ q: "tea", category: "Food & Drink" });
+
+		expect(res.status).toBe(200);
+		expect(res.text).toContain('class="site-header"');
+		expect(res.text).toContain('<dialog class="side-menu" id="site-menu"');
+		expect(res.text).toContain('value="tea"');
+		expect(res.text).toContain(
+			'<input type="hidden" name="category" value="Food &amp; Drink">',
+		);
+		expect(res.text).toContain("1 product for “tea”");
+		expect(res.text).not.toMatch(/<script/i);
+	});
+
+	it("renders the applied price range as fallback text for the CSS-driven live labels", async () => {
+		const products = [5, 50].map((price, index) => ({
+			productId: index + 1,
+			name: `Item ${index + 1}`,
+			category: "Other",
+			description: "Item",
+			price,
+			imageURL: "",
+		}));
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(new Response(JSON.stringify(products)));
+		const res = await request(createApp({ fetch: fetchApi }))
+			.get("/products")
+			.query({ minPrice: "10", maxPrice: "40" });
+
+		expect(res.status).toBe(200);
+		expect(res.text).toContain('style="--min: 5; --max: 50;');
+		expect(res.text).toContain('range__value range__value--lo">£10<');
+		expect(res.text).toContain('range__value range__value--hi">£40<');
+		expect(res.text).toContain('class="range__input range__input--a"');
+		expect(res.text).toContain('class="range__input range__input--b"');
+		expect(res.text).not.toMatch(/<script/i);
+	});
+
+	it.each(["/site.css", "/products.css"])(
+		"serves the catalogue stylesheet %s",
+		async (path) => {
+			const res = await request(createApp()).get(path);
+
+			expect(res.status).toBe(200);
+		},
+	);
+
+	it("titles the catalogue Browse Products, or the category when one is selected", async () => {
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockImplementation(async () => new Response("[]"));
+		const app = createApp({ fetch: fetchApi });
+
+		const all = await request(app).get("/products");
+		expect(all.text).toContain(
+			'<h1 class="catalogue__title">Browse Products</h1>',
+		);
+		expect(all.text).not.toContain("Top Picks");
+
+		const one = await request(app).get("/products").query({ category: "Mice" });
+		expect(one.text).toContain('<h1 class="catalogue__title">Mice</h1>');
+	});
+
+	describe("cart badge", () => {
+		const basketId = "8e0dcfff-1528-4ec6-9820-b8c9a6732000";
+		const product = {
+			productId: 1,
+			name: "Mug",
+			category: "Other",
+			description: "A mug",
+			price: 5,
+			imageURL: "",
+		};
+		const basketOf = (...quantities: number[]) =>
+			JSON.stringify({
+				items: quantities.map((quantity, index) => ({
+					productId: index + 1,
+					productName: "Item",
+					quantity,
+					unitPrice: 1,
+				})),
+				subtotal: 1,
+			});
+		const backend = (basket: () => Response, products?: () => Response) =>
+			vi
+				.fn<typeof fetch>()
+				.mockImplementation(async (input) =>
+					String(input).endsWith("/basket")
+						? basket()
+						: (products?.() ?? new Response(JSON.stringify([product]))),
+				);
+
+		it("shows no badge and skips the basket request when logged out", async () => {
+			const fetchApi = backend(() => new Response(basketOf(2)));
+			const res = await request(createApp({ fetch: fetchApi })).get(
+				"/products",
+			);
+
+			expect(res.status).toBe(200);
+			expect(res.text).not.toContain("cart-link__badge");
+			expect(fetchApi).toHaveBeenCalledTimes(1);
+		});
+
+		it("shows the total basket quantity on the cart icon and in the menu", async () => {
+			const fetchApi = backend(() => new Response(basketOf(2, 3)));
+			const res = await request(
+				createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
+			)
+				.get("/products")
+				.set("Cookie", `accessToken=access-one; basketId=${basketId}`);
+
+			expect(res.status).toBe(200);
+			expect(res.text).toMatch(/class="cart-link__badge"[^>]*>5</);
+			expect(res.text).toContain('aria-label="Basket, 5 items"');
+			expect(res.text).toContain('class="menu-item__badge">5<');
+			const basketCall = fetchApi.mock.calls.find(([url]) =>
+				String(url).endsWith("/basket"),
+			);
+			expect(basketCall?.[1]?.headers).toMatchObject({
+				Authorization: ["Bearer", "access-one"].join(" "),
+				Cookie: `basketId=${basketId}`,
+			});
+		});
+
+		it("caps large quantities at 99+", async () => {
+			const fetchApi = backend(() => new Response(basketOf(120)));
+			const res = await request(createApp({ fetch: fetchApi }))
+				.get("/products")
+				.set("Cookie", "accessToken=access-one");
+
+			expect(res.text).toMatch(/class="cart-link__badge"[^>]*>99\+</);
+			expect(res.text).toContain('aria-label="Basket, 120 items"');
+		});
+
+		it("still renders the catalogue without a badge when the basket is unavailable", async () => {
+			const fetchApi = backend(() => new Response("{}", { status: 503 }));
+			const res = await request(createApp({ fetch: fetchApi }))
+				.get("/products")
+				.set("Cookie", "accessToken=access-one");
+
+			expect(res.status).toBe(200);
+			expect(res.text).toContain("Mug");
+			expect(res.text).not.toContain("cart-link__badge");
+		});
+
+		it("keeps the badge on the unavailable page when products fail", async () => {
+			const fetchApi = backend(
+				() => new Response(basketOf(4)),
+				() => new Response("{}", { status: 503 }),
+			);
+			const res = await request(createApp({ fetch: fetchApi }))
+				.get("/products")
+				.set("Cookie", "accessToken=access-one");
+
+			expect(res.status).toBe(503);
+			expect(res.text).toContain("Products are temporarily unavailable.");
+			expect(res.text).toMatch(/class="cart-link__badge"[^>]*>4</);
+		});
 	});
 
 	it("allows same-site image paths but drops unsafe image URLs", async () => {
@@ -174,7 +351,8 @@ describe("products", () => {
 		expect(res.text).toMatch(/name="quantity"[^>]*max="30"/);
 		expect(res.text).toContain("In stock");
 		expect(res.text).not.toMatch(/<button[^>]*disabled/);
-		expect(res.text).toContain('href="/styles.css"');
+		expect(res.text).toContain('href="/site.css"');
+		expect(res.text).toContain('href="/product-detail.css"');
 	});
 
 	it.each([
@@ -294,6 +472,16 @@ describe("products", () => {
 
 		expect(res.status).toBe(503);
 		expect(res.text).toContain("Product is temporarily unavailable");
+		expect(res.text).not.toContain("Connection refused");
+	});
+
+	it("handles an unavailable backend for /products", async () => {
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockRejectedValue(new Error("Connection refused"));
+		const res = await request(createApp({ fetch: fetchApi })).get("/products");
+		expect(res.status).toBe(503);
+		expect(res.text).toContain("temporarily unavailable");
 		expect(res.text).not.toContain("Connection refused");
 	});
 });
