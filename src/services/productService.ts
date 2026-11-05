@@ -15,7 +15,7 @@ const currency = new Intl.NumberFormat("en-GB", {
 	currency: "GBP",
 });
 
-// The backend returns prices in pounds (e.g. 349.99), so no pence conversion.
+// The backend returns prices in pounds (e.g. 349.99).
 export const formatPrice = (price: number): string =>
 	currency.format(Number(price));
 
@@ -32,8 +32,9 @@ export const previewDescription = (
 	return `${(lastSpace > 0 ? cut.slice(0, lastSpace) : cut).replace(/[\s,.;:-]+$/, "")}…`;
 };
 
-const safeImageURL = (url: string | undefined): string =>
-	/^https?:\/\//i.test(url ?? "") ? (url as string) : "";
+// Allows absolute http(s) URLs and same-site paths such as /images/x.png, but not protocol-relative //host URLs.
+export const safeImageURL = (url: string | undefined): string =>
+	/^(https?:\/\/|\/(?![/\\]))/i.test(url ?? "") ? (url as string) : "";
 
 export class ProductService {
 	constructor(private readonly api: BackendApi) {}
@@ -67,6 +68,9 @@ export class ProductService {
 			description: product.description,
 			price: Number(product.price),
 			imageURL: safeImageURL(product.imageURL),
+			images: (product.images ?? [])
+				.filter((image) => safeImageURL(image.url))
+				.map((image) => ({ url: image.url, altText: image.altText ?? null })),
 			formattedPrice: formatPrice(product.price),
 			stockQuantity,
 			inStock: stockQuantity > 0,

@@ -5,6 +5,7 @@ import type {
 	BasketRequestCredentials,
 	BasketService,
 } from "../services/basketService";
+import { safeImageURL } from "../services/productService";
 import type { SessionService } from "../services/sessionService";
 import { isValidProductId } from "./productController";
 
@@ -35,10 +36,25 @@ const readAuthorization = (req: Request): string | undefined => {
 	);
 };
 
-const basketCookieHeader = (req: Request): string | undefined => {
+export const basketCookieHeader = (req: Request): string | undefined => {
 	const basketId = readCookie(req, BASKET_COOKIE);
 	return basketId ? `${BASKET_COOKIE}=${basketId}` : undefined;
 };
+
+const BASKET_STATUS_MESSAGES: Record<string, string> = {
+	invalid: `Please enter a quantity between 1 and ${MAX_ITEM_QUANTITY}.`,
+	notfound: "That item is no longer in your basket.",
+	unavailable: "We couldn't update your basket. Please try again.",
+};
+
+const basketChangeStatus = (error: unknown): string =>
+	error instanceof BackendApiError
+		? error.status === 404
+			? "notfound"
+			: error.status === 400
+				? "invalid"
+				: "unavailable"
+		: "unavailable";
 
 export class BasketController {
 	constructor(
@@ -113,6 +129,74 @@ export class BasketController {
 		}
 	}
 
+	async updateItem(req: Request, res: Response): Promise<void> {
+		const authorization = readAuthorization(req);
+		if (!authorization) {
+			res.redirect(303, "/login");
+			return;
+		}
+		const productId = req.params.productId;
+		const body = (req.body ?? {}) as Record<string, unknown>;
+		const quantityText =
+			typeof body.quantity === "string" ? body.quantity.trim() : "";
+		const quantity = Number(quantityText);
+		if (!isValidProductId(productId)) {
+			res.redirect(303, "/basket?basket=notfound");
+			return;
+		}
+		if (
+			!/^\d+$/.test(quantityText) ||
+			quantity < 1 ||
+			quantity > MAX_ITEM_QUANTITY
+		) {
+			res.redirect(303, "/basket?basket=invalid");
+			return;
+		}
+
+		try {
+			const cookie = basketCookieHeader(req);
+			await this.basketService.updateItemQuantity(Number(productId), quantity, {
+				authorization,
+				...(cookie ? { cookie } : {}),
+			});
+			res.redirect(303, "/basket");
+		} catch (error) {
+			if (error instanceof BackendApiError && error.status === 401) {
+				res.redirect(303, "/login");
+				return;
+			}
+			res.redirect(303, `/basket?basket=${basketChangeStatus(error)}`);
+		}
+	}
+
+	async removeItem(req: Request, res: Response): Promise<void> {
+		const authorization = readAuthorization(req);
+		if (!authorization) {
+			res.redirect(303, "/login");
+			return;
+		}
+		const productId = req.params.productId;
+		if (!isValidProductId(productId)) {
+			res.redirect(303, "/basket?basket=notfound");
+			return;
+		}
+
+		try {
+			const cookie = basketCookieHeader(req);
+			await this.basketService.removeItem(Number(productId), {
+				authorization,
+				...(cookie ? { cookie } : {}),
+			});
+			res.redirect(303, "/basket");
+		} catch (error) {
+			if (error instanceof BackendApiError && error.status === 401) {
+				res.redirect(303, "/login");
+				return;
+			}
+			res.redirect(303, `/basket?basket=${basketChangeStatus(error)}`);
+		}
+	}
+
 	async getBasket(req: Request, res: Response): Promise<void> {
 		const authorization = req.get("authorization");
 		const cookie = req.get("cookie");
@@ -135,13 +219,17 @@ export class BasketController {
 			);
 			const items = basket.items.map((item) => ({
 				...item,
-				imageURL: /^https?:\/\//i.test(item.imageURL ?? "")
-					? item.imageURL
-					: "",
+				imageURL: safeImageURL(item.imageURL),
 				displayUnitPrice: formatPrice(item.unitPrice),
 				displaySubtotal: formatPrice(item.unitPrice * item.quantity),
 			}));
 			res.render("basket", {
+				maxItemQuantity: MAX_ITEM_QUANTITY,
+				status:
+					typeof req.query.basket === "string" &&
+					Object.hasOwn(BASKET_STATUS_MESSAGES, req.query.basket)
+						? BASKET_STATUS_MESSAGES[req.query.basket]
+						: undefined,
 				basket: {
 					items,
 					itemCount: items.reduce((count, item) => count + item.quantity, 0),

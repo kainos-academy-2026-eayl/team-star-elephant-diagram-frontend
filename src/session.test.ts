@@ -183,13 +183,16 @@ describe("persistent authentication", () => {
 			if (path.endsWith("/admin/users/999")) {
 				return Promise.resolve(response({ error: "Not found" }, 404));
 			}
-			return Promise.resolve(
-				response({
-					staff: { name: "Ada" },
-					sections: [],
-					quickActions: [],
-				}),
-			);
+			if (path.endsWith("/admin")) {
+				return Promise.resolve(
+					response({
+						staff: { name: "Ada" },
+						sections: [],
+						quickActions: [],
+					}),
+				);
+			}
+			return Promise.resolve(response({ error: "Unexpected URL" }, 500));
 		});
 		const result = await request(createApp({ fetch: api }))
 			.get("/admin/users/999")
@@ -272,6 +275,55 @@ describe("persistent authentication", () => {
 		expect(String(result.headers["set-cookie"])).toContain(
 			"refreshToken=new-refresh",
 		);
+	});
+
+	it("preserves PUT when saving an address after refreshing an expired access token", async () => {
+		const api = vi.fn<typeof fetch>(async (input, init) => {
+			const path = String(input);
+			if (path.endsWith("/auth/refresh")) return credentials();
+			if (path.endsWith("/profile/shipping-address")) {
+				if (init?.method !== "PUT") {
+					return response({ error: "Expected PUT" }, 405);
+				}
+				const authorization = (
+					init.headers as Record<string, string> | undefined
+				)?.Authorization;
+				if (authorization === ["Bearer", "expired-access"].join(" ")) {
+					return response({ error: "Expired" }, 401);
+				}
+				return response({ status: "updated" });
+			}
+			return response({ error: "Unexpected URL" }, 500);
+		});
+		const result = await request(createApp({ fetch: api }))
+			.post("/payment_gateway")
+			.type("form")
+			.set("Cookie", "accessToken=expired-access; refreshToken=current-refresh")
+			.send({
+				useExistingAddress: "false",
+				fullName: "Ada Lovelace",
+				addressLine1: "1 St James Square",
+				city: "London",
+				postcode: "SW1A 1AA",
+				nameOnCard: "Ada Lovelace",
+				cardNumber: "4242424242424242",
+				expiry: "12/30",
+				cvc: "123",
+			});
+
+		expect(result.status).toBe(200);
+		const addressCalls = api.mock.calls.filter(([input]) =>
+			String(input).endsWith("/profile/shipping-address"),
+		);
+		expect(addressCalls).toHaveLength(2);
+		expect(addressCalls.map(([, init]) => init?.method)).toEqual([
+			"PUT",
+			"PUT",
+		]);
+		expect(
+			(addressCalls[1]?.[1]?.headers as Record<string, string> | undefined)
+				?.Authorization,
+		).toBe(["Bearer", "new-access"].join(" "));
 	});
 
 	it("offers a working separate admin login", async () => {

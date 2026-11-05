@@ -4,8 +4,66 @@
 <head>
 	<meta charset="UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
-	<title>Payment Gateway</title>
+	<title>Payment</title>
 	<link rel="stylesheet" href="/styles.css" />
+	<style>
+		.address-selector {
+			display: flex;
+			gap: 1rem;
+			margin-bottom: 1.5rem;
+			flex-wrap: wrap;
+		}
+
+		.address-button {
+			flex: 1;
+			min-width: 150px;
+			padding: 0.75rem 1rem;
+			border: 2px solid #ccc;
+			background: white;
+			cursor: pointer;
+			border-radius: 4px;
+			font-size: 1rem;
+			transition: all 0.2s ease;
+		}
+
+		.address-button:hover {
+			border-color: #333;
+			background: #f9f9f9;
+		}
+
+		.address-button.active {
+			border-color: #007bff;
+			background: #e7f3ff;
+			color: #007bff;
+			font-weight: 600;
+		}
+
+		.saved-address-display {
+			background: #f0f8ff;
+			border-left: 4px solid #007bff;
+			padding: 1rem;
+			margin-bottom: 1.5rem;
+			border-radius: 4px;
+		}
+
+		.saved-address-display h3 {
+			margin: 0 0 0.5rem 0;
+			color: #007bff;
+		}
+
+		.saved-address-display p {
+			margin: 0.25rem 0;
+			color: #333;
+		}
+
+		.shipping-fieldset {
+			display: none;
+		}
+
+		.shipping-fieldset.active {
+			display: block;
+		}
+	</style>
 </head>
 
 <body>
@@ -31,94 +89,195 @@
 	</nav>
 
 	<main class="container">
-		<h1 class="section-heading">Payment Gateway</h1>
+		<h1 class="section-heading">Payment</h1>
 
-		<div class="payment-layout">
-			<section class="payment-card" aria-labelledby="checkout-heading">
-				{% if paymentResult %}
-				<h2 id="checkout-heading">Payment</h2>
-				<p class="payment-intro"></p>
-				<div class="payment-notice" role="status">
-					Payment successful. Payment was processed.
-				</div>
-				<ul class="payment-order-list">
-					{% for item in paymentResult.items %}
-					<li class="payment-order-item">
-						<span>{{ item.name }} × {{ item.quantity }}</span>
-						<span>{{ item.formattedSubtotal }}</span>
-					</li>
-					{% endfor %}
-				</ul>
-				{% else %}
-				<h2 id="checkout-heading">Choose your products</h2>
-				<p class="payment-intro">Select quantities for checkout. Enter payment details.</p>
-				{% if error %}
-				<div class="payment-notice payment-notice--error" role="alert">{{ error }}</div>
-				{% endif %}
-				{% if products and products.length %}
-				<form class="payment-form" action="/payment_gateway" method="post">
-					<ul class="payment-product-list">
-						{% for product in products %}
-						<li class="payment-product">
-							<div>
-								<h3>{{ product.name }}</h3>
-								<p>{{ product.category }} · {{ product.formattedPrice }}</p>
-							</div>
-							<div class="field payment-quantity">
-								<label for="quantity-{{ product.productId }}">Quantity</label>
-								<input type="hidden" name="productId" value="{{ product.productId }}">
-								<input type="number" id="quantity-{{ product.productId }}" name="quantity" min="0" max="99" value="0" required>
-							</div>
-						</li>
-						{% endfor %}
-					</ul>
-					<button type="submit" class="btn btn--primary">Simulate payment</button>
-				</form>
-				{% else %}
-				<p class="payment-intro">No products are currently available.</p>
-				{% endif %}
-				{% endif %}
-			</section>
-
-			<aside class="basket-summary" aria-labelledby="summary-heading">
-				<h2 id="summary-heading">Order summary</h2>
-				{% if paymentResult %}
-				<div class="summary-row">
-					<span>Items</span>
-					<span>{{ paymentResult.itemCount }}</span>
-				</div>
-				<div class="summary-row summary-row--total">
-					<span>Total</span>
-					<span>{{ paymentResult.formattedTotal }}</span>
-				</div>
-				{% else %}
-				<p class="payment-intro">Choose product quantities to submit checkout.</p>
-				{% endif %}
-
-				{% if hasItems and not paymentResult %}
-				<form class="payment-form" action="/payment_gateway" method="post">
-					<button type="button" class="btn btn--thi">Remember my details</button>
-					<div class="field">
-						<label for="nameoncard">Name on Card</label>
-						<input type="text" name="nameoncard" id="nameoncard" autocomplete="card-name" maxlength="20" required>
-					</div>
-					<div class="field">
-						<label for="cardnumber">Card Number</label>
-						<input type="number" name="cardnumber" id="cardnumber" autocomplete="card-number" maxlength="19" required>
-					</div>
-					<div class="field">
-						<label for="expiry">Expiry Date</label>
-						<input type="number" name="expiry" id="expiry" autocomplete="expiry-date" required>
-					</div>
-					<button type="button" class="btn btn--secondary">Remember my details</button>
-					<button type="submit" class="btn btn--primary">Submit payment</button>
-				</form>
-				{% endif %}
-
-				<a class="btn btn--secondary payment-back" href="/basket">Return to basket</a>
-			</aside>
+		{% if error %}
+		<div class="payment-error" role="alert">
+			{{ error }}
+			{% if loginRequired %}
+			<p><a href="/login">Log in to your account</a></p>
+			{% endif %}
 		</div>
+		{% endif %}
+
+		{% if payment and payment.status %}
+		<div class="payment-success" role="status">
+			<h2>{{ payment.message }}</h2>
+		</div>
+		{% else %}
+		<div class="payment-layout">
+			<section class="payment-card" aria-labelledby="payment-heading">
+				<h2 id="payment-heading">Payment details</h2>
+				<p class="payment-intro">Enter your card and shipping information to complete your purchase.</p>
+
+				<form class="payment-form" action="/payment_gateway" method="post" id="paymentForm">
+					<fieldset class="payment-fieldset">
+						<legend class="payment-legend">Card information</legend>
+
+						<div class="field">
+							<label for="nameoncard">Name on card</label>
+							<input type="text" id="nameoncard" name="nameOnCard" autocomplete="cc-name" maxlength="50" required>
+						</div>
+
+						<div class="field">
+							<label for="cardnumber">Card number</label>
+							<input type="text" id="cardnumber" name="cardNumber" autocomplete="cc-number" maxlength="23" placeholder="0000 0000 0000 0000" required>
+						</div>
+
+						<div class="payment-row">
+							<div class="field">
+								<label for="expiry">Expiry date</label>
+								<input type="text" id="expiry" name="expiry" autocomplete="cc-exp" maxlength="5" placeholder="MM/YY" required>
+							</div>
+							<div class="field">
+								<label for="cvc">Security code</label>
+								<input type="text" id="cvc" name="cvc" autocomplete="cc-csc" maxlength="4" placeholder="CVC" required>
+							</div>
+						</div>
+					</fieldset>
+
+					{% if savedAddress %}
+					<fieldset class="payment-fieldset">
+						<legend class="payment-legend">Shipping address</legend>
+
+						<div class="address-selector">
+							<button type="button" class="address-button active" data-address-option="saved">
+								Use saved address
+							</button>
+							<button type="button" class="address-button" data-address-option="new">
+								Use new address
+							</button>
+						</div>
+
+						<div class="saved-address-display" id="savedAddressDisplay">
+							<h3>Saved Address</h3>
+							<p>{{ savedAddress.user.firstName }} {{ savedAddress.user.lastName }}</p>
+							<p>{{ savedAddress.user.addressLine1 }}</p>
+							{% if savedAddress.user.addressLine2 %}
+							<p>{{ savedAddress.user.addressLine2 }}</p>
+							{% endif %}
+							<p>{{ savedAddress.user.city }}, {{ savedAddress.user.postcode }}</p>
+						</div>
+
+						<fieldset class="shipping-fieldset" id="newAddressForm">
+							<div class="field">
+								<label for="fullname">Full name</label>
+								<input type="text" id="fullname" name="fullName" autocomplete="name" maxlength="100">
+							</div>
+
+							<div class="field">
+								<label for="address1">Street address</label>
+								<input type="text" id="address1" name="addressLine1" autocomplete="street-address" maxlength="100">
+							</div>
+
+							<div class="field">
+								<label for="address2">Apartment, suite, etc. (optional)</label>
+								<input type="text" id="address2" name="addressLine2" autocomplete="address-line2" maxlength="100">
+							</div>
+
+							<div class="payment-row">
+								<div class="field">
+									<label for="city">City</label>
+									<input type="text" id="city" name="city" autocomplete="address-level2" maxlength="50">
+								</div>
+								<div class="field">
+									<label for="postcode">Postcode</label>
+									<input type="text" id="postcode" name="postcode" autocomplete="postal-code" maxlength="20">
+								</div>
+							</div>
+						</fieldset>
+
+						<input type="hidden" id="useExistingAddress" name="useExistingAddress" value="true">
+					</fieldset>
+					{% else %}
+					<fieldset class="payment-fieldset">
+						<legend class="payment-legend">Shipping address</legend>
+
+						<div class="field">
+							<label for="fullname">Full name</label>
+							<input type="text" id="fullname" name="fullName" autocomplete="name" maxlength="100" required>
+						</div>
+
+						<div class="field">
+							<label for="address1">Street address</label>
+							<input type="text" id="address1" name="addressLine1" autocomplete="street-address" maxlength="100" required>
+						</div>
+
+						<div class="field">
+							<label for="address2">Apartment, suite, etc. (optional)</label>
+							<input type="text" id="address2" name="addressLine2" autocomplete="address-line2" maxlength="100">
+						</div>
+
+						<div class="payment-row">
+							<div class="field">
+								<label for="city">City</label>
+								<input type="text" id="city" name="city" autocomplete="address-level2" maxlength="50" required>
+							</div>
+							<div class="field">
+								<label for="postcode">Postcode</label>
+								<input type="text" id="postcode" name="postcode" autocomplete="postal-code" maxlength="20" required>
+							</div>
+						</div>
+					</fieldset>
+					{% endif %}
+
+					<div class="payment-actions">
+						<button type="submit" class="btn btn--primary">Submit payment</button>
+						<a href="/checkout" class="btn btn--secondary">Back to order</a>
+					</div>
+				</form>
+			</section>
+		</div>
+		{% endif %}
 	</main>
+
+	<script>
+		{% if savedAddress %}
+		const addressButtons = document.querySelectorAll('[data-address-option]');
+		const newAddressForm = document.getElementById('newAddressForm');
+		const useExistingInput = document.getElementById('useExistingAddress');
+		const fullNameInput = document.getElementById('fullname');
+		const addressLine1Input = document.getElementById('address1');
+		const addressLine2Input = document.getElementById('address2');
+		const cityInput = document.getElementById('city');
+		const postcodeInput = document.getElementById('postcode');
+
+		addressButtons.forEach(button => {
+			button.addEventListener('click', (e) => {
+				e.preventDefault();
+				
+				const option = button.getAttribute('data-address-option');
+				
+				addressButtons.forEach(btn => btn.classList.remove('active'));
+				button.classList.add('active');
+
+				if (option === 'saved') {
+					useExistingInput.value = 'true';
+					newAddressForm.classList.remove('active');
+					
+					fullNameInput.removeAttribute('required');
+					addressLine1Input.removeAttribute('required');
+					cityInput.removeAttribute('required');
+					postcodeInput.removeAttribute('required');
+					
+					fullNameInput.value = '';
+					addressLine1Input.value = '';
+					addressLine2Input.value = '';
+					cityInput.value = '';
+					postcodeInput.value = '';
+				} else {
+					useExistingInput.value = 'false';
+					newAddressForm.classList.add('active');
+					
+					fullNameInput.setAttribute('required', '');
+					addressLine1Input.setAttribute('required', '');
+					cityInput.setAttribute('required', '');
+					postcodeInput.setAttribute('required', '');
+				}
+			});
+		});
+		{% endif %}
+	</script>
 </body>
 
 </html>
