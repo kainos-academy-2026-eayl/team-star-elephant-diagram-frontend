@@ -1,48 +1,31 @@
+{%- import "partials/icons.njk" as i -%}
+{%- set currentNav = "shop-all" -%}
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% if product %}{{ product.name }} | Shop{% else %}Product not found | Shop{% endif %}</title>
-    <link rel="stylesheet" href="/styles.css">
+    <title>{% if product %}{{ product.name }} | Sedshed{% else %}Product not found | Sedshed{% endif %}</title>
+    <link rel="stylesheet" href="/site.css">
+    <link rel="stylesheet" href="/product-detail.css">
 </head>
 
-<body>
-    <header class="navbar">
-        <a href="/products" class="navbar-brand">Home</a>
+<body class="site">
+    {% include "partials/site-header.njk" %}
 
-        <input type="checkbox" id="menu-toggle" class="menu-toggle">
-        <label for="menu-toggle" class="menu-button">
-            <span>Menu</span>
-            <span class="menu-arrow"></span>
-        </label>
-
-        <nav class="dropdown">
-            <ul class="category-links">
-                <li><a href="/products">All</a></li>
-            </ul>
-
-            <div class="dropdown-actions">
-                <a href="/login" class="action-button">Account</a>
-                <a href="/basket" class="action-button">Basket <span class="basket-count">0</span></a>
-            </div>
-        </nav>
-    </header>
-
-    <div class="search-bar">
-        <form action="/products" method="get" class="search-form">
-            <input type="search" name="q" placeholder="Search products">
-            <button type="submit">Search</button>
-        </form>
-    </div>
-
-    <main class="container">
+    <main class="product-page">
         {% if error %}
-        <p role="alert">{{ error }}</p>
-        <a href="/products">Return to the product catalogue</a>
+        <p class="notice notice--error" role="alert">{{ error }}</p>
+        <a class="back-link" href="/products">{{ i.icon("arrow") }}<span>Return to the product catalogue</span></a>
         {% elif product %}
-        <a href="/products">Back to products</a>
+        <nav class="breadcrumb" aria-label="Breadcrumb">
+            <ol>
+                <li><a href="/products">Shop All</a></li>
+                <li><a href="/products?category={{ product.category | urlencode }}">{{ product.category }}</a></li>
+                <li aria-current="page">{{ product.name }}</li>
+            </ol>
+        </nav>
         <section class="product-detail" aria-labelledby="product-title">
             <div class="product-gallery" aria-label="Product images">
                 {% if product.images and product.images.length > 1 %}
@@ -63,7 +46,7 @@
                 {% elif product.imageURL %}
                 <img src="{{ product.imageURL }}" alt="{{ product.name }}">
                 {% else %}
-                <div class="product-image" role="img" aria-label="No product image available"></div>
+                <div class="product-gallery__placeholder" role="img" aria-label="No product image available">{{ i.icon("box") }}</div>
                 {% endif %}
             </div>
 
@@ -110,10 +93,12 @@
         <section class="product-not-found" aria-labelledby="not-found-title">
             <h1 id="not-found-title">Product not found</h1>
             <p>This product may have been removed or the link may be incorrect.</p>
-            <a href="/products">Return to the product catalogue</a>
+            <a class="back-link" href="/products">{{ i.icon("arrow") }}<span>Return to the product catalogue</span></a>
         </section>
         {% endif %}
     </main>
+
+    {% include "partials/site-menu.njk" %}
 </body>
 
 </html>
