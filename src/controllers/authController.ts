@@ -3,6 +3,7 @@ import { BackendApiError } from "../backendApi";
 import type { AuthService } from "../services/authService";
 import type { SessionService } from "../services/sessionService";
 import { safeAdminReturnTo } from "../validators/returnTo";
+import { getCartCount } from "./cartCount";
 
 export class AuthController {
 	constructor(
@@ -10,9 +11,10 @@ export class AuthController {
 		private readonly sessions: SessionService,
 	) {}
 
-	getLogin(req: Request, res: Response, admin = false): void {
+	async getLogin(req: Request, res: Response, admin = false): Promise<void> {
 		res.render("login", {
 			admin,
+			cartCount: await getCartCount(this.sessions, req, res),
 			registered: req.query.registered === "1",
 			passwordReset: req.query.reset === "1",
 			...(admin
@@ -137,6 +139,9 @@ export class AuthController {
 					? error.message
 					: "The service is temporarily unavailable. Please try again.",
 				details: rejected ? error.details : {},
+				...(page === "login"
+					? { cartCount: await getCartCount(this.sessions, req, res) }
+					: {}),
 			});
 		}
 	}

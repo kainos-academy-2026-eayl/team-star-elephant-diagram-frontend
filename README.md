@@ -119,6 +119,19 @@ Template filenames must match the casing used by `res.render()` exactly.
 The Linux CI runner uses a case-sensitive filesystem; the page tests check
 the filenames explicitly so casing mistakes are also caught on macOS.
 
+### Test organization
+
+Keep tests in focused files for the unit or feature under test. The
+[app tests](src/tests/app.test.ts) cover application-level behavior only;
+do not add authentication, admin, basket, or product cases there.
+Controller, route, service, and model tests live in their respective
+directories under [src/tests](src/tests). The former `src/products.test.ts`
+suite is now [productController.test.ts](src/tests/controllers/productController.test.ts).
+[Login redesign tests](src/login.test.ts) and
+[expanded product tests](src/productExpanded.test.ts) remain separate suites.
+Unit tests should exercise the target directly with mocked dependencies;
+existing HTTP-level regression tests also remain in their feature suites.
+
 ### Required GitHub configuration
 
 A workflow alone does not block merging. A repository administrator must:
