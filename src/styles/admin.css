@@ -470,7 +470,7 @@ body:has(.admin-menu[open]) {
 }
 
 .admin-page-head__eyebrow {
-	color: var(--sed-gold);
+	color: var(--sed-purple);
 }
 
 .admin-page-head__title {
@@ -1188,6 +1188,8 @@ body:has(.admin-menu[open]) {
 	border: 1px solid var(--sed-line);
 	border-radius: 14px;
 	color: var(--sed-text);
+	white-space: normal;
+	overflow-wrap: anywhere;
 }
 
 .admin-confirm::backdrop {

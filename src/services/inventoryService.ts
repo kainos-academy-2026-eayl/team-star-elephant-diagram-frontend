@@ -50,6 +50,7 @@ const SORT_OPTIONS = [
 		label: "Threshold (high → low)",
 	},
 	{ sort: "stockStatus", direction: "asc", label: "Status" },
+	{ sort: "stockStatus", direction: "desc", label: "Status (descending)" },
 	{ sort: "sku", direction: "asc", label: "SKU (A–Z)" },
 	{ sort: "sku", direction: "desc", label: "SKU (Z–A)" },
 ];

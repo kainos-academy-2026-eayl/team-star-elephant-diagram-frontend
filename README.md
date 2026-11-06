@@ -108,11 +108,11 @@ their existing dashboard. Direct resource URLs still use the backend permission
 matrix; the finance-only dashboard does not expose operational navigation.
 
 Staff sections are accessed through the top navigation and its matching menu,
-not dashboard quick-action buttons. Users, Baskets, Orders and Inventory links
-only appear when granted by the backend's role-scoped sections. Users and Baskets
-open their existing pages. Orders (`/admin/orders`, including detail and mutation
-URLs) intentionally return the standard 404 until that feature is enabled.
-Inventory (`/admin/inventory`) opens the integrated inventory section.
+not dashboard quick-action buttons. Users, Baskets and Inventory links only
+appear when granted by the backend's role-scoped sections; the admin navigation
+never includes Orders. Users and Baskets open their existing pages. The frontend
+has no admin orders pages, so `/admin/orders` (including detail and mutation
+URLs) returns the standard 404. Inventory (`/admin/inventory`) opens the integrated inventory section.
 Finance navigation remains dashboard-only.
 
 ### Admin inventory (KAN-71)
@@ -157,7 +157,7 @@ credentials and KAN-104 UI. The backend must retain KAN-104's `lowStock` respons
 alongside KAN-71's new inventory summary/permissions. The existing supplier-line
 low-stock panel is separate from product-level status counts. Finance's
 finance-only dashboard remains unchanged; permission-granted direct inventory
-URLs are read-only for that role. Order routes remain deliberately unregistered.
+URLs are read-only for that role. There are no admin order routes.
 
 Dashboard summary cards include a green role badge under "Your access"; its
 glow is disabled for reduced-motion preferences. Staff whose backend-granted
