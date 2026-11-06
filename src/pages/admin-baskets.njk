@@ -4,70 +4,88 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Baskets | Admin | Shop</title>
-    <link rel="stylesheet" href="/styles.css">
+    <title>Baskets | Admin | Sedshed</title>
     <link rel="stylesheet" href="/admin.css">
-    <script src="/admin.js" defer></script>
 </head>
 
-<body>
+<body class="admin">
     {% set activeNav = "baskets" %}
+    {% set searchAction = "/admin/baskets" %}
+    {% set searchLabel = "Search baskets" %}
+    {% set searchPlaceholder = "Search by basket ID, customer name or email" %}
     {% include "partials/admin-nav.njk" %}
 
-    <div class="search-bar">
-        <form action="/admin/baskets" method="get" class="search-form" role="search">
-            <label for="basket-search" class="visually-hidden">Search baskets</label>
-            <input type="search" id="basket-search" name="q" maxlength="100" placeholder="Search by basket ID, customer name or email" value="{{ search }}">
-            <button type="submit">Search</button>
-        </form>
-    </div>
+    <main id="main" class="admin-main">
+        <header class="admin-page-head">
+            <p class="admin-page-head__eyebrow">Shopping</p>
+            <h1 class="admin-page-head__title">Active baskets</h1>
+            {% if search %}<p class="admin-page-head__meta">Showing results for "{{ search }}"</p>{% endif %}
+        </header>
 
-    <main class="container">
-        <h1 class="section-heading">Active baskets</h1>
+        {% if notice %}<div class="admin-alert admin-alert--success" role="status">{{ notice }}</div>{% endif %}
+
+        {% if basketPermissions and basketPermissions.create %}
+        <section class="admin-card" aria-labelledby="create-basket">
+            <h2 id="create-basket" class="admin-card__title">Create a basket</h2>
+            <p class="admin-card__note">Each customer has one basket. Add products after it has been created.</p>
+            {% if createError %}<div class="admin-alert admin-alert--error" role="alert"><span>{{ createError }}</span></div>{% endif %}
+            <form action="/admin/baskets" method="post" class="admin-basket-add">
+                <input type="hidden" name="{{ submissionField }}" value="{{ submissionToken() }}">
+                <div class="admin-field">
+                    <label for="create-email">Customer email</label>
+                    <input id="create-email" name="email" type="email" maxlength="255" autocomplete="off" value="{{ createEmail }}" required
+                        {% if createError %}aria-invalid="true"{% endif %}>
+                </div>
+                <button type="submit" class="admin-btn admin-btn--primary">Create basket</button>
+            </form>
+        </section>
+        {% endif %}
 
         {% if error %}
-        <div class="error-message" role="alert">
-            {{ error }}
+        <div class="admin-alert admin-alert--error" role="alert">
+            <span>{{ error }}</span>
             <a href="/admin/baskets{% if search %}?q={{ search | urlencode }}{% endif %}">Retry</a>
         </div>
         {% elif baskets | length %}
-        <section class="order-card admin-table-card" aria-labelledby="baskets-table-caption">
-            <table class="order-items admin-table">
-                <caption id="baskets-table-caption" class="visually-hidden">Active customer baskets</caption>
-                <thead>
-                    <tr>
-                        <th scope="col">Basket ID</th>
-                        <th scope="col">Customer name</th>
-                        <th scope="col">Customer email</th>
-                        <th scope="col" class="admin-numeric">Items</th>
-                        <th scope="col" class="admin-numeric">Total</th>
-                        <th scope="col">Last activity</th>
-                        <th scope="col">Status</th>
-                        <th scope="col"><span class="visually-hidden">Actions</span></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for basket in baskets %}
-                    <tr>
-                        <td>#{{ basket.basketId }}</td>
-                        <td>{{ basket.customerName }}</td>
-                        <td>{{ basket.customerEmail }}</td>
-                        <td class="admin-numeric">{{ basket.itemCount }}</td>
-                        <td class="admin-numeric">{{ basket.total }}</td>
-                        <td>{{ basket.lastActivity }}</td>
-                        <td><span class="order-status">{{ basket.status }}</span></td>
-                        <td>
-                            <a href="{{ basket.detailsHref }}" class="action-button admin-view-button">View basket<span class="visually-hidden"> #{{ basket.basketId }}</span></a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <section class="admin-card admin-card--flush" aria-labelledby="baskets-table-caption">
+            <div class="admin-table-wrap">
+                <table class="admin-table">
+                    <caption id="baskets-table-caption" class="visually-hidden">Active customer baskets</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Basket ID</th>
+                            <th scope="col">Customer name</th>
+                            <th scope="col">Customer email</th>
+                            <th scope="col" class="admin-numeric">Items</th>
+                            <th scope="col" class="admin-numeric">Total</th>
+                            <th scope="col">Last activity</th>
+                            <th scope="col">Status</th>
+                            <th scope="col"><span class="visually-hidden">Actions</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for basket in baskets %}
+                        <tr>
+                            <td class="admin-table__strong">#{{ basket.basketId }}</td>
+                            <td>{{ basket.customerName }}</td>
+                            <td>{{ basket.customerEmail }}</td>
+                            <td class="admin-numeric">{{ basket.itemCount }}</td>
+                            <td class="admin-numeric">{{ basket.total }}</td>
+                            <td>{{ basket.lastActivity }}</td>
+                            <td><span class="admin-status admin-status--{{ 'success' if basket.itemCount else 'warning' }}">{{ basket.status }}</span></td>
+                            <td class="admin-table__action">
+                                <a href="{{ basket.detailsHref }}" class="admin-btn admin-btn--ghost admin-btn--small">View basket<span class="visually-hidden"> #{{ basket.basketId }}</span></a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </section>
         {% elif search %}
-        <p class="order-empty" role="status">No baskets match "{{ search }}". <a href="/admin/baskets" class="admin-table-link">Clear search</a></p>
+        <p class="admin-empty admin-empty--panel" role="status">No baskets match "{{ search }}". <a href="/admin/baskets" class="admin-link">Clear search</a></p>
         {% else %}
-        <p class="order-empty" role="status">There are no active baskets.</p>
+        <p class="admin-empty admin-empty--panel" role="status">There are no active baskets.</p>
         {% endif %}
     </main>
 </body>

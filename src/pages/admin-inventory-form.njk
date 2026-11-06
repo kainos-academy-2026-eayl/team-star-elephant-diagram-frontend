@@ -1,0 +1,57 @@
+{% import "partials/inventory-controls.njk" as controls %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if editing %}Edit{% else %}Create{% endif %} product | Admin | Sedshed</title>
+    <link rel="stylesheet" href="/admin.css">
+</head>
+<body class="admin">
+    {% set activeNav = "inventory" %}
+    {% include "partials/admin-nav.njk" %}
+    <main id="main" class="admin-main">
+        <a href="/admin/inventory{% if editing %}/{{ productId }}{% endif %}" class="admin-back-link">&larr; Cancel and return</a>
+        <header class="admin-page-head"><h1 class="admin-page-head__title">{% if editing %}Edit{% else %}Create{% endif %} product</h1></header>
+        {% if error %}
+        <div class="admin-alert admin-alert--error" role="alert">
+            <div>{{ error }}{% if errors %}<ul>{% for field, messages in errors %}<li><a href="#{{ field }}">{{ field }}: {{ messages | join(" ") }}</a></li>{% endfor %}</ul>{% endif %}</div>
+        </div>
+        {% endif %}
+        <form method="post" action="/admin/inventory{% if editing %}/{{ productId }}{% endif %}" class="admin-card admin-product-form">
+            <input type="hidden" name="{{ submissionField }}" value="{{ submissionToken() }}">
+            <p>All fields are required. Images use an http(s) URL or an existing /images/ path.</p>
+            {{ controls.field("name", "Name", values, errors, "text", "100") }}
+            <div class="admin-field">
+                <label for="description">Description</label>
+                <textarea id="description" name="description" maxlength="255" rows="4" required{% if errors.description %} aria-invalid="true" aria-describedby="description-error"{% endif %}>{{ values.description }}</textarea>
+                {% if errors.description %}<p id="description-error" class="admin-field-error">{{ errors.description | join(" ") }}</p>{% endif %}
+            </div>
+            {{ controls.field("price", "Price (GBP)", values, errors, "number", "", "0.01", "99999999.99", "0.01") }}
+            {{ controls.field("category", "Category", values, errors, "text", "100") }}
+            {% if editing %}
+            <div class="admin-field"><label for="sku">SKU (cannot be changed)</label><input id="sku" name="sku" value="{{ values.sku }}" readonly></div>
+            {% else %}
+            {{ controls.field("sku", "SKU", values, errors, "text", "64") }}
+            <div class="admin-field">
+                <label for="supplierId">Supplier</label>
+                <select name="supplierId" id="supplierId" required{% if errors.supplierId %} aria-invalid="true" aria-describedby="supplierId-error"{% endif %}>
+                    <option value="">Select a supplier</option>
+                    {% for supplier in suppliers %}<option value="{{ supplier.supplierId }}"{% if values.supplierId == supplier.supplierId | string %} selected{% endif %}>{{ supplier.name }}</option>{% endfor %}
+                </select>
+                <p class="admin-card__note">Stock is held against this supplier. An existing supplier must be available before creating a product.</p>
+                {% if errors.supplierId %}<p id="supplierId-error" class="admin-field-error">{{ errors.supplierId | join(" ") }}</p>{% endif %}
+            </div>
+            {% endif %}
+            {{ controls.field("stockQuantity", "Stock" if editing else "Initial Stock", values, errors, "number", "", "0", "2147483647", "1") }}
+            {{ controls.field("lowStockThreshold", "Low Stock Threshold", values, errors, "number", "", "0", "2147483647", "1") }}
+            {{ controls.field("imageURL", "Image URL or /images/ path", values, errors, "text", "255") }}
+            {% if editing %}{{ controls.field("reason", "Reason for update", values, errors, "text", "255") }}{% endif %}
+            <div class="admin-card__actions">
+                <button type="submit" class="admin-btn admin-btn--primary">{% if editing %}Save changes{% else %}Create product{% endif %}</button>
+                <a href="/admin/inventory" class="admin-btn admin-btn--ghost">Cancel</a>
+            </div>
+        </form>
+    </main>
+</body>
+</html>

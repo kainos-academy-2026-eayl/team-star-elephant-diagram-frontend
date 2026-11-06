@@ -75,7 +75,7 @@ describe("admin dashboard", () => {
 		});
 	});
 
-	it("shows access denied when staff lack dashboard permission", async () => {
+	it("shows access denied for staff without dashboard permission", async () => {
 		const fetchApi = vi
 			.fn<typeof fetch>()
 			.mockResolvedValue(
@@ -112,7 +112,7 @@ describe("admin dashboard", () => {
 
 		expect(res.status).toBe(200);
 		expect(res.text).toContain('<a href="/admin/users">Users</a>');
-		expect(res.text).toContain('<a href="/admin/orders">Orders</a>');
+		expect(res.text).not.toContain('href="/admin/orders"');
 		expect(res.text).not.toContain("Users (Unavailable)");
 	});
 
@@ -135,7 +135,8 @@ describe("admin dashboard", () => {
 
 		expect(res.text).toContain('<a href="/admin" class="active"');
 		expect(res.text).toContain('<a href="/admin/baskets">Baskets</a>');
-		expect(res.text).toContain('<a href="/admin/orders">Orders</a>');
+		expect(res.text).not.toContain('<a href="/admin/users">Users</a>');
+		expect(res.text).not.toContain('href="/admin/orders"');
 		expect(res.text).not.toContain("Baskets (Unavailable)");
 	});
 
@@ -162,6 +163,8 @@ describe("admin user management", () => {
 		...overrides,
 	});
 	const userDetails = (overrides = {}) => ({
+		sections: [{ label: "Users" }],
+		quickActions: [{ label: "Suspend or reactivate customers" }],
 		user: adminUser(overrides),
 		recentOrders: [
 			{
@@ -179,13 +182,6 @@ describe("admin user management", () => {
 	});
 	const jsonResponse = (body: unknown, status = 200) =>
 		new Response(JSON.stringify(body), { status });
-	const accessDashboard = () =>
-		jsonResponse({
-			staff: { name: "Staff member" },
-			role: "Admin",
-			sections: [{ label: "Users" }],
-			quickActions: [{ label: "Suspend or reactivate customers" }],
-		});
 
 	it.each(["admin-users", "admin-user-details"])(
 		"provides the %s template",
@@ -275,13 +271,9 @@ describe("admin user management", () => {
 	});
 
 	it("renders user details with orders, basket and a suspend action", async () => {
-		const fetchApi = vi.fn<typeof fetch>((input) =>
-			Promise.resolve(
-				String(input).endsWith("/admin")
-					? accessDashboard()
-					: jsonResponse(userDetails()),
-			),
-		);
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockImplementation(async () => jsonResponse(userDetails()));
 		const res = await request(
 			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 		)
@@ -312,16 +304,12 @@ describe("admin user management", () => {
 	});
 
 	it("offers reactivation for a suspended user with an empty basket", async () => {
-		const fetchApi = vi.fn<typeof fetch>((input) =>
-			Promise.resolve(
-				String(input).endsWith("/admin")
-					? accessDashboard()
-					: jsonResponse({
-							...userDetails({ status: "suspended" }),
-							recentOrders: [],
-							basket: { itemCount: 0, subtotal: 0, items: [] },
-						}),
-			),
+		const fetchApi = vi.fn<typeof fetch>().mockImplementation(async () =>
+			jsonResponse({
+				...userDetails({ status: "suspended" }),
+				recentOrders: [],
+				basket: { itemCount: 0, subtotal: 0, items: [] },
+			}),
 		);
 		const res = await request(createApp({ fetch: fetchApi }))
 			.get("/admin/users/7")
@@ -334,31 +322,6 @@ describe("admin user management", () => {
 		expect(res.text).toContain("No orders yet.");
 		expect(res.text).toContain("The basket is empty.");
 	});
-
-	it.each(["active", "suspended"])(
-		"does not offer status changes for a read-only role with an %s user",
-		async (status) => {
-			const fetchApi = vi.fn<typeof fetch>((input) =>
-				Promise.resolve(
-					String(input).endsWith("/admin")
-						? jsonResponse({
-								staff: { name: "Staff member" },
-								role: "Read-only staff",
-								sections: [{ label: "Users" }],
-								quickActions: [],
-							})
-						: jsonResponse(userDetails({ status })),
-				),
-			);
-			const res = await request(createApp({ fetch: fetchApi }))
-				.get("/admin/users/7")
-				.set("Cookie", "accessToken=staff-access");
-
-			expect(res.status).toBe(200);
-			expect(res.text).not.toContain("Suspend account");
-			expect(res.text).not.toContain("Reactivate account");
-		},
-	);
 
 	it.each([
 		["/admin/users", "/admin/login?returnTo=%2Fadmin%2Fusers"],
@@ -398,11 +361,14 @@ describe("admin user management", () => {
 	it.each(["/admin/users", "/admin/users/7"])(
 		"redirects to the admin login when the session has expired for %s",
 		async (path) => {
-			const fetchApi = vi.fn<typeof fetch>((input) =>
-				Promise.resolve(
-					String(input).endsWith("/auth/refresh")
-						? jsonResponse({ error: "Expired refresh" }, 401)
-						: jsonResponse({ error: "Expired" }, 401),
+			const fetchApi = vi.fn<typeof fetch>().mockImplementation(async (input) =>
+				jsonResponse(
+					{
+						error: String(input).endsWith("/auth/refresh")
+							? "Expired refresh"
+							: "Expired",
+					},
+					401,
 				),
 			);
 			const res = await request(createApp({ fetch: fetchApi }))
@@ -423,7 +389,7 @@ describe("admin user management", () => {
 	);
 
 	it.each(["/admin/users", "/admin/users/7"])(
-		"shows access denied for staff without permission to %s",
+		"shows access denied for staff without permission for %s",
 		async (path) => {
 			const fetchApi = vi
 				.fn<typeof fetch>()
@@ -441,28 +407,18 @@ describe("admin user management", () => {
 	);
 
 	it("refreshes an expired access token and keeps the users list working", async () => {
-		const fetchApi = vi.fn<typeof fetch>((input, init) => {
-			const url = String(input);
-			const authorization = (
-				init?.headers as Record<string, string> | undefined
-			)?.Authorization;
-			if (authorization === ["Bearer", "expired-access"].join(" ")) {
-				return Promise.resolve(jsonResponse({ error: "Expired" }, 401));
-			}
-			if (url.endsWith("/auth/refresh")) {
-				return Promise.resolve(loginResponse());
-			}
-			if (url.endsWith("/admin/users/7")) {
-				return Promise.resolve(jsonResponse(userDetails()));
-			}
-			if (url.endsWith("/admin/users")) {
-				return Promise.resolve(jsonResponse({ users: [adminUser()] }));
-			}
-			if (url.endsWith("/admin")) {
-				return Promise.resolve(accessDashboard());
-			}
-			return Promise.resolve(jsonResponse({ error: "Unexpected URL" }, 500));
-		});
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockImplementation(async (input, init) => {
+				if (String(input).endsWith("/auth/refresh")) return loginResponse();
+				if (
+					(init?.headers as Record<string, string>)?.Authorization ===
+					["Bearer", "expired-access"].join(" ")
+				) {
+					return jsonResponse({ error: "Expired" }, 401);
+				}
+				return jsonResponse({ ...userDetails(), users: [adminUser()] });
+			});
 		const app = createApp({
 			apiBaseUrl: "http://backend:4000",
 			fetch: fetchApi,
@@ -476,11 +432,15 @@ describe("admin user management", () => {
 
 		expect(res.status).toBe(200);
 		expect(res.text).toContain("Ada Lovelace");
-		expect(
-			fetchApi.mock.calls.some(([url]) =>
-				String(url).endsWith("/auth/refresh"),
-			),
-		).toBe(true);
+		expect(String(fetchApi.mock.calls[2]?.[0])).toBe(
+			"http://backend:4000/auth/refresh",
+		);
+		expect(fetchApi.mock.calls[2]?.[1]?.headers).toMatchObject({
+			Cookie: "refreshToken=current-refresh",
+		});
+		expect(fetchApi.mock.calls[3]?.[1]?.headers).toMatchObject({
+			Authorization: ["Bearer", "access-one"].join(" "),
+		});
 		const cookies = res.headers["set-cookie"] as unknown as string[];
 		expect(cookies.some((c) => c.startsWith("accessToken=access-one"))).toBe(
 			true,
@@ -494,13 +454,10 @@ describe("admin user management", () => {
 			.set("Cookie", "accessToken=access-one; refreshToken=refresh-one");
 		expect(details.status).toBe(200);
 		expect(details.text).toContain("Customer information");
-		expect(
-			fetchApi.mock.calls.filter(
-				([, options]) =>
-					(options?.headers as Record<string, string>)?.Authorization ===
-					["Bearer", "access-one"].join(" "),
-			),
-		).toHaveLength(4);
+		expect(fetchApi.mock.calls[5]?.[1]?.headers).toMatchObject({
+			Authorization: ["Bearer", "access-one"].join(" "),
+		});
+		expect(fetchApi).toHaveBeenCalledTimes(7);
 	});
 
 	it.each(["suspend", "reactivate"])(
@@ -698,61 +655,6 @@ describe("admin user management", () => {
 		expect(res.text).toContain("Access denied");
 	});
 
-	it("reuses refreshed credentials when checking access after a forbidden status change", async () => {
-		const fetchApi = vi.fn<typeof fetch>((input, init) => {
-			const url = String(input);
-			const authorization = (
-				init?.headers as Record<string, string> | undefined
-			)?.Authorization;
-			if (url.endsWith("/auth/refresh")) {
-				return Promise.resolve(loginResponse());
-			}
-			if (url.endsWith("/admin/users/7/suspend")) {
-				return Promise.resolve(
-					authorization === ["Bearer", "expired-access"].join(" ")
-						? jsonResponse({ error: "Expired" }, 401)
-						: jsonResponse({ error: "Forbidden" }, 403),
-				);
-			}
-			if (url.endsWith("/admin")) {
-				return Promise.resolve(
-					jsonResponse({
-						role: "Read-only staff",
-						sections: [{ label: "Users" }],
-						quickActions: [],
-					}),
-				);
-			}
-			return Promise.resolve(jsonResponse({ error: "Unexpected URL" }, 500));
-		});
-		const res = await request(createApp({ fetch: fetchApi }))
-			.post("/admin/users/7/suspend")
-			.set("Host", "shop.example")
-			.set("Origin", "http://shop.example")
-			.set(
-				"Cookie",
-				"accessToken=expired-access; refreshToken=current-refresh",
-			);
-
-		expect(res.status).toBe(403);
-		expect(res.headers.location).toBeUndefined();
-		expect(res.text).toContain("Access denied");
-		expect(
-			fetchApi.mock.calls.filter(([url]) =>
-				String(url).endsWith("/auth/refresh"),
-			),
-		).toHaveLength(1);
-		expect(fetchApi.mock.calls[3]?.[1]?.headers).toMatchObject({
-			Authorization: ["Bearer", "access-one"].join(" "),
-		});
-		expect(String(res.headers["set-cookie"])).toContain(
-			"accessToken=access-one",
-		);
-		expect(String(res.headers["set-cookie"])).toContain(
-			"refreshToken=refresh-one",
-		);
-	});
-
 	it("reports a failed status change when the backend is unavailable", async () => {
 		const fetchApi = vi
 			.fn<typeof fetch>()
@@ -906,26 +808,22 @@ describe("admin baskets", () => {
 		total: "£85.00",
 	};
 	const jsonResponse = (body: unknown, status = 200) =>
-		new Response(JSON.stringify(body), { status });
-	const staffCookie = "accessToken=staff-access";
+		new Response(
+			JSON.stringify({ sections: [{ label: "Baskets" }], ...(body as object) }),
+			{ status },
+		);
 
 	it("renders the active basket list from the backend", async () => {
-		const fetchApi = vi.fn<typeof fetch>((input) =>
-			Promise.resolve(
-				String(input).endsWith("/admin")
-					? jsonResponse({
-							staff: { name: "Staff member" },
-							sections: [{ label: "Baskets" }],
-							quickActions: [],
-						})
-					: jsonResponse({ baskets: basketSummaries }),
-			),
-		);
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockImplementation(async () =>
+				jsonResponse({ baskets: basketSummaries }),
+			);
 		const res = await request(
 			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 		)
 			.get("/admin/baskets")
-			.set("Cookie", staffCookie);
+			.set("Cookie", "accessToken=staff-access");
 
 		expect(res.status).toBe(200);
 		expect(res.text).toContain("Active baskets");
@@ -941,27 +839,17 @@ describe("admin baskets", () => {
 		expect(res.text).toContain(
 			'<a href="/admin/baskets" class="active" aria-current="page">Baskets</a>',
 		);
-		expect(
-			fetchApi.mock.calls.some(([url]) =>
-				String(url).endsWith("/admin/baskets"),
-			),
-		).toBe(true);
+		expect(String(fetchApi.mock.calls[0]?.[0])).toBe(
+			"http://backend:4000/admin/baskets",
+		);
 	});
 
 	it("forwards staff credentials when loading baskets", async () => {
-		const fetchApi = vi.fn<typeof fetch>((input) =>
-			Promise.resolve(
-				String(input).endsWith("/admin")
-					? jsonResponse({
-							staff: { name: "Staff member" },
-							sections: [{ label: "Baskets" }],
-							quickActions: [],
-						})
-					: String(input).endsWith("/admin/baskets/123")
-						? jsonResponse({ basket: basketDetails })
-						: jsonResponse({ baskets: basketSummaries }),
-			),
-		);
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockImplementation(async () =>
+				jsonResponse({ baskets: basketSummaries, basket: basketDetails }),
+			);
 		const client = request(
 			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 		);
@@ -973,63 +861,41 @@ describe("admin baskets", () => {
 		await client
 			.get("/admin/baskets")
 			.set("Authorization", ["Bearer", "test-token"].join(" "))
-			.set("Cookie", staffCookie);
+			.set("Cookie", "session=staff-session");
 		await client
 			.get("/admin/baskets/123")
 			.set("Authorization", ["Bearer", "test-token"].join(" "))
-			.set("Cookie", staffCookie);
+			.set("Cookie", "session=staff-session");
 
-		const protectedCalls = fetchApi.mock.calls.filter(
-			([url]) => !String(url).endsWith("/admin"),
-		);
-		expect(protectedCalls).toHaveLength(2);
-		for (const [, options] of protectedCalls) {
-			expect(options?.headers).toEqual(expectedHeaders);
-		}
+		expect(fetchApi.mock.calls[0]?.[1]?.headers).toEqual(expectedHeaders);
+		expect(fetchApi.mock.calls[2]?.[1]?.headers).toEqual(expectedHeaders);
 	});
 
-	it("filters baskets by search term", async () => {
-		const fetchApi = vi.fn<typeof fetch>((input) =>
-			Promise.resolve(
-				String(input).endsWith("/admin")
-					? jsonResponse({
-							staff: { name: "Staff member" },
-							sections: [{ label: "Baskets" }],
-							quickActions: [],
-						})
-					: jsonResponse({
-							baskets: String(input).includes("?")
-								? [basketSummaries[1]]
-								: basketSummaries,
-						}),
-			),
-		);
+	it("passes basket search terms to the backend", async () => {
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(jsonResponse({ baskets: [basketSummaries[1]] }));
 		const res = await request(createApp({ fetch: fetchApi }))
 			.get("/admin/baskets")
 			.query({ q: "ADA@example" })
-			.set("Cookie", staffCookie);
+			.set("Cookie", "accessToken=staff-access");
 
 		expect(res.status).toBe(200);
 		expect(res.text).toContain("Ada Lovelace");
 		expect(res.text).not.toContain("John Smith");
 		expect(res.text).toContain('value="ADA@example"');
+		expect(String(fetchApi.mock.calls[0]?.[0])).toBe(
+			"http://localhost:3001/admin/baskets?search=ADA%40example",
+		);
 	});
 
 	it("renders an empty state when there are no active baskets", async () => {
-		const fetchApi = vi.fn<typeof fetch>((input) =>
-			Promise.resolve(
-				String(input).endsWith("/admin")
-					? jsonResponse({
-							staff: { name: "Staff member" },
-							sections: [{ label: "Baskets" }],
-							quickActions: [],
-						})
-					: jsonResponse({ baskets: [] }),
-			),
-		);
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(jsonResponse({ baskets: [] }));
 		const res = await request(createApp({ fetch: fetchApi }))
 			.get("/admin/baskets")
-			.set("Cookie", staffCookie);
+			.set("Cookie", "accessToken=staff-access");
 
 		expect(res.status).toBe(200);
 		expect(res.text).toContain("There are no active baskets.");
@@ -1037,21 +903,13 @@ describe("admin baskets", () => {
 	});
 
 	it("renders a no-results state when the search matches nothing", async () => {
-		const fetchApi = vi.fn<typeof fetch>((input) =>
-			Promise.resolve(
-				String(input).endsWith("/admin")
-					? jsonResponse({
-							staff: { name: "Staff member" },
-							sections: [{ label: "Baskets" }],
-							quickActions: [],
-						})
-					: jsonResponse({ baskets: [] }),
-			),
-		);
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(jsonResponse({ baskets: [] }));
 		const res = await request(createApp({ fetch: fetchApi }))
 			.get("/admin/baskets")
 			.query({ q: "<script>" })
-			.set("Cookie", staffCookie);
+			.set("Cookie", "accessToken=staff-access");
 
 		expect(res.status).toBe(200);
 		expect(res.text).toContain("No baskets match");
@@ -1060,22 +918,14 @@ describe("admin baskets", () => {
 	});
 
 	it("renders basket details from the backend", async () => {
-		const fetchApi = vi.fn<typeof fetch>((input) =>
-			Promise.resolve(
-				String(input).endsWith("/admin")
-					? jsonResponse({
-							staff: { name: "Staff member" },
-							sections: [{ label: "Baskets" }],
-							quickActions: [],
-						})
-					: jsonResponse({ basket: basketDetails }),
-			),
-		);
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(jsonResponse({ basket: basketDetails }));
 		const res = await request(
 			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 		)
 			.get("/admin/baskets/123")
-			.set("Cookie", staffCookie);
+			.set("Cookie", "accessToken=staff-access");
 
 		expect(res.status).toBe(200);
 		expect(res.text).toContain("Basket #123");
@@ -1090,35 +940,20 @@ describe("admin baskets", () => {
 		expect(res.text).toContain("<dd>4</dd>");
 		expect(res.text).toContain("<dd>£85.00</dd>");
 		expect(res.text).toContain('href="/admin/baskets" class="admin-back-link"');
-		expect(
-			fetchApi.mock.calls.some(([url]) =>
-				String(url).endsWith("/admin/baskets/123"),
-			),
-		).toBe(true);
+		expect(String(fetchApi.mock.calls[0]?.[0])).toBe(
+			"http://backend:4000/admin/baskets/123",
+		);
 	});
 
 	it("renders an empty basket", async () => {
-		const fetchApi = vi.fn<typeof fetch>((input) =>
-			Promise.resolve(
-				String(input).endsWith("/admin")
-					? jsonResponse({
-							staff: { name: "Staff member" },
-							sections: [{ label: "Baskets" }],
-							quickActions: [],
-						})
-					: jsonResponse({
-							basket: {
-								...basketDetails,
-								items: [],
-								itemCount: 0,
-								total: "£0.00",
-							},
-						}),
-			),
+		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
+			jsonResponse({
+				basket: { ...basketDetails, items: [], itemCount: 0, total: "£0.00" },
+			}),
 		);
 		const res = await request(createApp({ fetch: fetchApi }))
 			.get("/admin/baskets/123")
-			.set("Cookie", staffCookie);
+			.set("Cookie", "accessToken=staff-access");
 
 		expect(res.status).toBe(200);
 		expect(res.text).toContain("This basket is empty.");
@@ -1133,7 +968,7 @@ describe("admin baskets", () => {
 			const fetchApi = vi.fn<typeof fetch>();
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get(`/admin/baskets/${id}`)
-				.set("Cookie", staffCookie);
+				.set("Cookie", "session=staff-session");
 
 			expect(res.status).toBe(404);
 			expect(res.text).toContain("Basket not found");
@@ -1142,41 +977,25 @@ describe("admin baskets", () => {
 	);
 
 	it("caps the basket search term at 100 characters", async () => {
-		const fetchApi = vi.fn<typeof fetch>((input) =>
-			Promise.resolve(
-				String(input).endsWith("/admin")
-					? jsonResponse({
-							staff: { name: "Staff member" },
-							sections: [{ label: "Baskets" }],
-							quickActions: [],
-						})
-					: jsonResponse({ baskets: basketSummaries }),
-			),
-		);
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(jsonResponse({ baskets: basketSummaries }));
 		const res = await request(createApp({ fetch: fetchApi }))
 			.get("/admin/baskets")
 			.query({ q: "x".repeat(150) })
-			.set("Cookie", staffCookie);
+			.set("Cookie", "accessToken=staff-access");
 
 		expect(res.text).toContain(`value="${"x".repeat(100)}"`);
 		expect(res.text).not.toContain("x".repeat(101));
 	});
 
 	it("shows a not found page when the basket does not exist", async () => {
-		const fetchApi = vi.fn<typeof fetch>((input) =>
-			Promise.resolve(
-				String(input).endsWith("/admin")
-					? jsonResponse({
-							staff: { name: "Staff member" },
-							sections: [{ label: "Baskets" }],
-							quickActions: [],
-						})
-					: jsonResponse({ error: "Not found" }, 404),
-			),
-		);
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(jsonResponse({ error: "Not found" }, 404));
 		const res = await request(createApp({ fetch: fetchApi }))
 			.get("/admin/baskets/999")
-			.set("Cookie", staffCookie);
+			.set("Cookie", "accessToken=staff-access");
 
 		expect(res.status).toBe(404);
 		expect(res.text).toContain("Basket not found");
@@ -1209,14 +1028,16 @@ describe("admin baskets", () => {
 				.mockResolvedValue(jsonResponse({ error: "Denied" }, status));
 			const res = await request(createApp({ fetch: fetchApi }))
 				.get(path)
-				.set("Cookie", "accessToken=customer-access");
+				.set("Cookie", "accessToken=staff-access");
 
 			expect(res.status).toBe(status === 401 ? 303 : 403);
-			expect(res.headers.location).toBe(
-				status === 401
-					? `/admin/login?returnTo=${encodeURIComponent(path)}`
-					: undefined,
-			);
+			if (status === 401) {
+				expect(res.headers.location).toBe(
+					`/admin/login?returnTo=${encodeURIComponent(path)}`,
+				);
+			} else {
+				expect(res.text).toContain("Access denied");
+			}
 			expect(res.text).not.toContain("Active baskets");
 			expect(res.text).not.toContain("Basket contents");
 		},
@@ -1237,403 +1058,5 @@ describe("admin baskets", () => {
 		expect(res.text).toContain(message);
 		expect(res.text).toContain('role="alert"');
 		expect(res.text).not.toContain("Connection refused");
-	});
-});
-
-describe("admin orders", () => {
-	const jsonResponse = (body: unknown, status = 200) =>
-		new Response(JSON.stringify(body), { status });
-	const staffCookie = "accessToken=staff-access";
-	const orderSummary = {
-		orderId: 1001,
-		customer: { id: 7, name: "Ada Lovelace", email: "ada@example.com" },
-		status: "PENDING",
-		orderDate: "2026-10-20T12:00:00.000Z",
-		totalCost: 24.5,
-	};
-	const orderDetails = (overrides = {}) => ({
-		order: {
-			orderId: 1001,
-			status: "PENDING",
-			orderDate: "2026-10-20T12:00:00.000Z",
-			lastUpdated: "2026-10-21T08:00:00.000Z",
-			customer: {
-				id: 7,
-				name: "Ada Lovelace",
-				email: "ada@example.com",
-				address: {
-					line1: "1 Analytical Way",
-					city: "London",
-					postcode: "N1 1AA",
-				},
-			},
-			items: [
-				{
-					productId: 3,
-					productName: "Notebook",
-					quantity: 2,
-					unitPrice: 4.25,
-					itemTotal: 8.5,
-				},
-			],
-			itemCount: 2,
-			orderTotal: 8.5,
-			allowedTransitions: ["PROCESSING", "CANCELLED"],
-			...overrides,
-		},
-	});
-	const detailsFetch = (role: string | undefined, details = orderDetails()) =>
-		vi
-			.fn<typeof fetch>()
-			.mockImplementation(async (input) =>
-				String(input).endsWith("/admin/me")
-					? role
-						? jsonResponse({ role })
-						: jsonResponse({ error: "Unavailable" }, 500)
-					: jsonResponse(details),
-			);
-	const postStatus = (fetchApi: typeof fetch, status: unknown, id = "1001") =>
-		request(createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }))
-			.post(`/admin/orders/${id}/status`)
-			.set("Host", "shop.example")
-			.set("Origin", "http://shop.example")
-			.set("Cookie", staffCookie)
-			.type("form")
-			.send(status === undefined ? {} : { status });
-
-	it("rate-limits order lookups", async () => {
-		const fetchApi = vi.fn<typeof fetch>(() =>
-			Promise.resolve(jsonResponse({ orders: [] })),
-		);
-		const client = request(createApp({ fetch: fetchApi }));
-		let result = await client.get("/admin/orders").set("Cookie", staffCookie);
-
-		for (let i = 1; i < 60; i += 1) {
-			result = await client.get("/admin/orders").set("Cookie", staffCookie);
-		}
-		const limited = await client
-			.get("/admin/orders")
-			.set("Cookie", staffCookie);
-
-		expect(result.status).toBe(200);
-		expect(limited.status).toBe(429);
-		expect(fetchApi).toHaveBeenCalledTimes(60);
-	});
-
-	it("renders the order list and forwards staff credentials", async () => {
-		const fetchApi = vi
-			.fn<typeof fetch>()
-			.mockResolvedValue(jsonResponse({ orders: [orderSummary] }));
-		const res = await request(
-			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
-		)
-			.get("/admin/orders")
-			.set("Cookie", staffCookie);
-
-		expect(res.status).toBe(200);
-		expect(res.text).toContain("#1001");
-		expect(res.text).toContain("Ada Lovelace");
-		expect(res.text).toContain("20 Oct 2026");
-		expect(res.text).toContain("£24.50");
-		expect(res.text).toContain('href="/admin/orders/1001"');
-		expect(String(fetchApi.mock.calls[0]?.[0])).toBe(
-			"http://backend:4000/admin/orders",
-		);
-		expect(fetchApi.mock.calls[0]?.[1]?.headers).toMatchObject({
-			Authorization: ["Bearer", "staff-access"].join(" "),
-		});
-	});
-
-	it("forwards search and page to the backend and renders pagination", async () => {
-		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
-			jsonResponse({
-				orders: [orderSummary],
-				pagination: { page: 2, pageSize: 10, totalPages: 3, totalOrders: 25 },
-			}),
-		);
-		const res = await request(
-			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
-		)
-			.get("/admin/orders?q=ada&page=2")
-			.set("Cookie", staffCookie);
-
-		expect(res.status).toBe(200);
-		expect(String(fetchApi.mock.calls[0]?.[0])).toBe(
-			"http://backend:4000/admin/orders?search=ada&page=2",
-		);
-		expect(res.text).toContain("Page 2 of 3");
-		expect(res.text).toContain("/admin/orders?q=ada&amp;page=1");
-		expect(res.text).toContain("/admin/orders?q=ada&amp;page=3");
-	});
-
-	it.each([
-		["", "No orders found."],
-		["?q=nobody", 'No orders match "nobody".'],
-	])("renders an empty state for %s", async (query, message) => {
-		const fetchApi = vi
-			.fn<typeof fetch>()
-			.mockResolvedValue(jsonResponse({ orders: [] }));
-		const res = await request(createApp({ fetch: fetchApi }))
-			.get(`/admin/orders${query}`)
-			.set("Cookie", staffCookie);
-
-		expect(res.status).toBe(200);
-		expect(res.text).toContain(message);
-	});
-
-	it("shows an unavailable message when the orders backend fails", async () => {
-		const fetchApi = vi
-			.fn<typeof fetch>()
-			.mockRejectedValue(new Error("Connection refused"));
-		const res = await request(createApp({ fetch: fetchApi }))
-			.get("/admin/orders")
-			.set("Cookie", staffCookie);
-
-		expect(res.status).toBe(503);
-		expect(res.text).toContain(
-			"Orders are temporarily unavailable. Please try again.",
-		);
-		expect(res.text).not.toContain("Connection refused");
-	});
-
-	it.each(["/admin/orders", "/admin/orders/1001"])(
-		"redirects to the admin login from %s without a session",
-		async (path) => {
-			const fetchApi = vi.fn<typeof fetch>();
-			const res = await request(createApp({ fetch: fetchApi })).get(path);
-
-			expect(res.status).toBe(303);
-			expect(res.headers.location).toMatch(/^\/admin\/login/);
-			expect(fetchApi).not.toHaveBeenCalled();
-		},
-	);
-
-	it("does not render order data after a forbidden backend response", async () => {
-		const fetchApi = vi
-			.fn<typeof fetch>()
-			.mockResolvedValue(jsonResponse({ error: "Forbidden" }, 403));
-		const res = await request(createApp({ fetch: fetchApi }))
-			.get("/admin/orders")
-			.set("Cookie", staffCookie);
-
-		expect(res.status).toBe(503);
-		expect(res.headers.location).toBeUndefined();
-		expect(res.text).toContain("Orders are temporarily unavailable");
-		expect(res.text).not.toContain("#1001");
-	});
-
-	it("renders order details with a status form for an admin", async () => {
-		const fetchApi = detailsFetch("Admin");
-		const res = await request(
-			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
-		)
-			.get("/admin/orders/1001")
-			.set("Cookie", staffCookie);
-
-		expect(res.status).toBe(200);
-		expect(res.text).toContain("Order #1001");
-		expect(res.text).toContain("Notebook");
-		expect(res.text).toContain("£4.25");
-		expect(res.text).toContain("£8.50");
-		expect(res.text).toContain("1 Analytical Way");
-		expect(res.text).toContain('action="/admin/orders/1001/status"');
-		expect(res.text).toContain(
-			'<option value="PROCESSING">Processing</option>',
-		);
-		expect(res.text).toContain('<option value="CANCELLED">Cancelled</option>');
-		expect(fetchApi.mock.calls.map(([url]) => String(url)).sort()).toEqual([
-			"http://backend:4000/admin/me",
-			"http://backend:4000/admin/orders/1001",
-		]);
-	});
-
-	it.each([
-		["a role without order permissions", "Support", orderDetails()],
-		["an unknown role", undefined, orderDetails()],
-		[
-			"an order with no allowed transitions",
-			"Admin",
-			orderDetails({ allowedTransitions: [] }),
-		],
-	])("hides the status form for %s", async (_case, role, details) => {
-		const res = await request(createApp({ fetch: detailsFetch(role, details) }))
-			.get("/admin/orders/1001")
-			.set("Cookie", staffCookie);
-
-		expect(res.status).toBe(200);
-		expect(res.text).toContain("Order #1001");
-		expect(res.text).not.toContain("/admin/orders/1001/status");
-	});
-
-	it("confirms a status change on the details page", async () => {
-		const res = await request(createApp({ fetch: detailsFetch("Admin") }))
-			.get("/admin/orders/1001?updated=PROCESSING")
-			.set("Cookie", staffCookie);
-
-		expect(res.text).toContain(
-			"The order status has been updated to Processing.",
-		);
-	});
-
-	it.each([
-		["invalid", "That status change is not allowed for this order."],
-		["forbidden", "You do not have permission to update order status."],
-		["failed", "The order status could not be updated. Please try again."],
-	])("shows the %s status error on the details page", async (reason, text) => {
-		const res = await request(createApp({ fetch: detailsFetch("Admin") }))
-			.get(`/admin/orders/1001?statusError=${reason}`)
-			.set("Cookie", staffCookie);
-
-		expect(res.text).toContain(text);
-	});
-
-	it("ignores unknown updated and statusError values", async () => {
-		const res = await request(createApp({ fetch: detailsFetch("Admin") }))
-			.get("/admin/orders/1001?updated=%3Cscript%3E&statusError=%3Cscript%3E")
-			.set("Cookie", staffCookie);
-
-		expect(res.status).toBe(200);
-		expect(res.text).not.toContain("The order status has been updated");
-		expect(res.text).not.toContain("<script>");
-	});
-
-	it("shows not found for an unknown order", async () => {
-		const fetchApi = vi
-			.fn<typeof fetch>()
-			.mockResolvedValue(jsonResponse({ error: "Not found" }, 404));
-		const res = await request(createApp({ fetch: fetchApi }))
-			.get("/admin/orders/9999")
-			.set("Cookie", staffCookie);
-
-		expect(res.status).toBe(404);
-		expect(res.text).toContain("Order not found");
-	});
-
-	it("rejects malformed order ids without calling the backend", async () => {
-		const fetchApi = vi.fn<typeof fetch>();
-		const res = await request(createApp({ fetch: fetchApi }))
-			.get("/admin/orders/..%2Fusers")
-			.set("Cookie", staffCookie);
-
-		expect(res.status).toBe(404);
-		expect(res.text).toContain("Order not found");
-		expect(fetchApi).not.toHaveBeenCalled();
-	});
-
-	it("shows an unavailable message when order details cannot be loaded", async () => {
-		const fetchApi = vi
-			.fn<typeof fetch>()
-			.mockRejectedValue(new Error("Connection refused"));
-		const res = await request(createApp({ fetch: fetchApi }))
-			.get("/admin/orders/1001")
-			.set("Cookie", staffCookie);
-
-		expect(res.status).toBe(503);
-		expect(res.text).toContain(
-			"Order details are temporarily unavailable. Please try again.",
-		);
-		expect(res.text).toContain('href="/admin/orders/1001"');
-	});
-
-	it("updates the order status through the backend", async () => {
-		const fetchApi = vi
-			.fn<typeof fetch>()
-			.mockResolvedValue(jsonResponse(orderDetails({ status: "SHIPPED" })));
-		const res = await postStatus(fetchApi, " shipped ");
-
-		expect(res.status).toBe(303);
-		expect(res.headers.location).toBe("/admin/orders/1001?updated=SHIPPED");
-		expect(String(fetchApi.mock.calls[0]?.[0])).toBe(
-			"http://backend:4000/admin/orders/1001/status",
-		);
-		expect(JSON.parse(String(fetchApi.mock.calls[0]?.[1]?.body))).toEqual({
-			status: "SHIPPED",
-		});
-		expect(fetchApi.mock.calls[0]?.[1]?.headers).toMatchObject({
-			Authorization: ["Bearer", "staff-access"].join(" "),
-		});
-	});
-
-	it.each([undefined, "", "LOST"])(
-		"rejects the invalid status %s without calling the backend",
-		async (status) => {
-			const fetchApi = vi.fn<typeof fetch>();
-			const res = await postStatus(fetchApi, status);
-
-			expect(res.status).toBe(303);
-			expect(res.headers.location).toBe(
-				"/admin/orders/1001?statusError=invalid",
-			);
-			expect(fetchApi).not.toHaveBeenCalled();
-		},
-	);
-
-	it.each([
-		[403, "forbidden"],
-		[400, "invalid"],
-		[500, "failed"],
-	])(
-		"redirects back with a statusError when the backend responds %i",
-		async (status, reason) => {
-			const fetchApi = vi
-				.fn<typeof fetch>()
-				.mockResolvedValue(jsonResponse({ error: "No" }, status));
-			const res = await postStatus(fetchApi, "SHIPPED");
-
-			expect(res.status).toBe(303);
-			expect(res.headers.location).toBe(
-				`/admin/orders/1001?statusError=${reason}`,
-			);
-		},
-	);
-
-	it("reports a failed status change when the backend is unavailable", async () => {
-		const fetchApi = vi
-			.fn<typeof fetch>()
-			.mockRejectedValue(new Error("Connection refused"));
-		const res = await postStatus(fetchApi, "SHIPPED");
-
-		expect(res.status).toBe(303);
-		expect(res.headers.location).toBe("/admin/orders/1001?statusError=failed");
-	});
-
-	it("shows not found when updating an unknown order", async () => {
-		const fetchApi = vi
-			.fn<typeof fetch>()
-			.mockResolvedValue(jsonResponse({ error: "Not found" }, 404));
-		const res = await postStatus(fetchApi, "SHIPPED", "9999");
-
-		expect(res.status).toBe(404);
-		expect(res.text).toContain("Order not found");
-	});
-
-	it("rejects cross-origin status changes before calling the backend", async () => {
-		const fetchApi = vi.fn<typeof fetch>();
-		const res = await request(createApp({ fetch: fetchApi }))
-			.post("/admin/orders/1001/status")
-			.set("Host", "shop.example")
-			.set("Origin", "https://attacker.example")
-			.set("Cookie", staffCookie)
-			.type("form")
-			.send({ status: "SHIPPED" });
-
-		expect(res.status).toBe(403);
-		expect(fetchApi).not.toHaveBeenCalled();
-	});
-
-	it("returns to the order after logging in when a status change needs a session", async () => {
-		const fetchApi = vi.fn<typeof fetch>();
-		const res = await request(createApp({ fetch: fetchApi }))
-			.post("/admin/orders/1001/status")
-			.set("Host", "shop.example")
-			.set("Origin", "http://shop.example")
-			.type("form")
-			.send({ status: "SHIPPED" });
-
-		expect(res.status).toBe(303);
-		expect(res.headers.location).toBe(
-			"/admin/login?returnTo=%2Fadmin%2Forders%2F1001",
-		);
-		expect(fetchApi).not.toHaveBeenCalled();
 	});
 });

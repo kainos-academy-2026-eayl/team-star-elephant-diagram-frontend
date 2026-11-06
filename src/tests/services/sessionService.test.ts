@@ -1,3 +1,4 @@
+import { EventEmitter } from "node:events";
 import type { Response as ExpressResponse, Request } from "express";
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
@@ -289,6 +290,20 @@ describe("persistent authentication", () => {
 		const api = vi.fn<typeof fetch>(async (input, init) => {
 			const path = String(input);
 			if (path.endsWith("/auth/refresh")) return credentials();
+			if (path.endsWith("/orders/from-reservation")) {
+				return response(
+					{
+						order: {
+							orderId: 42,
+							orderStatus: "PROCESSING",
+							cost: "7.00",
+							orderPlacedAt: "2026-11-05T09:00:00.000Z",
+							items: [],
+						},
+					},
+					201,
+				);
+			}
 			if (path.endsWith("/profile/shipping-address")) {
 				if (init?.method !== "PUT") {
 					return response({ error: "Expected PUT" }, 405);
@@ -300,17 +315,6 @@ describe("persistent authentication", () => {
 					return response({ error: "Expired" }, 401);
 				}
 				return response({ status: "updated" });
-			}
-			if (path.endsWith("/orders/from-reservation")) {
-				return response({
-					order: {
-						orderId: 42,
-						orderStatus: "PROCESSING",
-						cost: "12.34",
-						orderPlacedAt: "2026-11-05T12:00:00.000Z",
-						items: [],
-					},
-				});
 			}
 			return response({ error: "Unexpected URL" }, 500);
 		});
@@ -463,6 +467,57 @@ describe("persistent authentication", () => {
 		expect(page.headers["set-cookie"]).toBeUndefined();
 	});
 
+	it("removes refreshed cookies when logout occurs between admin access and inventory lookup", async () => {
+		let resolveInventory!: (result: Response) => void;
+		const inventoryResponse = new Promise<Response>((resolve) => {
+			resolveInventory = resolve;
+		});
+		let inventoryStarted!: () => void;
+		const inventoryRequestStarted = new Promise<void>((resolve) => {
+			inventoryStarted = resolve;
+		});
+		const api = vi.fn<typeof fetch>(async (input) => {
+			const path = new URL(String(input)).pathname;
+			if (path.endsWith("/auth/refresh")) return credentials();
+			if (path.endsWith("/admin")) {
+				return response({
+					staff: { name: "Ada" },
+					role: "InventoryManager",
+					sections: [{ label: "Inventory" }],
+					inventoryPermissions: {
+						view: true,
+						create: true,
+						update: true,
+						delete: true,
+					},
+				});
+			}
+			if (path.endsWith("/api/admin/inventory")) {
+				inventoryStarted();
+				return inventoryResponse;
+			}
+			return response({ status: "Success" });
+		});
+		const app = createApp({ fetch: api });
+		const pageRequest = request(app)
+			.get("/admin/inventory")
+			.set("Cookie", "refreshToken=current-refresh")
+			.then((result) => result);
+
+		await inventoryRequestStarted;
+		const logout = await request(app)
+			.post("/logout")
+			.set("Cookie", "refreshToken=current-refresh");
+		expect(logout.status).toBe(303);
+		resolveInventory(
+			response({ items: [], totalItems: 0, totalPages: 1, currentPage: 1 }),
+		);
+		const page = await pageRequest;
+
+		expect(page.status).toBe(200);
+		expect(page.headers["set-cookie"]).toBeUndefined();
+	});
+
 	it("shares a refresh request across concurrent protected requests", async () => {
 		let resolveRefresh!: (result: Response) => void;
 		const refreshResponse = new Promise<Response>((resolve) => {
@@ -609,13 +664,26 @@ describe("SessionService", () => {
 			get: (name: string) => headers[name.toLowerCase()],
 		}) as unknown as Request;
 	const fakeResponse = () => {
+		const headers = new Map<string, string | string[]>();
 		const mocks = {
 			set: vi.fn(),
 			cookie: vi.fn(),
 			append: vi.fn(),
 			clearCookie: vi.fn(),
+			headersSent: false,
+			getHeader: vi.fn((name: string) => headers.get(name)),
+			setHeader: vi.fn((name: string, value: string | string[]) =>
+				headers.set(name, value),
+			),
+			removeHeader: vi.fn((name: string) => headers.delete(name)),
 		};
-		return { mocks, res: mocks as unknown as ExpressResponse };
+		return {
+			mocks,
+			res: Object.assign(
+				new EventEmitter(),
+				mocks,
+			) as unknown as ExpressResponse,
+		};
 	};
 	const setup = () => {
 		const fetchMock = vi.fn<typeof fetch>();
@@ -699,24 +767,24 @@ describe("SessionService", () => {
 			fetchMock.mockResolvedValueOnce(response({ ok: true }));
 
 			const result = await service.request(
-				"/admin/orders/1/status",
+				"/admin/baskets/1/items/2",
 				fakeRequest({ authorization: bearer("header-token") }),
 				res,
 				{ "X-Trace": "1" },
-				{ status: "SHIPPED" },
-				"PUT",
+				{ quantity: 3 },
+				"PATCH",
 			);
 
 			expect(result).toEqual({ ok: true });
 			expect(sent(fetchMock)).toEqual({
-				url: "http://backend:4000/admin/orders/1/status",
-				method: "PUT",
+				url: "http://backend:4000/admin/baskets/1/items/2",
+				method: "PATCH",
 				headers: {
 					"Content-Type": "application/json",
 					"X-Trace": "1",
 					Authorization: bearer("header-token"),
 				},
-				body: { status: "SHIPPED" },
+				body: { quantity: 3 },
 			});
 			expect(mocks.set).toHaveBeenCalledWith("Cache-Control", "no-store");
 			expect(mocks.cookie).not.toHaveBeenCalled();

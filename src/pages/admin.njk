@@ -4,23 +4,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% if forbidden %}Access denied{% else %}Admin Dashboard{% endif %} | Shop</title>
-    <link rel="stylesheet" href="/styles.css">
+    <title>{% if forbidden %}Access denied{% elif isFinanceDashboard %}Finance Dashboard{% else %}Admin Dashboard{% endif %} | Sedshed</title>
     <link rel="stylesheet" href="/admin.css">
-    <script src="/admin.js" defer></script>
 </head>
 
-<body>
+<body class="admin">
     {% set activeNav = "" if forbidden else "dashboard" %}
     {% include "partials/admin-nav.njk" %}
 
-    {% if not forbidden %}
-    <div class="search-bar">
-        <div class="admin-search-unavailable" aria-disabled="true">Search is unavailable.</div>
-    </div>
-    {% endif %}
-
-    <main class="container">
+    <main id="main" class="admin-main">
         {% if forbidden %}
         <section class="admin-denied" aria-labelledby="access-denied-title">
             <p class="admin-denied__code" aria-hidden="true">403</p>
@@ -28,125 +20,183 @@
             <p class="admin-denied__message" role="alert">You do not have permission to view this page or perform this action.</p>
             <p class="admin-denied__hint">If you think you should have access, ask a Super Admin to review your role.</p>
             <div class="admin-denied__actions">
-                <a href="/admin" class="btn btn--primary">Return to the dashboard</a>
+                <a href="/admin" class="admin-btn admin-btn--primary">Return to the dashboard</a>
             </div>
         </section>
         {% else %}
-        <h1 class="section-heading">Admin dashboard</h1>
+        <section class="admin-hero" aria-labelledby="dashboard-title">
+            <p class="admin-hero__eyebrow">{% if isFinanceDashboard %}Finance overview{% else %}Staff portal{% endif %}</p>
+            <h1 id="dashboard-title" class="admin-hero__title">{% if isFinanceDashboard %}Finance dashboard{% else %}Admin dashboard{% endif %}</h1>
+            {% if staff and staff.name %}
+            <p class="admin-hero__lead">Welcome back, <strong>{{ staff.name }}</strong>. {% if isFinanceDashboard %}Here is your read-only financial summary.{% else %}Here is what is happening in the shop today.{% endif %}</p>
+            {% endif %}
+        </section>
 
         {% if error %}
-        <div class="error-message" role="alert">
-            {{ error }}
-            <a href="/admin">Retry</a>
+        <div class="admin-alert admin-alert--error" role="alert">
+            <span>{{ error }}</span>
+            {% if not isFinanceDashboard %}<a href="/admin">Retry</a>{% endif %}
         </div>
         {% else %}
 
-        {% if staff and staff.name %}
-        <p class="admin-welcome">Signed in as <strong>{{ staff.name }}</strong></p>
+        {% if isFinanceDashboard %}
+        <p class="admin-hero__lead">All-time figures. Revenue is the total value of non-cancelled orders, not confirmed payments. Order counts include all orders; pending orders are awaiting processing.</p>
         {% endif %}
 
-        {% if quickActions | length %}
-        <section class="quick-actions" aria-label="Quick actions">
-            {% for action in quickActions %}
-            <span class="action-button unavailable-action" aria-disabled="true">{{ action.label }} (Unavailable)</span>
-            {% endfor %}
-        </section>
-        {% endif %}
-
-        <section class="product-grid stat-grid" aria-label="Summary">
+        <section class="admin-stats" aria-label="{% if isFinanceDashboard %}Financial summary{% else %}Summary{% endif %}">
             {% for card in cards %}
-            <div class="product-card stat-card">
-                <div class="product-info">
-                    <h2>{{ card.label }}</h2>
-                    <p class="product-price stat-value">{{ card.value }}</p>
-                </div>
+            <div class="admin-stat">
+                <h2 class="admin-stat__label">{{ card.label }}</h2>
+                <p class="admin-stat__value">{{ card.value }}</p>
             </div>
             {% else %}
-            <p class="order-empty">No summary information is available.</p>
+            <p class="admin-empty">No summary information is available.</p>
             {% endfor %}
+            {% if roleLabel %}
+            <section class="admin-stat admin-stat--access" aria-labelledby="your-access">
+                <h2 id="your-access" class="admin-stat__label">Your access</h2>
+                <p class="admin-role-badge"><span class="admin-role-badge__dot" aria-hidden="true"></span>{{ roleLabel }}</p>
+            </section>
+            {% endif %}
         </section>
 
-        <div class="activity-grid">
-            <section class="order-card" aria-labelledby="latest-orders">
-                <h2 id="latest-orders">Latest orders</h2>
-                <table class="order-items">
-                    <thead>
-                        <tr>
-                            <th scope="col">Order</th>
-                            <th scope="col">Customer</th>
-                            <th scope="col">Date</th>
-                            <th scope="col">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for order in recentOrders %}
-                        <tr>
-                            <td>#{{ order.id }}</td>
-                            <td>{{ order.customer }}</td>
-                            <td>{{ order.date }}</td>
-                            <td><span class="order-status">{{ order.status }}</span></td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="4" class="order-empty">No recent orders.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+        {% if not isFinanceDashboard %}
+        {% if canViewInventory and inventoryPermissions.view %}
+        <a href="/admin/inventory" class="admin-card admin-inventory-summary" aria-label="Inventory Management">
+            <h2 class="admin-card__title">Inventory Management</h2>
+            {% if inventorySummary %}
+            <dl class="admin-details">
+                <div class="admin-details__row"><dt>Total Products</dt><dd>{{ inventorySummary.totalProducts }}</dd></div>
+                <div class="admin-details__row"><dt>Low Stock Products</dt><dd>{{ inventorySummary.lowStockProducts }}</dd></div>
+                <div class="admin-details__row"><dt>Out Of Stock Products</dt><dd>{{ inventorySummary.outOfStockProducts }}</dd></div>
+            </dl>
+            {% else %}<p role="alert">Inventory summary is currently unavailable.</p>{% endif %}
+        </a>
+        {% endif %}
+        <div class="admin-grid admin-dashboard-grid{% if canViewInventory %} admin-dashboard-grid--inventory{% endif %}">
+            <section class="admin-card admin-card--orders" aria-labelledby="latest-orders">
+                <h2 id="latest-orders" class="admin-card__title">Latest orders</h2>
+                <div class="admin-table-wrap" tabindex="0" role="region" aria-label="Latest orders table">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Order</th>
+                                <th scope="col">Customer</th>
+                                <th scope="col">Date</th>
+                                <th scope="col">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for order in recentOrders %}
+                            <tr>
+                                <td>#{{ order.id }}</td>
+                                <td>{{ order.customer }}</td>
+                                <td>{{ order.date }}</td>
+                                <td><span class="admin-status">{{ order.status }}</span></td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="admin-empty">No recent orders.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </section>
 
-            <section class="order-card" aria-labelledby="new-registrations">
-                <h2 id="new-registrations">New registrations</h2>
-                <table class="order-items">
-                    <thead>
-                        <tr>
-                            <th scope="col">Name</th>
-                            <th scope="col">Email</th>
-                            <th scope="col">Joined</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for user in newUsers %}
-                        <tr>
-                            <td>{{ user.name }}</td>
-                            <td>{{ user.email }}</td>
-                            <td>{{ user.joined }}</td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="3" class="order-empty">No new registrations.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            <section class="admin-card" aria-labelledby="new-registrations">
+                <h2 id="new-registrations" class="admin-card__title">New registrations</h2>
+                <div class="admin-table-wrap">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Name</th>
+                                <th scope="col">Email</th>
+                                <th scope="col">Joined</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in newUsers %}
+                            <tr>
+                                <td>{{ user.name }}</td>
+                                <td>{{ user.email }}</td>
+                                <td>{{ user.joined }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="3" class="admin-empty">No new registrations.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </section>
 
-            <section class="order-card" aria-labelledby="stock-changes">
-                <h2 id="stock-changes">Recent stock changes</h2>
-                <table class="order-items">
-                    <thead>
-                        <tr>
-                            <th scope="col">Product</th>
-                            <th scope="col" class="admin-numeric">Change</th>
-                            <th scope="col">Reason</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for change in stockChanges %}
-                        <tr>
-                            <td>{{ change.product }}</td>
-                            <td class="admin-numeric">{{ change.amount }}</td>
-                            <td>{{ change.reason }}</td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="3" class="order-empty">No recent stock changes.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            {% if canViewInventory %}
+            <section class="admin-card admin-card--low-stock" aria-labelledby="low-stock">
+                <h2 id="low-stock" class="admin-card__title">Low in stock</h2>
+                {% if lowStock %}
+                <p class="admin-card__note">Stock lines at or below their reorder level.</p>
+                {% if lowStock.items | length %}
+                <div class="admin-table-wrap" tabindex="0" role="region" aria-label="Low-stock inventory">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Product</th>
+                                <th scope="col" class="admin-numeric">Left</th>
+                                <th scope="col" class="admin-numeric">Reorder at</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in lowStock.items %}
+                            <tr>
+                                <td><strong>{{ item.product }}</strong><small class="admin-stock-supplier">{{ item.supplier }}</small></td>
+                                <td class="admin-numeric"><span class="admin-status admin-status--danger">{{ item.quantity }}</span></td>
+                                <td class="admin-numeric">{{ item.reorderLevel }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <p class="admin-card__note admin-stock-count">Showing {{ lowStock.items | length }} of {{ lowStock.total }} low-stock lines.</p>
+                {% else %}
+                <p class="admin-empty">No stock lines are at or below their reorder level.</p>
+                {% endif %}
+                {% else %}
+                <p class="admin-alert admin-alert--error" role="alert">Low-stock information is currently unavailable.</p>
+                {% endif %}
+            </section>
+            {% endif %}
+
+            <section class="admin-card admin-card--wide" aria-labelledby="stock-changes">
+                <h2 id="stock-changes" class="admin-card__title">Recent stock changes</h2>
+                <div class="admin-table-wrap">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Product</th>
+                                <th scope="col" class="admin-numeric">Change</th>
+                                <th scope="col">Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for change in stockChanges %}
+                            <tr>
+                                <td>{{ change.product }}</td>
+                                <td class="admin-numeric">{{ change.amount }}</td>
+                                <td>{{ change.reason }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="3" class="admin-empty">No recent stock changes.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </section>
         </div>
+        {% endif %}
 
         {% endif %}
         {% endif %}

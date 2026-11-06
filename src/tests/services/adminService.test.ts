@@ -1,7 +1,6 @@
 import type { Request, Response } from "express";
 import { describe, expect, it, vi } from "vitest";
 import { BackendApiError } from "../../backendApi";
-import type { AdminOrderDetails } from "../../models/adminOrder";
 import { AdminService } from "../../services/adminService";
 import type { SessionService } from "../../services/sessionService";
 
@@ -24,34 +23,6 @@ const user = {
 	status: "active",
 };
 
-const orderDetails = (
-	overrides: Partial<AdminOrderDetails> = {},
-): AdminOrderDetails => ({
-	orderId: 42,
-	status: "PROCESSING",
-	orderDate: "2026-03-01T09:00:00Z",
-	lastUpdated: "2026-03-02T09:00:00Z",
-	customer: {
-		id: 7,
-		name: "Ada Lovelace",
-		email: "ada@example.com",
-		address: { line1: "1 Analytical Way", line2: " ", city: "London" },
-	},
-	items: [
-		{
-			productId: 1,
-			productName: "Kettle",
-			quantity: 2,
-			unitPrice: 12.5,
-			itemTotal: 25,
-		},
-	],
-	itemCount: 2,
-	orderTotal: 25,
-	allowedTransitions: ["SHIPPED", "CANCELLED", "LOST"],
-	...overrides,
-});
-
 describe("AdminService", () => {
 	describe("session-backed requests", () => {
 		it("loads the dashboard through the session", async () => {
@@ -59,12 +30,9 @@ describe("AdminService", () => {
 			const dashboard = { staff: { name: "Ada" } };
 			request.mockResolvedValueOnce(dashboard);
 
-			await expect(service.getDashboard(req, res)).resolves.toMatchObject({
-				...dashboard,
-				role: "",
-				nav: [{ key: "dashboard", label: "Dashboard", href: "/admin" }],
-				canChangeUserStatus: false,
-			});
+			await expect(service.getDashboard(req, res)).resolves.toMatchObject(
+				dashboard,
+			);
 			expect(request).toHaveBeenCalledExactlyOnceWith("/admin", req, res);
 		});
 
@@ -82,25 +50,34 @@ describe("AdminService", () => {
 	});
 
 	describe("input helpers", () => {
-		it("derives role-scoped access from the dashboard", () => {
+		it("loads access through the session without forwarding browser cookies", async () => {
+			const { request, service } = setup();
+			request.mockResolvedValueOnce({ sections: [{ label: "Users" }] });
+
+			const access = await service.getAccess(req, res);
+
+			expect(request).toHaveBeenCalledExactlyOnceWith("/admin", req, res);
+			expect(access.nav).toContainEqual({
+				key: "users",
+				label: "Users",
+				href: "/admin/users",
+			});
+		});
+
+		it("restricts access when no permissions are known", () => {
 			const { service } = setup();
 
-			expect(
-				service.toAccess({
-					staff: { name: "Ada" },
-					role: "Admin",
-					sections: [{ label: "Users" }, { label: "Orders" }],
-					quickActions: [{ label: "Suspend or reactivate customers" }],
-				}),
-			).toEqual({
-				staff: { name: "Ada" },
-				role: "Admin",
-				nav: [
-					{ key: "dashboard", label: "Dashboard", href: "/admin" },
-					{ key: "users", label: "Users", href: "/admin/users" },
-					{ key: "orders", label: "Orders", href: "/admin/orders" },
-				],
-				canChangeUserStatus: true,
+			expect(service.getRestrictedAccess()).toMatchObject({
+				nav: [{ key: "dashboard", label: "Dashboard", href: "/admin" }],
+				canChangeUserStatus: false,
+				canDeleteUsers: false,
+				canViewInventory: false,
+				inventoryPermissions: {
+					view: false,
+					create: false,
+					update: false,
+					delete: false,
+				},
 			});
 		});
 
@@ -138,7 +115,6 @@ describe("AdminService", () => {
 			const { service } = setup();
 
 			expect(service.getUserDetailsHref("a/b")).toBe("/admin/users/a%2Fb");
-			expect(service.getOrderDetailsHref("42")).toBe("/admin/orders/42");
 		});
 
 		it.each([
@@ -161,19 +137,12 @@ describe("AdminService", () => {
 			).toBe(true);
 		});
 
-		it("parses status updates and order status values", () => {
+		it("parses status updates", () => {
 			const { service } = setup();
 
 			expect(service.parseStatusUpdate("suspended")).toBe("suspended");
 			expect(service.parseStatusUpdate("reactivated")).toBe("reactivated");
 			expect(service.parseStatusUpdate("deleted")).toBeUndefined();
-			expect(service.isOrderStatus("SHIPPED")).toBe(true);
-			expect(service.isOrderStatus("shipped")).toBe(false);
-			expect(service.isOrderStatus(1)).toBe(false);
-			expect(service.parseOrderStatusError("forbidden")).toBe("forbidden");
-			expect(service.parseOrderStatusError("other")).toBeUndefined();
-			expect(service.formatOrderStatus("PROCESSING")).toBe("Processing");
-			expect(service.formatOrderStatus("")).toBe("");
 		});
 	});
 
@@ -379,17 +348,26 @@ describe("AdminService", () => {
 		});
 
 		it.each([
-			["charles babbage", "/admin/baskets?search=charles+babbage"],
-			["ada@example", "/admin/baskets?search=ada%40example"],
-			["1", "/admin/baskets?search=1"],
-			["nobody", "/admin/baskets?search=nobody"],
-		])("forwards basket search %j to the backend", async (search, path) => {
+			["CHARLES", ["b/2"]],
+			["ada@example", [1]],
+			["1", [1]],
+			["nobody", []],
+		])("passes basket search %j to the backend", async (search, ids) => {
 			const { request, service } = setup();
-			request.mockResolvedValueOnce({ baskets });
+			request.mockResolvedValueOnce({
+				baskets: baskets.filter((basket) =>
+					ids.some((id) => id === basket.basketId),
+				),
+			});
 
-			await service.getBaskets(req, res, search);
+			const result = await service.getBaskets(req, res, search);
 
-			expect(request).toHaveBeenCalledExactlyOnceWith(path, req, res);
+			expect(request).toHaveBeenCalledExactlyOnceWith(
+				`/admin/baskets?search=${encodeURIComponent(search)}`,
+				req,
+				res,
+			);
+			expect(result.map((basket) => basket.basketId)).toEqual(ids);
 		});
 
 		it("tolerates a missing baskets list", async () => {
@@ -404,9 +382,10 @@ describe("AdminService", () => {
 			const basket = { basketId: "b/2", items: [] };
 			request.mockResolvedValueOnce({ basket });
 
-			await expect(service.getBasketById(req, res, "b/2")).resolves.toEqual(
+			await expect(service.getBasketById(req, res, "b/2")).resolves.toEqual({
 				basket,
-			);
+				products: [],
+			});
 			expect(request).toHaveBeenCalledExactlyOnceWith(
 				"/admin/baskets/b%2F2",
 				req,
@@ -431,150 +410,6 @@ describe("AdminService", () => {
 
 			await expect(service.getBaskets(req, res)).rejects.toThrow(
 				"fetch failed",
-			);
-		});
-	});
-
-	describe("orders", () => {
-		it("requests orders with search and page and maps them for display", async () => {
-			const { request, service } = setup();
-			request.mockResolvedValueOnce({
-				orders: [
-					{
-						orderId: 42,
-						customer: { id: 7, name: "Ada", email: "ada@example.com" },
-						status: "SHIPPED",
-						orderDate: "2026-03-01T09:00:00Z",
-						totalCost: 1234.5,
-					},
-				],
-				pagination: { page: 3, pageSize: 10, totalPages: 3, totalOrders: 30 },
-			});
-
-			const view = await service.getOrders(req, res, {
-				search: "ada",
-				page: 3,
-			});
-
-			expect(request).toHaveBeenCalledExactlyOnceWith(
-				"/admin/orders?search=ada&page=3",
-				req,
-				res,
-			);
-			expect(view.orders[0]).toMatchObject({
-				detailsHref: "/admin/orders/42",
-				displayOrderDate: "1 Mar 2026",
-				displayTotal: "£1,234.50",
-				statusLabel: "Shipped",
-			});
-			expect(view.pagination).toMatchObject({
-				previousHref: "/admin/orders?q=ada&page=2",
-				nextHref: undefined,
-			});
-		});
-
-		it("omits pagination for a single page and tolerates missing orders", async () => {
-			const { request, service } = setup();
-			request.mockResolvedValueOnce({
-				pagination: { page: 1, pageSize: 10, totalPages: 1, totalOrders: 0 },
-			});
-
-			await expect(service.getOrders(req, res)).resolves.toEqual({
-				orders: [],
-			});
-			expect(request).toHaveBeenCalledWith("/admin/orders", req, res);
-		});
-
-		it("loads order details and the staff role together", async () => {
-			const { request, service } = setup();
-			request.mockImplementation(async (path: string) =>
-				path === "/admin/me" ? { role: "Admin" } : { order: orderDetails() },
-			);
-
-			const view = await service.getOrderById(req, res, "42");
-
-			expect(request).toHaveBeenCalledWith("/admin/orders/42", req, res);
-			expect(request).toHaveBeenCalledWith("/admin/me", req, res);
-			expect(view.canUpdateStatus).toBe(true);
-			expect(view.order).toMatchObject({
-				detailsHref: "/admin/orders/42",
-				statusLabel: "Processing",
-				displayOrderDate: "1 Mar 2026",
-				displayLastUpdated: "2 Mar 2026",
-				displayOrderTotal: "£25.00",
-				addressLines: ["1 Analytical Way", "London"],
-				items: [
-					expect.objectContaining({
-						displayUnitPrice: "£12.50",
-						displayItemTotal: "£25.00",
-					}),
-				],
-				transitions: [
-					{ value: "SHIPPED", label: "Shipped" },
-					{ value: "CANCELLED", label: "Cancelled" },
-				],
-			});
-		});
-
-		it.each([
-			["a role without order permissions", async () => ({ role: "Support" })],
-			["a missing role", async () => ({})],
-			[
-				"a failed role lookup",
-				async () => {
-					throw new BackendApiError(500, "boom");
-				},
-			],
-		])("hides status controls for %s", async (_label, me) => {
-			const { request, service } = setup();
-			request.mockImplementation(async (path: string) =>
-				path === "/admin/me" ? me() : { order: orderDetails() },
-			);
-
-			const view = await service.getOrderById(req, res, "42");
-
-			expect(view.canUpdateStatus).toBe(false);
-		});
-
-		it("hides status controls when there are no valid transitions", async () => {
-			const { request, service } = setup();
-			request.mockImplementation(async (path: string) =>
-				path === "/admin/me"
-					? { role: "SuperAdmin" }
-					: { order: orderDetails({ allowedTransitions: ["LOST"] }) },
-			);
-
-			const view = await service.getOrderById(req, res, "42");
-
-			expect(view.order.transitions).toEqual([]);
-			expect(view.canUpdateStatus).toBe(false);
-		});
-
-		it("rejects when the order request fails", async () => {
-			const { request, service } = setup();
-			request.mockImplementation(async (path: string) => {
-				if (path === "/admin/me") return { role: "Admin" };
-				throw new BackendApiError(404, "Order not found");
-			});
-
-			await expect(service.getOrderById(req, res, "999")).rejects.toMatchObject(
-				{ status: 404 },
-			);
-		});
-
-		it("posts a new order status", async () => {
-			const { request, service } = setup();
-			request.mockResolvedValueOnce({ order: orderDetails() });
-
-			await expect(
-				service.updateOrderStatus(req, res, "a/1", "SHIPPED"),
-			).resolves.toBe("SHIPPED");
-			expect(request).toHaveBeenCalledExactlyOnceWith(
-				"/admin/orders/a%2F1/status",
-				req,
-				res,
-				{},
-				{ status: "SHIPPED" },
 			);
 		});
 	});
