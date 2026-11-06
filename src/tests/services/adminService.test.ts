@@ -1,27 +1,19 @@
 import type { Request, Response } from "express";
 import { describe, expect, it, vi } from "vitest";
-import { BackendApi, BackendApiError } from "../../backendApi";
+import { BackendApiError } from "../../backendApi";
 import type { AdminOrderDetails } from "../../models/adminOrder";
 import { AdminService } from "../../services/adminService";
 import type { SessionService } from "../../services/sessionService";
 
-const authorization = ["Bearer", "staff-token"].join(" ");
 const req = {} as Request;
 const res = {} as Response;
 
-const json = (body: unknown, status = 200) =>
-	new Response(JSON.stringify(body), { status });
-
 const setup = () => {
-	const fetchMock = vi.fn<typeof fetch>();
 	const request = vi.fn();
 	const accessTokenKind = vi.fn();
 	const sessions = { request, accessTokenKind } as unknown as SessionService;
-	const service = new AdminService(
-		new BackendApi("http://backend:4000", fetchMock),
-		sessions,
-	);
-	return { fetchMock, request, accessTokenKind, service };
+	const service = new AdminService(sessions);
+	return { request, accessTokenKind, service };
 };
 
 const user = {
@@ -67,7 +59,12 @@ describe("AdminService", () => {
 			const dashboard = { staff: { name: "Ada" } };
 			request.mockResolvedValueOnce(dashboard);
 
-			await expect(service.getDashboard(req, res)).resolves.toBe(dashboard);
+			await expect(service.getDashboard(req, res)).resolves.toMatchObject({
+				...dashboard,
+				role: "",
+				nav: [{ key: "dashboard", label: "Dashboard", href: "/admin" }],
+				canChangeUserStatus: false,
+			});
 			expect(request).toHaveBeenCalledExactlyOnceWith("/admin", req, res);
 		});
 
@@ -85,23 +82,26 @@ describe("AdminService", () => {
 	});
 
 	describe("input helpers", () => {
-		it("keeps a bearer authorization header and cookie", () => {
+		it("derives role-scoped access from the dashboard", () => {
 			const { service } = setup();
 
-			expect(service.resolveCredentials(authorization, "a=b")).toEqual({
-				authorization,
-				cookie: "a=b",
+			expect(
+				service.toAccess({
+					staff: { name: "Ada" },
+					role: "Admin",
+					sections: [{ label: "Users" }, { label: "Orders" }],
+					quickActions: [{ label: "Suspend or reactivate customers" }],
+				}),
+			).toEqual({
+				staff: { name: "Ada" },
+				role: "Admin",
+				nav: [
+					{ key: "dashboard", label: "Dashboard", href: "/admin" },
+					{ key: "users", label: "Users", href: "/admin/users" },
+					{ key: "orders", label: "Orders", href: "/admin/orders" },
+				],
+				canChangeUserStatus: true,
 			});
-		});
-
-		it("drops non-bearer authorization headers", () => {
-			const { service } = setup();
-
-			expect(service.resolveCredentials("Basic abc", "a=b")).toEqual({
-				cookie: "a=b",
-			});
-			expect(service.resolveCredentials("Basic abc")).toBeUndefined();
-			expect(service.resolveCredentials()).toBeUndefined();
 		});
 
 		it("trims and limits search terms", () => {
@@ -362,25 +362,16 @@ describe("AdminService", () => {
 		];
 
 		it("lists baskets with credentials and detail links", async () => {
-			const { fetchMock, service } = setup();
-			fetchMock.mockResolvedValueOnce(json({ baskets }));
+			const { request, service } = setup();
+			request.mockResolvedValueOnce({ baskets });
 
-			const result = await service.getBaskets({
-				authorization,
-				cookie: "accessToken=x",
-			});
+			const result = await service.getBaskets(req, res);
 
-			expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
-				"http://backend:4000/admin/baskets",
+			expect(request).toHaveBeenCalledExactlyOnceWith(
+				"/admin/baskets",
+				req,
+				res,
 			);
-			expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
-				method: "GET",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: authorization,
-					Cookie: "accessToken=x",
-				},
-			});
 			expect(result.map((basket) => basket.detailsHref)).toEqual([
 				"/admin/baskets/1",
 				"/admin/baskets/b%2F2",
@@ -393,52 +384,62 @@ describe("AdminService", () => {
 			["1", [1]],
 			["nobody", []],
 		])("filters baskets by %j", async (search, ids) => {
-			const { fetchMock, service } = setup();
-			fetchMock.mockResolvedValueOnce(json({ baskets }));
+			const { request, service } = setup();
+			const expectedIds: Array<string | number> = ids;
+			request.mockResolvedValueOnce({
+				baskets: baskets.filter((basket) =>
+					expectedIds.includes(basket.basketId),
+				),
+			});
 
-			const result = await service.getBaskets({ authorization }, search);
+			const result = await service.getBaskets(req, res, search);
 
+			expect(request).toHaveBeenCalledWith(
+				`/admin/baskets?${new URLSearchParams({ search }).toString()}`,
+				req,
+				res,
+			);
 			expect(result.map((basket) => basket.basketId)).toEqual(ids);
 		});
 
 		it("tolerates a missing baskets list", async () => {
-			const { fetchMock, service } = setup();
-			fetchMock.mockResolvedValueOnce(json({}));
+			const { request, service } = setup();
+			request.mockResolvedValueOnce({});
 
-			await expect(service.getBaskets({ authorization })).resolves.toEqual([]);
+			await expect(service.getBaskets(req, res)).resolves.toEqual([]);
 		});
 
 		it("loads a basket by encoded id", async () => {
-			const { fetchMock, service } = setup();
+			const { request, service } = setup();
 			const basket = { basketId: "b/2", items: [] };
-			fetchMock.mockResolvedValueOnce(json({ basket }));
+			request.mockResolvedValueOnce({ basket });
 
-			await expect(
-				service.getBasketById({ cookie: "accessToken=x" }, "b/2"),
-			).resolves.toEqual(basket);
-			expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
-				"http://backend:4000/admin/baskets/b%2F2",
+			await expect(service.getBasketById(req, res, "b/2")).resolves.toEqual(
+				basket,
 			);
-			expect(fetchMock.mock.calls[0]?.[1]?.headers).toEqual({
-				"Content-Type": "application/json",
-				Cookie: "accessToken=x",
-			});
+			expect(request).toHaveBeenCalledExactlyOnceWith(
+				"/admin/baskets/b%2F2",
+				req,
+				res,
+			);
 		});
 
 		it("rejects with the backend error for unknown baskets", async () => {
-			const { fetchMock, service } = setup();
-			fetchMock.mockResolvedValueOnce(json({ error: "Basket not found" }, 404));
+			const { request, service } = setup();
+			request.mockRejectedValueOnce(
+				new BackendApiError(404, "Basket not found"),
+			);
 
 			await expect(
-				service.getBasketById({ authorization }, "999"),
+				service.getBasketById(req, res, "999"),
 			).rejects.toMatchObject({ status: 404, message: "Basket not found" });
 		});
 
 		it("propagates network failures", async () => {
-			const { fetchMock, service } = setup();
-			fetchMock.mockRejectedValueOnce(new TypeError("fetch failed"));
+			const { request, service } = setup();
+			request.mockRejectedValueOnce(new TypeError("fetch failed"));
 
-			await expect(service.getBaskets({ authorization })).rejects.toThrow(
+			await expect(service.getBaskets(req, res)).rejects.toThrow(
 				"fetch failed",
 			);
 		});
