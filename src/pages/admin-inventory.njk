@@ -1,0 +1,83 @@
+{% import "partials/inventory-controls.njk" as controls %}
+{% import "partials/icons.njk" as i %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Management | Admin | Sedshed</title>
+    <link rel="stylesheet" href="/admin.css">
+</head>
+<body class="admin">
+    {% set activeNav = "inventory" %}
+    {% include "partials/admin-nav.njk" %}
+    <main id="main" class="admin-main">
+        <header class="admin-page-head">
+            <p class="admin-page-head__eyebrow">Products and stock</p>
+            <h1 class="admin-page-head__title">{% if notFound %}Product not found{% else %}Inventory Management{% endif %}</h1>
+            {% if inventoryPermissions.create %}<a href="/admin/inventory/new" class="admin-btn admin-btn--primary">Create product</a>{% endif %}
+        </header>
+        {% if notice %}<div class="admin-alert admin-alert--success" role="status">{{ notice }}</div>{% endif %}
+        {% if error %}
+        <div class="admin-alert admin-alert--error" role="alert">{{ error }} <a href="/admin/inventory">Return to inventory</a></div>
+        {% else %}
+        <section class="admin-card admin-inventory-toolbar" aria-label="Search, filter and sort products">
+            <form method="get" action="/admin/inventory" class="admin-inventory-toolbar__row" role="search">
+                {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+                <input type="hidden" name="sort" value="{{ sort }}">
+                <input type="hidden" name="direction" value="{{ direction }}">
+                <div class="admin-inventory-search">
+                    <label for="inventory-search" class="visually-hidden">Search products by name or SKU</label>
+                    {{ i.icon("search") }}
+                    <input id="inventory-search" type="search" name="q" maxlength="100" value="{{ search }}" placeholder="Search by name or SKU">
+                    <button type="submit" class="admin-btn admin-btn--primary admin-btn--small">Search</button>
+                </div>
+                <details class="admin-inventory-sort">
+                    <summary>Sort by: {% for option in filters.sortOptions %}{% if option.active %}<strong>{{ option.label }}</strong>{% endif %}{% endfor %}</summary>
+                    <ul class="admin-inventory-sort__menu">
+                        {% for option in filters.sortOptions %}
+                        <li><a href="{{ option.href }}"{% if option.active %} class="is-active" aria-current="true"{% endif %}>{{ option.label }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </details>
+            </form>
+            <nav class="admin-inventory-status" aria-label="Filter by stock status">
+                {% for tab in filters.statusTabs %}
+                <a href="{{ tab.href }}" class="admin-pill{% if tab.active %} is-active{% endif %}{% if tab.value %} admin-pill--{{ tab.value | lower | replace('_', '-') }}{% endif %}"{% if tab.active %} aria-current="true"{% endif %}>{{ tab.label }}</a>
+                {% endfor %}
+            </nav>
+            {% if search %}
+            <p class="admin-inventory-active">Showing results for “<strong>{{ search }}</strong>” <a href="{{ filters.clearSearchHref }}" class="admin-link">Clear search</a></p>
+            {% endif %}
+        </section>
+        <section class="admin-card admin-card--flush" aria-label="Inventory products">
+            <div class="admin-table-wrap" tabindex="0" role="region" aria-label="Inventory table">
+                <table class="admin-table">
+                    <thead><tr>
+                        {% for column in filters.columns %}
+                        <th scope="col" aria-sort="{{ column.ariaSort }}"><a href="{{ column.href }}" class="admin-sort-link{% if column.active %} is-active{% endif %}">{{ column.label }}<span class="admin-sort-link__arrow" aria-hidden="true">{% if column.ariaSort == "ascending" %}▲{% elif column.ariaSort == "descending" %}▼{% else %}↕{% endif %}</span><span class="visually-hidden">, sort {% if column.ariaSort == "ascending" %}descending{% else %}ascending{% endif %}</span></a></th>
+                        {% endfor %}
+                        <th scope="col">Actions</th>
+                    </tr></thead>
+                    <tbody>
+                        {% for product in items %}
+                        <tr>
+                            <td class="admin-table__strong"><a href="{{ product.href }}">{{ product.name }}</a></td><td>{{ product.sku }}</td><td>{{ product.displayPrice }}</td>
+                            <td class="admin-numeric">{{ product.stockQuantity }}</td><td class="admin-numeric">{{ product.lowStockThreshold }}</td><td>{{ controls.status(product) }}</td>
+                            <td class="admin-table__action">
+                                <a href="{{ product.href }}" class="admin-btn admin-btn--ghost admin-btn--small">Details and history<span class="visually-hidden"> for {{ product.name }}</span></a>
+                                {% if inventoryPermissions.update %}<a href="{{ product.href }}/edit" class="admin-btn admin-btn--ghost admin-btn--small">Edit<span class="visually-hidden"> {{ product.name }}</span></a>{% endif %}
+                                {% if inventoryPermissions.delete %}{{ controls.deleteProduct(product) }}{% endif %}
+                            </td>
+                        </tr>
+                        {% else %}<tr><td colspan="7" class="admin-empty">No products found. Try changing the search or filters.</td></tr>{% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        <p class="admin-card__note">{{ totalItems }} product{% if totalItems != 1 %}s{% endif %} found.</p>
+        {{ controls.pagination(pagination, "Inventory pages") }}
+        {% endif %}
+    </main>
+</body>
+</html>

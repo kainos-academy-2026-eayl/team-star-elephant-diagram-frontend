@@ -1,27 +1,84 @@
-<header class="navbar">
-    <a href="/admin" class="navbar-brand">Admin</a>
+{%- import "partials/icons.njk" as i -%}
+{%- set navItems = nav or [{ key: "dashboard", label: "Dashboard", href: "/admin" }] -%}
+{%- set navIcons = { dashboard: "grid", users: "user", baskets: "cart", inventory: "truck" } -%}
+<a href="#main" class="admin-skip-link">Skip to main content</a>
 
-    <input type="checkbox" id="menu-toggle" class="menu-toggle">
-    <label for="menu-toggle" class="menu-button">
-        <span>Menu</span>
-        <span class="menu-arrow"></span>
-    </label>
+<header class="admin-header">
+    {% if isFinanceDashboard %}
+    <div class="admin-brand">
+        <img src="/images/home/logo.png" alt="" width="80" height="42">
+        <span class="admin-brand__name">SEDSHED</span>
+        <span class="admin-brand__tag">Finance</span>
+    </div>
+    {% else %}
+    <a href="/admin" class="admin-brand" aria-label="Sedshed admin dashboard">
+        <img src="/images/home/logo.png" alt="" width="80" height="42">
+        <span class="admin-brand__name">SEDSHED</span>
+        <span class="admin-brand__tag">Admin</span>
+    </a>
+    {% endif %}
 
-    <nav class="dropdown">
-        <ul class="category-links">
-            <li><a href="/admin"{% if activeNav == "dashboard" %} class="active" aria-current="page"{% endif %}>Dashboard</a></li>
-            <li><a href="/admin/users"{% if activeNav == "users" %} class="active" aria-current="page"{% endif %}>Users</a></li>
-            <li><a href="/admin/baskets"{% if activeNav == "baskets" %} class="active" aria-current="page"{% endif %}>Baskets</a></li>
-            {% for section in sections %}
-            {% if section.label | lower not in ["users", "baskets"] %}
-            <li><span class="unavailable-link" aria-disabled="true">{{ section.label }} (Unavailable)</span></li>
-            {% endif %}
+    {% if searchAction and not isFinanceDashboard %}
+    <form action="{{ searchAction }}" method="get" class="admin-search" role="search">
+        <label for="admin-search-input" class="visually-hidden">{{ searchLabel }}</label>
+        <input type="search" id="admin-search-input" name="q" maxlength="100" placeholder="{{ searchPlaceholder }}" value="{{ search }}">
+        <button type="submit" aria-label="Search">{{ i.icon("search") }}</button>
+    </form>
+    {% else %}
+    <span class="admin-search-spacer" aria-hidden="true"></span>
+    {% endif %}
+
+    <div class="admin-header__actions">
+        {% if staff and staff.name %}
+        <span class="admin-staff-chip">{{ i.icon("user") }}<span class="admin-staff-chip__name">{{ staff.name }}</span></span>
+        {% endif %}
+        <button type="button" class="admin-icon-link" command="show-modal" commandfor="admin-menu" aria-label="Open admin menu">{{ i.icon("menu") }}</button>
+    </div>
+</header>
+
+{% if not isFinanceDashboard %}
+<nav class="admin-tabs" aria-label="Admin sections">
+    <ul>
+        {# Items come from the backend's role-scoped sections; the backend still enforces access. #}
+        {% for item in navItems %}
+        <li><a href="{{ item.href }}"{% if activeNav == item.key %} class="active" aria-current="page"{% endif %}>{{ item.label }}</a></li>
+        {% endfor %}
+    </ul>
+</nav>
+{% endif %}
+
+<dialog class="admin-menu" id="admin-menu" aria-label="Admin menu" closedby="any">
+    <div class="admin-menu__top">
+        <a href="/admin" class="admin-menu__brand">
+            <img src="/images/home/logo-menu.png" alt="" width="56" height="36">
+            <span>Sedshed {% if isFinanceDashboard %}Finance{% else %}Admin{% endif %}</span>
+        </a>
+        <button type="button" class="admin-icon-link admin-icon-link--dark" command="close" commandfor="admin-menu" aria-label="Close menu" autofocus>{{ i.icon("close") }}</button>
+    </div>
+
+    {% if staff and staff.name %}
+    <div class="admin-menu__staff">
+        {{ i.icon("user") }}
+        <span><small>Signed in as</small><strong>{{ staff.name }}</strong></span>
+    </div>
+    {% endif %}
+
+    <nav aria-label="Admin menu sections">
+        <ul>
+            {% for item in navItems %}
+            <li><a class="admin-menu-item{% if activeNav == item.key %} is-current{% endif %}" href="{{ item.href }}"{% if activeNav == item.key %} aria-current="page"{% endif %}>{{ i.icon(navIcons[item.key] or "arrow") }}<span>{{ item.label }}</span></a></li>
             {% endfor %}
         </ul>
-
-        <div class="dropdown-actions">
-            <span class="staff-name">{{ staff.name if staff else "" }}</span>
-            <form action="/logout" method="post"><button type="submit">Log out</button></form>
-        </div>
+        {% if not isFinanceDashboard %}
+        <ul class="admin-menu__section">
+            <li><a class="admin-menu-item" href="/">{{ i.icon("home") }}<span>View the shop</span></a></li>
+        </ul>
+        {% endif %}
     </nav>
-</header>
+
+    <form action="/logout" method="post" class="admin-menu__logout">
+        <button type="submit" class="admin-btn admin-btn--primary admin-btn--block">Log out</button>
+    </form>
+
+    <p class="admin-menu__copyright">© 2026 Sedshed. Staff portal.</p>
+</dialog>

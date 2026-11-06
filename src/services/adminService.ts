@@ -1,9 +1,9 @@
 import type { Request, Response } from "express";
-import type { BackendApi } from "../backendApi";
 import type {
-	BasketDetails,
 	BasketDetailsResponse,
 	BasketListResponse,
+	BasketPage,
+	BasketPermissions,
 	BasketSummary,
 	BasketSummaryView,
 } from "../models/adminBasket";
@@ -20,10 +20,19 @@ import type {
 	AdminUserSummary,
 	AdminUserView,
 } from "../models/adminUser";
+import type {
+	InventoryPermissions,
+	InventorySummary,
+} from "../models/inventory";
 import type { SessionService } from "./sessionService";
 
 export interface AdminDashboard {
+	inventoryPermissions?: InventoryPermissions;
+	basketPermissions?: BasketPermissions;
+	inventorySummary?: InventorySummary | null;
 	staff: { name: string };
+	role?: string;
+	dashboard?: string;
 	sections: Array<{ label: string }>;
 	quickActions: Array<{ label: string }>;
 	cards: Array<{ label: string; value: string }>;
@@ -39,33 +48,96 @@ export interface AdminDashboard {
 		amount: string;
 		reason: string;
 	}>;
+	lowStock?: {
+		total: number;
+		items: Array<{
+			inventoryId: number;
+			product: string;
+			supplier: string;
+			quantity: number;
+			reorderLevel: number;
+		}>;
+	} | null;
 }
 
-export interface AdminRequestCredentials {
-	authorization?: string;
-	cookie?: string;
+export interface AdminNavItem {
+	key: string;
+	label: string;
+	href: string;
 }
+
+// What the logged-in role may see, derived only from the backend's role-scoped dashboard response.
+export interface AdminContext {
+	inventoryPermissions: InventoryPermissions;
+	basketPermissions: BasketPermissions;
+	staff: { name: string };
+	role: string;
+	roleLabel: string;
+	isFinanceDashboard: boolean;
+	canViewInventory: boolean;
+	nav: AdminNavItem[];
+	canChangeUserStatus: boolean;
+	canDeleteUsers: boolean;
+}
+
+// Backend quick action label granted to roles holding users:suspend.
+const USER_STATUS_QUICK_ACTION = "Suspend or reactivate customers";
+const USER_DELETE_QUICK_ACTION = "Permanently delete customers";
+const ROLE_LABELS: Record<string, string> = {
+	SuperAdmin: "Super Admin",
+	Admin: "Admin",
+	InventoryManager: "Inventory Manager",
+	WarehouseStaff: "Warehouse Staff",
+	FinanceManager: "Finance Manager",
+	CustomerService: "Customer Service",
+};
+const STAFF_MANAGEMENT_LABELS = new Set([
+	"Admin accounts",
+	"Permissions",
+	"Manage admin accounts",
+	"Manage permissions",
+]);
+
+const DASHBOARD_NAV_ITEM: AdminNavItem = {
+	key: "dashboard",
+	label: "Dashboard",
+	href: "/admin",
+};
+
+const SECTION_HREFS = new Map([
+	["users", "/admin/users"],
+	["baskets", "/admin/baskets"],
+	["inventory", "/admin/inventory"],
+]);
+
+const toNavKey = (label: string): string =>
+	label
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "");
+
+const toNav = (sections: AdminDashboard["sections"]): AdminNavItem[] => [
+	DASHBOARD_NAV_ITEM,
+	...sections
+		.filter((section) => typeof section?.label === "string")
+		.flatMap((section) => {
+			const key = toNavKey(section.label);
+			const href = SECTION_HREFS.get(key);
+			return key && key !== DASHBOARD_NAV_ITEM.key && href
+				? [{ key, label: section.label, href }]
+				: [];
+		}),
+];
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
-const BEARER_PATTERN = /^Bearer\s+\S+$/i;
+// Backend per-line basket limit; also enforced server-side together with available stock.
+const MAX_BASKET_QUANTITY = 99;
 const MAX_SEARCH_LENGTH = 100;
 
 const STATUS_UPDATES: Record<AdminUserStatusAction, AdminUserStatusUpdate> = {
 	suspend: "suspended",
 	reactivate: "reactivated",
-};
-
-const toHeaders = (
-	credentials: AdminRequestCredentials,
-): Record<string, string> => {
-	const headers: Record<string, string> = {};
-	if (credentials.authorization) {
-		headers.Authorization = credentials.authorization;
-	}
-	if (credentials.cookie) {
-		headers.Cookie = credentials.cookie;
-	}
-	return headers;
 };
 
 const basketPath = (id: string): string =>
@@ -131,32 +203,92 @@ const toPaginationView = (
 };
 
 export class AdminService {
-	constructor(
-		private readonly api: BackendApi,
-		private readonly sessions: SessionService,
-	) {}
+	constructor(private readonly sessions: SessionService) {}
 
-	getDashboard(req: Request, res: Response): Promise<AdminDashboard> {
-		return this.sessions.request<AdminDashboard>("/admin", req, res);
+	async getDashboard(
+		req: Request,
+		res: Response,
+	): Promise<AdminDashboard & AdminContext> {
+		const dashboard = await this.sessions.request<AdminDashboard>(
+			"/admin",
+			req,
+			res,
+		);
+		const access = this.toAccess(dashboard);
+		return {
+			...dashboard,
+			...access,
+			lowStock: access.canViewInventory ? (dashboard.lowStock ?? null) : null,
+			sections: (dashboard.sections ?? []).filter(
+				(section) => !STAFF_MANAGEMENT_LABELS.has(section.label),
+			),
+			quickActions: [],
+		};
+	}
+
+	async getAccess(req: Request, res: Response): Promise<AdminContext> {
+		return this.toAccess(
+			await this.sessions.request<AdminDashboard>("/admin", req, res),
+		);
+	}
+
+	toAccess(dashboard: Partial<AdminDashboard>): AdminContext {
+		const sections = Array.isArray(dashboard.sections)
+			? dashboard.sections
+			: [];
+		const quickActions = Array.isArray(dashboard.quickActions)
+			? dashboard.quickActions
+			: [];
+		const isFinanceDashboard = dashboard.role === "FinanceManager";
+		const inventoryVisible = dashboard.inventoryPermissions?.view !== false;
+		const visibleSections = sections.filter(
+			(section) => toNavKey(section.label) !== "inventory" || inventoryVisible,
+		);
+		return {
+			inventoryPermissions: {
+				view: dashboard.inventoryPermissions?.view === true,
+				create: dashboard.inventoryPermissions?.create === true,
+				update: dashboard.inventoryPermissions?.update === true,
+				delete: dashboard.inventoryPermissions?.delete === true,
+			},
+			basketPermissions: {
+				view: dashboard.basketPermissions?.view === true,
+				create: dashboard.basketPermissions?.create === true,
+				update: dashboard.basketPermissions?.update === true,
+				delete: dashboard.basketPermissions?.delete === true,
+			},
+			staff: { name: dashboard.staff?.name ?? "" },
+			role: dashboard.role ?? "",
+			roleLabel: ROLE_LABELS[dashboard.role ?? ""] ?? dashboard.role ?? "",
+			isFinanceDashboard,
+			canViewInventory:
+				!isFinanceDashboard &&
+				visibleSections.some(
+					(section) =>
+						typeof section?.label === "string" &&
+						toNavKey(section.label) === "inventory",
+				),
+			nav: isFinanceDashboard ? [DASHBOARD_NAV_ITEM] : toNav(visibleSections),
+			canChangeUserStatus:
+				!isFinanceDashboard &&
+				quickActions.some(
+					(action) => action?.label === USER_STATUS_QUICK_ACTION,
+				),
+			canDeleteUsers:
+				!isFinanceDashboard &&
+				quickActions.some(
+					(action) => action?.label === USER_DELETE_QUICK_ACTION,
+				),
+		};
+	}
+
+	// Used when the role cannot be confirmed: only the dashboard link and no actions.
+	getRestrictedAccess(): AdminContext {
+		return this.toAccess({});
 	}
 
 	isCustomerSession(req: Request): boolean {
 		return this.sessions.accessTokenKind(req) === "customer";
-	}
-
-	resolveCredentials(
-		authorization?: string,
-		cookie?: string,
-	): AdminRequestCredentials | undefined {
-		const credentials: AdminRequestCredentials = {
-			...(authorization && BEARER_PATTERN.test(authorization)
-				? { authorization }
-				: {}),
-			...(cookie ? { cookie } : {}),
-		};
-		return credentials.authorization || credentials.cookie
-			? credentials
-			: undefined;
 	}
 
 	normaliseSearch(value: unknown): string {
@@ -257,44 +389,160 @@ export class AdminService {
 		return STATUS_UPDATES[action];
 	}
 
+	async deleteUser(req: Request, res: Response, id: string): Promise<void> {
+		await this.sessions.request(`${userPath(id)}/delete`, req, res, {}, {});
+	}
+
 	parseStatusUpdate(value: unknown): AdminUserStatusUpdate | undefined {
 		return value === "suspended" || value === "reactivated" ? value : undefined;
 	}
 
+	// The backend performs the (multi-term) search, so results are rendered as returned.
 	async getBaskets(
-		credentials: AdminRequestCredentials,
+		req: Request,
+		res: Response,
 		search = "",
 	): Promise<BasketSummaryView[]> {
-		const { baskets } = await this.api.request<BasketListResponse>(
-			"/admin/baskets",
-			undefined,
-			toHeaders(credentials),
+		const params = new URLSearchParams();
+		if (search) {
+			params.set("search", search);
+		}
+		const queryString = params.toString();
+		const { baskets } = await this.sessions.request<BasketListResponse>(
+			`/admin/baskets${queryString ? `?${queryString}` : ""}`,
+			req,
+			res,
 		);
-		const normalisedSearch = search.trim().toLowerCase();
-		return (baskets ?? [])
-			.filter(
-				(basket: BasketSummary) =>
-					!normalisedSearch ||
-					[basket.basketId, basket.customerName, basket.customerEmail]
-						.join(" ")
-						.toLowerCase()
-						.includes(normalisedSearch),
-			)
-			.map((basket) => ({
-				...basket,
-				detailsHref: basketPath(String(basket.basketId)),
-			}));
+		return (baskets ?? []).map((basket: BasketSummary) => ({
+			...basket,
+			detailsHref: basketPath(String(basket.basketId)),
+		}));
 	}
 
 	async getBasketById(
-		credentials: AdminRequestCredentials,
+		req: Request,
+		res: Response,
 		id: string,
-	): Promise<BasketDetails> {
-		const { basket } = await this.api.request<BasketDetailsResponse>(
-			basketPath(id),
-			undefined,
-			toHeaders(credentials),
+	): Promise<BasketPage> {
+		return this.toBasketPage(
+			await this.sessions.request<BasketDetailsResponse>(
+				basketPath(id),
+				req,
+				res,
+			),
 		);
-		return basket;
+	}
+
+	getBasketDetailsHref(id: string): string {
+		return basketPath(id);
+	}
+
+	// Returns the new basket ID; a 409 from the backend carries the existing basket's ID.
+	async createBasket(
+		req: Request,
+		res: Response,
+		email: string,
+	): Promise<string> {
+		const { basketId } = await this.sessions.request<{ basketId: number }>(
+			"/admin/baskets",
+			req,
+			res,
+			{},
+			{ email },
+		);
+		return String(basketId);
+	}
+
+	async addBasketItem(
+		req: Request,
+		res: Response,
+		id: string,
+		productId: number,
+		quantity: number,
+	): Promise<void> {
+		await this.sessions.request(
+			`${basketPath(id)}/items`,
+			req,
+			res,
+			{},
+			{ productId, quantity },
+		);
+	}
+
+	async updateBasketItem(
+		req: Request,
+		res: Response,
+		id: string,
+		productId: number,
+		quantity: number,
+	): Promise<void> {
+		await this.sessions.request(
+			`${basketPath(id)}/items/${productId}`,
+			req,
+			res,
+			{},
+			{ quantity },
+			"PATCH",
+		);
+	}
+
+	async removeBasketItem(
+		req: Request,
+		res: Response,
+		id: string,
+		productId: number,
+	): Promise<void> {
+		await this.sessions.request(
+			`${basketPath(id)}/items/${productId}`,
+			req,
+			res,
+			{},
+			undefined,
+			"DELETE",
+		);
+	}
+
+	async clearBasket(req: Request, res: Response, id: string): Promise<void> {
+		await this.sessions.request(
+			`${basketPath(id)}/items`,
+			req,
+			res,
+			{},
+			undefined,
+			"DELETE",
+		);
+	}
+
+	async deleteBasket(req: Request, res: Response, id: string): Promise<void> {
+		await this.sessions.request(
+			basketPath(id),
+			req,
+			res,
+			{},
+			undefined,
+			"DELETE",
+		);
+	}
+
+	// Positive whole numbers within the Postgres INTEGER range, or undefined.
+	parsePositiveInt(value: unknown): number | undefined {
+		const text = typeof value === "string" ? value.trim() : "";
+		if (!/^[1-9]\d{0,9}$/.test(text)) return undefined;
+		const number = Number(text);
+		return number <= 2_147_483_647 ? number : undefined;
+	}
+
+	private toBasketPage(response: BasketDetailsResponse): BasketPage {
+		const basket = response.basket;
+		return {
+			basket: {
+				...basket,
+				items: (basket.items ?? []).map((item) => ({
+					...item,
+					maxQuantity: item.maxQuantity ?? MAX_BASKET_QUANTITY,
+				})),
+			},
+			products: response.products ?? [],
+		};
 	}
 }

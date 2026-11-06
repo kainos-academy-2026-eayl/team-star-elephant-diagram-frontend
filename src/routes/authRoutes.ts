@@ -1,16 +1,11 @@
 import { Router } from "express";
-import { rateLimit } from "express-rate-limit";
 import type { AuthController } from "../controllers/authController";
+import { createRateLimiter } from "../middleware/rateLimiter";
 import { rateLimitMax } from "./rateLimitMax";
 
 export function createAuthRoutes(authController: AuthController): Router {
 	const router = Router();
-	const authRateLimit = rateLimit({
-		windowMs: 15 * 60 * 1000,
-		limit: rateLimitMax(10),
-		standardHeaders: "draft-8",
-		legacyHeaders: false,
-	});
+	const authRateLimit = createRateLimiter(rateLimitMax(10));
 
 	router.use(["/forgot-password", "/reset-password"], (_req, res, next) => {
 		res.set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });

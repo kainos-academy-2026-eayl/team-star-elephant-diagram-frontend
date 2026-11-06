@@ -5,14 +5,21 @@ import { AdminController } from "./controllers/adminController";
 import { AuthController } from "./controllers/authController";
 import { BasketController } from "./controllers/basketController";
 import { CheckoutController } from "./controllers/checkoutController";
+import { InventoryController } from "./controllers/inventoryController";
 import { PageController } from "./controllers/pageController";
 import { PaymentGatewayController } from "./controllers/paymentGatewayController";
 import { ProductController } from "./controllers/productController";
 import { ProfileController } from "./controllers/profileController";
+import {
+	createSubmissionToken,
+	preventDuplicateSubmissions,
+	SUBMISSION_FIELD,
+} from "./middleware/duplicateSubmission";
 import { createAdminRoutes } from "./routes/adminRoutes";
 import { createAuthRoutes } from "./routes/authRoutes";
 import { createBasketRoutes } from "./routes/basketRoutes";
 import { createCheckoutRoutes } from "./routes/checkoutRoutes";
+import { createInventoryRoutes } from "./routes/inventoryRoutes";
 import { createPageRoutes } from "./routes/pageRoutes";
 import { createPaymentGatewayRoutes } from "./routes/paymentGatewayRoutes";
 import { createProductRoutes } from "./routes/productRoutes";
@@ -21,10 +28,12 @@ import { AdminService } from "./services/adminService";
 import { AuthService } from "./services/authService";
 import { BasketService } from "./services/basketService";
 import { CheckoutService } from "./services/checkoutService";
+import { InventoryService } from "./services/inventoryService";
 import { PaymentGatewayService } from "./services/paymentGatewayService";
 import { ProductService } from "./services/productService";
 import { ProfileService } from "./services/profileService";
 import { SessionService } from "./services/sessionService";
+import { menuCategories } from "./siteMenu";
 
 export function createApp({
 	apiBaseUrl = process.env.API_BASE_URL ?? "http://localhost:3001",
@@ -42,14 +51,19 @@ export function createApp({
 	const api = new BackendApi(apiBaseUrl, fetchApi);
 	const sessions = new SessionService(api);
 	const authController = new AuthController(new AuthService(api), sessions);
-	const adminController = new AdminController(new AdminService(api, sessions));
+	const adminService = new AdminService(sessions);
+	const adminController = new AdminController(adminService);
+	const inventoryController = new InventoryController(
+		new InventoryService(sessions),
+		adminService,
+	);
 	const basketController = new BasketController(
 		new BasketService(api),
 		sessions,
 	);
 	const pageController = new PageController(sessions);
 	const productService = new ProductService(api);
-	const productController = new ProductController(productService);
+	const productController = new ProductController(productService, sessions);
 	const checkoutController = new CheckoutController(
 		new CheckoutService(),
 		sessions,
@@ -61,10 +75,13 @@ export function createApp({
 	);
 	const profileController = new ProfileController(new ProfileService(sessions));
 
-	nunjucks.configure("src/pages", {
+	const templates = nunjucks.configure("src/pages", {
 		autoescape: true,
 		express: app,
 	});
+	templates.addGlobal("submissionToken", createSubmissionToken);
+	templates.addGlobal("submissionField", SUBMISSION_FIELD);
+	templates.addGlobal("menuCategories", menuCategories);
 
 	app.set("view engine", "njk");
 
@@ -73,9 +90,11 @@ export function createApp({
 	app.use(express.static("src/assets"));
 	app.use(express.json({ limit: "100kb" }));
 	app.use(express.urlencoded({ extended: false, limit: "100kb" }));
+	app.use("/admin", preventDuplicateSubmissions());
 
 	app.use(createPageRoutes(pageController));
 	app.use(createAdminRoutes(adminController));
+	app.use(createInventoryRoutes(inventoryController));
 	app.use(createAuthRoutes(authController));
 	app.use(createBasketRoutes(basketController));
 	app.use(createProductRoutes(productController));
