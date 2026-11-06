@@ -1,5 +1,4 @@
 import type { Request, Response } from "express";
-import type { BackendApi } from "../backendApi";
 import type {
 	BasketDetails,
 	BasketDetailsResponse,
@@ -37,6 +36,8 @@ import type { SessionService } from "./sessionService";
 
 export interface AdminDashboard {
 	staff: { name: string };
+	role?: string;
+	dashboard?: string;
 	sections: Array<{ label: string }>;
 	quickActions: Array<{ label: string }>;
 	cards: Array<{ label: string; value: string }>;
@@ -54,31 +55,61 @@ export interface AdminDashboard {
 	}>;
 }
 
-export interface AdminRequestCredentials {
-	authorization?: string;
-	cookie?: string;
+export interface AdminNavItem {
+	key: string;
+	label: string;
+	href: string;
 }
 
+// What the logged-in role may see, derived only from the backend's role-scoped dashboard response.
+export interface AdminAccess {
+	staff: { name: string };
+	role: string;
+	nav: AdminNavItem[];
+	canChangeUserStatus: boolean;
+}
+
+// Backend quick action label granted to roles holding users:suspend.
+const USER_STATUS_QUICK_ACTION = "Suspend or reactivate customers";
+
+const DASHBOARD_NAV_ITEM: AdminNavItem = {
+	key: "dashboard",
+	label: "Dashboard",
+	href: "/admin",
+};
+
+const IMPLEMENTED_SECTION_HREFS = new Map([
+	["users", "/admin/users"],
+	["baskets", "/admin/baskets"],
+	["orders", "/admin/orders"],
+]);
+
+const toNavKey = (label: string): string =>
+	label
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "");
+
+const toNav = (sections: AdminDashboard["sections"]): AdminNavItem[] => [
+	DASHBOARD_NAV_ITEM,
+	...sections
+		.filter((section) => typeof section?.label === "string")
+		.flatMap((section) => {
+			const key = toNavKey(section.label);
+			const href = IMPLEMENTED_SECTION_HREFS.get(key);
+			return key && key !== DASHBOARD_NAV_ITEM.key && href
+				? [{ key, label: section.label, href }]
+				: [];
+		}),
+];
+
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
-const BEARER_PATTERN = /^Bearer\s+\S+$/i;
 const MAX_SEARCH_LENGTH = 100;
 
 const STATUS_UPDATES: Record<AdminUserStatusAction, AdminUserStatusUpdate> = {
 	suspend: "suspended",
 	reactivate: "reactivated",
-};
-
-const toHeaders = (
-	credentials: AdminRequestCredentials,
-): Record<string, string> => {
-	const headers: Record<string, string> = {};
-	if (credentials.authorization) {
-		headers.Authorization = credentials.authorization;
-	}
-	if (credentials.cookie) {
-		headers.Cookie = credentials.cookie;
-	}
-	return headers;
 };
 
 const basketPath = (id: string): string =>
@@ -198,32 +229,50 @@ const toOrderPaginationView = (
 };
 
 export class AdminService {
-	constructor(
-		private readonly api: BackendApi,
-		private readonly sessions: SessionService,
-	) {}
+	constructor(private readonly sessions: SessionService) {}
 
-	getDashboard(req: Request, res: Response): Promise<AdminDashboard> {
-		return this.sessions.request<AdminDashboard>("/admin", req, res);
+	async getDashboard(
+		req: Request,
+		res: Response,
+	): Promise<AdminDashboard & AdminAccess> {
+		const dashboard = await this.sessions.request<AdminDashboard>(
+			"/admin",
+			req,
+			res,
+		);
+		return { ...dashboard, ...this.toAccess(dashboard) };
+	}
+
+	async getAccess(req: Request, res: Response): Promise<AdminAccess> {
+		return this.toAccess(
+			await this.sessions.request<AdminDashboard>("/admin", req, res),
+		);
+	}
+
+	toAccess(dashboard: Partial<AdminDashboard>): AdminAccess {
+		const sections = Array.isArray(dashboard.sections)
+			? dashboard.sections
+			: [];
+		const quickActions = Array.isArray(dashboard.quickActions)
+			? dashboard.quickActions
+			: [];
+		return {
+			staff: { name: dashboard.staff?.name ?? "" },
+			role: dashboard.role ?? "",
+			nav: toNav(sections),
+			canChangeUserStatus: quickActions.some(
+				(action) => action?.label === USER_STATUS_QUICK_ACTION,
+			),
+		};
+	}
+
+	// Used when the role cannot be confirmed: only the dashboard link and no actions.
+	getRestrictedAccess(): AdminAccess {
+		return this.toAccess({});
 	}
 
 	isCustomerSession(req: Request): boolean {
 		return this.sessions.accessTokenKind(req) === "customer";
-	}
-
-	resolveCredentials(
-		authorization?: string,
-		cookie?: string,
-	): AdminRequestCredentials | undefined {
-		const credentials: AdminRequestCredentials = {
-			...(authorization && BEARER_PATTERN.test(authorization)
-				? { authorization }
-				: {}),
-			...(cookie ? { cookie } : {}),
-		};
-		return credentials.authorization || credentials.cookie
-			? credentials
-			: undefined;
 	}
 
 	normaliseSearch(value: unknown): string {
@@ -328,39 +377,37 @@ export class AdminService {
 		return value === "suspended" || value === "reactivated" ? value : undefined;
 	}
 
+	// The backend performs the (multi-term) search, so results are rendered as returned.
 	async getBaskets(
-		credentials: AdminRequestCredentials,
+		req: Request,
+		res: Response,
 		search = "",
 	): Promise<BasketSummaryView[]> {
-		const { baskets } = await this.api.request<BasketListResponse>(
-			"/admin/baskets",
-			undefined,
-			toHeaders(credentials),
+		const params = new URLSearchParams();
+		if (search) {
+			params.set("search", search);
+		}
+		const queryString = params.toString();
+		const { baskets } = await this.sessions.request<BasketListResponse>(
+			`/admin/baskets${queryString ? `?${queryString}` : ""}`,
+			req,
+			res,
 		);
-		const normalisedSearch = search.trim().toLowerCase();
-		return (baskets ?? [])
-			.filter(
-				(basket: BasketSummary) =>
-					!normalisedSearch ||
-					[basket.basketId, basket.customerName, basket.customerEmail]
-						.join(" ")
-						.toLowerCase()
-						.includes(normalisedSearch),
-			)
-			.map((basket) => ({
-				...basket,
-				detailsHref: basketPath(String(basket.basketId)),
-			}));
+		return (baskets ?? []).map((basket: BasketSummary) => ({
+			...basket,
+			detailsHref: basketPath(String(basket.basketId)),
+		}));
 	}
 
 	async getBasketById(
-		credentials: AdminRequestCredentials,
+		req: Request,
+		res: Response,
 		id: string,
 	): Promise<BasketDetails> {
-		const { basket } = await this.api.request<BasketDetailsResponse>(
+		const { basket } = await this.sessions.request<BasketDetailsResponse>(
 			basketPath(id),
-			undefined,
-			toHeaders(credentials),
+			req,
+			res,
 		);
 		return basket;
 	}
