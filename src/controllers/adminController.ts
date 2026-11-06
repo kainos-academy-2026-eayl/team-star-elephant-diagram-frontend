@@ -566,7 +566,7 @@ export class AdminController {
 		const mustLeave =
 			reason instanceof CustomerSessionError ||
 			(reason instanceof BackendApiError && reason.status === 401);
-		if (result.status === "fulfilled" && mustLeave) {
+		if (mustLeave) {
 			return { access, result: { status: "rejected", reason } };
 		}
 		return { access, result };
