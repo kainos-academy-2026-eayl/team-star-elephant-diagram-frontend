@@ -1,6 +1,6 @@
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
-import { createApp } from "./app";
+import { createApp } from "../../app";
 
 describe("profile", () => {
 	it("loads profile details and order history from the backend", async () => {

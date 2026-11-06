@@ -4,7 +4,7 @@ import type { BasketController } from "../controllers/basketController";
 
 export function createBasketRoutes(basketController: BasketController): Router {
 	const router = Router();
-	const basketChangeRateLimit = rateLimit({
+	const mutationRateLimit = rateLimit({
 		windowMs: 15 * 60 * 1000,
 		limit: 60,
 		standardHeaders: "draft-8",
@@ -12,15 +12,15 @@ export function createBasketRoutes(basketController: BasketController): Router {
 	});
 
 	router.get("/basket", (req, res) => basketController.getBasket(req, res));
-	router.post("/basket", basketChangeRateLimit, (req, res) =>
+	router.post("/basket", mutationRateLimit, (req, res) =>
 		basketController.addItem(req, res),
 	);
-	router.post("/basket/items/:productId", basketChangeRateLimit, (req, res) =>
+	router.post("/basket/items/:productId", mutationRateLimit, (req, res) =>
 		basketController.updateItem(req, res),
 	);
 	router.post(
 		"/basket/items/:productId/remove",
-		basketChangeRateLimit,
+		mutationRateLimit,
 		(req, res) => basketController.removeItem(req, res),
 	);
 

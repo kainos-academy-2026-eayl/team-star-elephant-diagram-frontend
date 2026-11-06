@@ -4,19 +4,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard | Shop</title>
+    <title>{% if forbidden %}Access denied{% else %}Admin Dashboard{% endif %} | Shop</title>
     <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/admin.css">
+    <script src="/admin.js" defer></script>
 </head>
 
 <body>
-    {% set activeNav = "dashboard" %}
+    {% set activeNav = "" if forbidden else "dashboard" %}
     {% include "partials/admin-nav.njk" %}
 
+    {% if not forbidden %}
     <div class="search-bar">
         <div class="admin-search-unavailable" aria-disabled="true">Search is unavailable.</div>
     </div>
+    {% endif %}
 
     <main class="container">
+        {% if forbidden %}
+        <section class="admin-denied" aria-labelledby="access-denied-title">
+            <p class="admin-denied__code" aria-hidden="true">403</p>
+            <h1 id="access-denied-title" class="admin-denied__title">Access denied</h1>
+            <p class="admin-denied__message" role="alert">You do not have permission to view this page or perform this action.</p>
+            <p class="admin-denied__hint">If you think you should have access, ask a Super Admin to review your role.</p>
+            <div class="admin-denied__actions">
+                <a href="/admin" class="btn btn--primary">Return to the dashboard</a>
+            </div>
+        </section>
+        {% else %}
         <h1 class="section-heading">Admin dashboard</h1>
 
         {% if error %}
@@ -25,6 +40,10 @@
             <a href="/admin">Retry</a>
         </div>
         {% else %}
+
+        {% if staff and staff.name %}
+        <p class="admin-welcome">Signed in as <strong>{{ staff.name }}</strong></p>
+        {% endif %}
 
         {% if quickActions | length %}
         <section class="quick-actions" aria-label="Quick actions">
@@ -42,19 +61,21 @@
                     <p class="product-price stat-value">{{ card.value }}</p>
                 </div>
             </div>
+            {% else %}
+            <p class="order-empty">No summary information is available.</p>
             {% endfor %}
         </section>
 
         <div class="activity-grid">
-            <section class="order-card">
-                <h2>Latest orders</h2>
+            <section class="order-card" aria-labelledby="latest-orders">
+                <h2 id="latest-orders">Latest orders</h2>
                 <table class="order-items">
                     <thead>
                         <tr>
-                            <th>Order</th>
-                            <th>Customer</th>
-                            <th>Date</th>
-                            <th>Status</th>
+                            <th scope="col">Order</th>
+                            <th scope="col">Customer</th>
+                            <th scope="col">Date</th>
+                            <th scope="col">Status</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -74,14 +95,14 @@
                 </table>
             </section>
 
-            <section class="order-card">
-                <h2>New registrations</h2>
+            <section class="order-card" aria-labelledby="new-registrations">
+                <h2 id="new-registrations">New registrations</h2>
                 <table class="order-items">
                     <thead>
                         <tr>
-                            <th>Name</th>
-                            <th>Email</th>
-                            <th>Joined</th>
+                            <th scope="col">Name</th>
+                            <th scope="col">Email</th>
+                            <th scope="col">Joined</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -100,21 +121,21 @@
                 </table>
             </section>
 
-            <section class="order-card">
-                <h2>Recent stock changes</h2>
+            <section class="order-card" aria-labelledby="stock-changes">
+                <h2 id="stock-changes">Recent stock changes</h2>
                 <table class="order-items">
                     <thead>
                         <tr>
-                            <th>Product</th>
-                            <th>Change</th>
-                            <th>Reason</th>
+                            <th scope="col">Product</th>
+                            <th scope="col" class="admin-numeric">Change</th>
+                            <th scope="col">Reason</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for change in stockChanges %}
                         <tr>
                             <td>{{ change.product }}</td>
-                            <td>{{ change.amount }}</td>
+                            <td class="admin-numeric">{{ change.amount }}</td>
                             <td>{{ change.reason }}</td>
                         </tr>
                         {% else %}
@@ -127,6 +148,7 @@
             </section>
         </div>
 
+        {% endif %}
         {% endif %}
     </main>
 </body>

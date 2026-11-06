@@ -18,6 +18,16 @@ export interface UserProfile {
 	};
 }
 
+interface OrderFromReservationResponse {
+	order: {
+		orderId: number;
+		orderStatus: string;
+		cost: string;
+		orderPlacedAt: string;
+		items: Array<{ productId: number; quantity: number }>;
+	};
+}
+
 export class PaymentGatewayController {
 	constructor(
 		private readonly paymentGatewayService: PaymentGatewayService,
@@ -122,7 +132,58 @@ export class PaymentGatewayController {
 			}
 		}
 
-		const status = { success: 200, invalid: 400, unavailable: 503 }[outcome];
-		res.status(status).render("payment_gateway", data);
+		if (outcome !== "success") {
+			const status = { invalid: 400, unavailable: 503 }[outcome];
+			res.status(status).render("payment_gateway", data);
+			return;
+		}
+
+		// Payment complete: backend deletes the reservation and records the order as PROCESSING.
+		try {
+			const { order } =
+				await this.sessions.request<OrderFromReservationResponse>(
+					"/orders/from-reservation",
+					req,
+					res,
+					{},
+					{},
+					"POST",
+				);
+			res.status(201).render("payment_gateway", {
+				error: null,
+				order,
+				payment: {
+					status: order.orderStatus.toLowerCase(),
+					message: `Payment complete. Order #${order.orderId} is processing.`,
+				},
+			});
+		} catch (error) {
+			if (error instanceof BackendApiError && error.status === 401) {
+				res.status(401).render("payment_gateway", {
+					error: "Please log in to complete payment.",
+					loginRequired: true,
+					payment: null,
+					savedAddress: null,
+				});
+				return;
+			}
+			if (
+				error instanceof BackendApiError &&
+				[404, 409, 410].includes(error.status)
+			) {
+				res.status(409).render("payment_gateway", {
+					error: error.message,
+					payment: null,
+					savedAddress: null,
+				});
+				return;
+			}
+			console.error("Failed to create order:", error);
+			res.status(503).render("payment_gateway", {
+				error: "We could not place your order. Please try again.",
+				payment: null,
+				savedAddress: null,
+			});
+		}
 	}
 }
