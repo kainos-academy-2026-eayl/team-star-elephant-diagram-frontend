@@ -182,7 +182,7 @@ describe("login template", () => {
 			'<p class="auth-message" role="status">Your session has expired. Please log in again.</p>',
 		);
 		expect(html).toContain(
-			'<div class="auth-message auth-message--error" role="alert">',
+			'<div class="auth-message auth-message--error" role="alert" id="login-error">',
 		);
 		expect(html).toContain("<p>email: is required</p>");
 	});
