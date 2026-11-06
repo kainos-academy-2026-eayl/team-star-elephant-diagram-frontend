@@ -1,10 +1,11 @@
 import { Router } from "express";
 import type { BasketController } from "../controllers/basketController";
 import { createRateLimiter } from "../middleware/rateLimiter";
+import { rateLimitMax } from "./rateLimitMax";
 
 export function createBasketRoutes(basketController: BasketController): Router {
 	const router = Router();
-	const mutationRateLimit = createRateLimiter(60);
+	const mutationRateLimit = createRateLimiter(rateLimitMax(60));
 
 	router.get("/basket", (req, res) => basketController.getBasket(req, res));
 	router.post("/basket", mutationRateLimit, (req, res) =>
