@@ -135,6 +135,8 @@ export class AuthController {
 				admin,
 				...(returnTo ? { returnTo } : {}),
 				values: safeValues,
+				invalidCredentials:
+					page === "login" && rejected && error.status === 401,
 				error: rejected
 					? error.message
 					: "The service is temporarily unavailable. Please try again.",

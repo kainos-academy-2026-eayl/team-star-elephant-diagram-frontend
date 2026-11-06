@@ -1,15 +1,8 @@
 import { Router } from "express";
-import { rateLimit } from "express-rate-limit";
 import type { AdminController } from "../controllers/adminController";
 
 export function createAdminRoutes(adminController: AdminController): Router {
 	const router = Router();
-	const orderRateLimit = rateLimit({
-		windowMs: 15 * 60 * 1000,
-		limit: 60,
-		standardHeaders: "draft-8",
-		legacyHeaders: false,
-	});
 
 	router.get("/admin", (req, res) => adminController.getDashboard(req, res));
 	router.get("/admin/users", (req, res) => adminController.getUsers(req, res));
@@ -22,21 +15,32 @@ export function createAdminRoutes(adminController: AdminController): Router {
 	router.post("/admin/users/:id/reactivate", (req, res) =>
 		adminController.postReactivateUser(req, res),
 	);
+	router.post("/admin/users/:id/delete", (req, res) =>
+		adminController.postDeleteUser(req, res),
+	);
 	router.get("/admin/baskets", (req, res) =>
 		adminController.getBaskets(req, res),
 	);
 	router.get("/admin/baskets/:id", (req, res) =>
 		adminController.getBasketDetails(req, res),
 	);
-	router.get("/admin/orders", orderRateLimit, (req, res) =>
-		adminController.getOrders(req, res),
+	router.post("/admin/baskets", (req, res) =>
+		adminController.postCreateBasket(req, res),
 	);
-	router.get("/admin/orders/:id", orderRateLimit, (req, res) =>
-		adminController.getOrderDetails(req, res),
+	router.post("/admin/baskets/:id/items", (req, res) =>
+		adminController.postAddBasketItem(req, res),
 	);
-	router.post("/admin/orders/:id/status", orderRateLimit, (req, res) =>
-		adminController.postOrderStatus(req, res),
+	router.post("/admin/baskets/:id/items/:productId", (req, res) =>
+		adminController.postUpdateBasketItem(req, res),
 	);
-
+	router.post("/admin/baskets/:id/items/:productId/remove", (req, res) =>
+		adminController.postRemoveBasketItem(req, res),
+	);
+	router.post("/admin/baskets/:id/clear", (req, res) =>
+		adminController.postClearBasket(req, res),
+	);
+	router.post("/admin/baskets/:id/delete", (req, res) =>
+		adminController.postDeleteBasket(req, res),
+	);
 	return router;
 }
