@@ -86,12 +86,89 @@ Admin user management (`/admin/users`, `/admin/users/:id`) forwards the staff
 `Authorization`/`Cookie` headers to backend `GET /admin/users?search=&page=`
 (`{ users, pagination? }`), `GET /admin/users/:id`
 (`{ user, recentOrders, basket }`), and `POST /admin/users/:id/suspend` or
-`/reactivate`. These backend endpoints are not implemented yet; see
-`src/models/adminUser.ts` for the expected shapes.
+`/reactivate`. Admin and SuperAdmin can also permanently delete customers from
+either user-management page after expanding "Delete permanently" and checking
+the confirmation box. The frontend posts to backend
+`POST /admin/users/:id/delete`; the backend atomically deletes the customer,
+orders and order items, payment details, basket/items and customer refresh
+sessions. This cannot be undone. Other staff roles cannot delete customers.
+See `src/models/adminUser.ts` for the user response shapes.
+Unimplemented staff-account and permission-management controls are not shown.
+Staff login uses an email address, not a separate username; incorrect credentials
+keep the staff login form visible with HTTP 401 and an accessible
+"Invalid email or password" error, without redisplaying the password.
 When deployed behind a TLS-terminating reverse proxy, set `TRUSTED_PROXY` to
 the proxy's IP address or CIDR (comma-separated for multiple proxies) so HTTPS
 origin checks use the forwarded protocol. Only trust the actual proxy addresses
 and prevent untrusted clients from connecting directly to the frontend.
+
+FinanceManager staff use the same `/admin` page with a read-only finance
+dashboard: all-time revenue, total orders and pending orders. Revenue excludes
+cancelled orders and does not represent confirmed payments. Its menu provides
+dashboard navigation and logout, but no operational quick actions or
+customer/inventory panels. Other roles retain
+their existing dashboard. Direct resource URLs still use the backend permission
+matrix; the finance-only dashboard does not expose operational navigation.
+
+Staff sections are accessed through the top navigation and its matching menu,
+not dashboard quick-action buttons. Users, Baskets and Inventory links only
+appear when granted by the backend's role-scoped sections; the admin navigation
+never includes Orders. Users and Baskets open their existing pages. The frontend
+has no admin orders pages, so `/admin/orders` (including detail and mutation
+URLs) returns the standard 404. Inventory (`/admin/inventory`) opens the integrated inventory section.
+Finance navigation remains dashboard-only.
+
+### Admin inventory (KAN-71)
+
+Inventory reuses KAN-97's backend-derived access context/session service and
+KAN-104's admin navigation, icons, cards, tables, buttons, dialogs,
+alerts and access-denied page. Inventory permissions come from the dashboard's
+`inventoryPermissions`; missing permissions fail closed. No frontend role matrix
+is introduced. The backend must include the KAN-71 API changes and database
+migration; do not point the running app at an empty test database to preview
+existing customer/product data.
+
+The dashboard adds a clickable Inventory Management card with Total Products,
+Low Stock Products and Out Of Stock Products. The inventory page supports
+server-side name/SKU search, status filtering, sorting and pagination. Staff with
+the corresponding backend permissions can create products, edit metadata/stock/
+threshold/image, adjust stock with a reason, and delete after a cancel-first
+confirmation dialog. Product details display paginated staff adjustment history
+with UTC dates, actor, reason, adjustment, previous stock and new stock.
+
+Admin pages ship no client-side JavaScript. Sort options are server-rendered
+links, and admin POST forms carry a one-time `_submission` token: a repeated
+POST with the same token (e.g. a double-click) waits for the first request and
+replays its response instead of repeating the action.
+
+Create includes a supplier selector because the existing stock model requires
+supplier-backed inventory. Images accept HTTP(S) URLs and existing `/images/`
+paths, not uploads. SKU cannot be edited. Reserved stock cannot be removed;
+products referenced by orders, baskets or reservations cannot be deleted.
+Validation errors retain entered values; backend conflicts and outages are
+displayed explicitly. Writes require the existing same-origin check.
+
+All API calls use the existing server-side HTTP/session utilities and
+`/api/admin/inventory` endpoints. Create uses POST, edit PUT, stock/threshold
+changes PATCH and deletion DELETE. Form routes are `/admin/inventory/new`,
+`/admin/inventory/:id/edit` and `/admin/inventory/:id`; history is on the details page.
+
+Integration notes: KAN-97 and KAN-104 were merged into this feature branch before
+implementation. Their admin controller/service, session service and test
+conflicts were resolved retaining the shared access context, refreshed-request
+credentials and KAN-104 UI. The backend must retain KAN-104's `lowStock` response
+alongside KAN-71's new inventory summary/permissions. The existing supplier-line
+low-stock panel is separate from product-level status counts. Finance's
+finance-only dashboard remains unchanged; permission-granted direct inventory
+URLs are read-only for that role. There are no admin order routes.
+
+Dashboard summary cards include a green role badge under "Your access"; its
+glow is disabled for reduced-motion preferences. Staff whose backend-granted
+sections include Inventory also see "Low in stock", showing up to five stock
+lines at or below their individual reorder levels (including zero stock).
+The list includes suppliers because a product can have multiple stock lines.
+Roles without inventory access do not see this panel. Missing inventory data
+is shown as unavailable, rather than as an empty list.
 
 Admin basket viewing (`/admin/baskets`, `/admin/baskets/:id`) uses the same
 staff session handling as user management (access-token cookie, automatic
@@ -121,6 +198,19 @@ and runs the Vitest tests. A failed command fails the job.
 Template filenames must match the casing used by `res.render()` exactly.
 The Linux CI runner uses a case-sensitive filesystem; the page tests check
 the filenames explicitly so casing mistakes are also caught on macOS.
+
+### Test organization
+
+Keep tests in focused files for the unit or feature under test. The
+[app tests](src/tests/app.test.ts) cover application-level behavior only;
+do not add authentication, admin, basket, or product cases there.
+Controller, route, service, and model tests live in their respective
+directories under [src/tests](src/tests). The former `src/products.test.ts`
+suite is now [productController.test.ts](src/tests/controllers/productController.test.ts).
+[Login redesign tests](src/login.test.ts) and
+[expanded product tests](src/productExpanded.test.ts) remain separate suites.
+Unit tests should exercise the target directly with mocked dependencies;
+existing HTTP-level regression tests also remain in their feature suites.
 
 ### Required GitHub configuration
 

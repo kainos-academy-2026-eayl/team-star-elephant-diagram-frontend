@@ -1,24 +1,12 @@
 import type { Request, Response } from "express";
 import type {
-	BasketDetails,
 	BasketDetailsResponse,
 	BasketListResponse,
+	BasketPage,
+	BasketPermissions,
 	BasketSummary,
 	BasketSummaryView,
 } from "../models/adminBasket";
-import {
-	type AdminOrderDetailsResponse,
-	type AdminOrderDetailsView,
-	type AdminOrderListQuery,
-	type AdminOrderListResponse,
-	type AdminOrderListView,
-	type AdminOrderPaginationView,
-	type AdminOrderStatusError,
-	type AdminOrderSummary,
-	type AdminOrderSummaryView,
-	ORDER_STATUSES,
-	type OrderStatus,
-} from "../models/adminOrder";
 import type {
 	AdminUserDetailsResponse,
 	AdminUserDetailsView,
@@ -32,9 +20,16 @@ import type {
 	AdminUserSummary,
 	AdminUserView,
 } from "../models/adminUser";
+import type {
+	InventoryPermissions,
+	InventorySummary,
+} from "../models/inventory";
 import type { SessionService } from "./sessionService";
 
 export interface AdminDashboard {
+	inventoryPermissions?: InventoryPermissions;
+	basketPermissions?: BasketPermissions;
+	inventorySummary?: InventorySummary | null;
 	staff: { name: string };
 	role?: string;
 	dashboard?: string;
@@ -53,6 +48,16 @@ export interface AdminDashboard {
 		amount: string;
 		reason: string;
 	}>;
+	lowStock?: {
+		total: number;
+		items: Array<{
+			inventoryId: number;
+			product: string;
+			supplier: string;
+			quantity: number;
+			reorderLevel: number;
+		}>;
+	} | null;
 }
 
 export interface AdminNavItem {
@@ -62,15 +67,36 @@ export interface AdminNavItem {
 }
 
 // What the logged-in role may see, derived only from the backend's role-scoped dashboard response.
-export interface AdminAccess {
+export interface AdminContext {
+	inventoryPermissions: InventoryPermissions;
+	basketPermissions: BasketPermissions;
 	staff: { name: string };
 	role: string;
+	roleLabel: string;
+	isFinanceDashboard: boolean;
+	canViewInventory: boolean;
 	nav: AdminNavItem[];
 	canChangeUserStatus: boolean;
+	canDeleteUsers: boolean;
 }
 
 // Backend quick action label granted to roles holding users:suspend.
 const USER_STATUS_QUICK_ACTION = "Suspend or reactivate customers";
+const USER_DELETE_QUICK_ACTION = "Permanently delete customers";
+const ROLE_LABELS: Record<string, string> = {
+	SuperAdmin: "Super Admin",
+	Admin: "Admin",
+	InventoryManager: "Inventory Manager",
+	WarehouseStaff: "Warehouse Staff",
+	FinanceManager: "Finance Manager",
+	CustomerService: "Customer Service",
+};
+const STAFF_MANAGEMENT_LABELS = new Set([
+	"Admin accounts",
+	"Permissions",
+	"Manage admin accounts",
+	"Manage permissions",
+]);
 
 const DASHBOARD_NAV_ITEM: AdminNavItem = {
 	key: "dashboard",
@@ -78,10 +104,10 @@ const DASHBOARD_NAV_ITEM: AdminNavItem = {
 	href: "/admin",
 };
 
-const IMPLEMENTED_SECTION_HREFS = new Map([
+const SECTION_HREFS = new Map([
 	["users", "/admin/users"],
 	["baskets", "/admin/baskets"],
-	["orders", "/admin/orders"],
+	["inventory", "/admin/inventory"],
 ]);
 
 const toNavKey = (label: string): string =>
@@ -97,7 +123,7 @@ const toNav = (sections: AdminDashboard["sections"]): AdminNavItem[] => [
 		.filter((section) => typeof section?.label === "string")
 		.flatMap((section) => {
 			const key = toNavKey(section.label);
-			const href = IMPLEMENTED_SECTION_HREFS.get(key);
+			const href = SECTION_HREFS.get(key);
 			return key && key !== DASHBOARD_NAV_ITEM.key && href
 				? [{ key, label: section.label, href }]
 				: [];
@@ -105,6 +131,8 @@ const toNav = (sections: AdminDashboard["sections"]): AdminNavItem[] => [
 ];
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+// Backend per-line basket limit; also enforced server-side together with available stock.
+const MAX_BASKET_QUANTITY = 99;
 const MAX_SEARCH_LENGTH = 100;
 
 const STATUS_UPDATES: Record<AdminUserStatusAction, AdminUserStatusUpdate> = {
@@ -117,23 +145,6 @@ const basketPath = (id: string): string =>
 
 const userPath = (id: string): string =>
 	`/admin/users/${encodeURIComponent(id)}`;
-
-const orderPath = (id: string): string =>
-	`/admin/orders/${encodeURIComponent(id)}`;
-
-// Mirrors backend ROLE_PERMISSIONS for orders:update; used only to hide controls; the backend still enforces RBAC.
-const ORDER_UPDATE_ROLES = new Set(["SuperAdmin", "Admin"]);
-
-const ORDER_STATUS_ERRORS: readonly AdminOrderStatusError[] = [
-	"invalid",
-	"forbidden",
-	"failed",
-];
-
-const formatStatus = (status: string): string => {
-	const value = String(status ?? "").toLowerCase();
-	return value ? value.charAt(0).toUpperCase() + value.slice(1) : "";
-};
 
 const formatPrice = (amount: number): string =>
 	new Intl.NumberFormat("en-GB", {
@@ -191,83 +202,88 @@ const toPaginationView = (
 	};
 };
 
-const toOrderSummaryView = (
-	order: AdminOrderSummary,
-): AdminOrderSummaryView => ({
-	...order,
-	detailsHref: orderPath(String(order.orderId)),
-	displayOrderDate: formatDate(order.orderDate),
-	displayTotal: formatPrice(Number(order.totalCost ?? 0)),
-	statusLabel: formatStatus(order.status),
-});
-
-const toOrderPaginationView = (
-	result: AdminOrderListResponse,
-	search: string,
-): AdminOrderPaginationView | undefined => {
-	const pagination = result.pagination;
-	if (!pagination || pagination.totalPages <= 1) {
-		return undefined;
-	}
-	const pageHref = (page: number): string => {
-		const params = new URLSearchParams();
-		if (search) {
-			params.set("q", search);
-		}
-		params.set("page", String(page));
-		return `/admin/orders?${params.toString()}`;
-	};
-	return {
-		...pagination,
-		previousHref:
-			pagination.page > 1 ? pageHref(pagination.page - 1) : undefined,
-		nextHref:
-			pagination.page < pagination.totalPages
-				? pageHref(pagination.page + 1)
-				: undefined,
-	};
-};
-
 export class AdminService {
 	constructor(private readonly sessions: SessionService) {}
 
 	async getDashboard(
 		req: Request,
 		res: Response,
-	): Promise<AdminDashboard & AdminAccess> {
+	): Promise<AdminDashboard & AdminContext> {
 		const dashboard = await this.sessions.request<AdminDashboard>(
 			"/admin",
 			req,
 			res,
 		);
-		return { ...dashboard, ...this.toAccess(dashboard) };
+		const access = this.toAccess(dashboard);
+		return {
+			...dashboard,
+			...access,
+			lowStock: access.canViewInventory ? (dashboard.lowStock ?? null) : null,
+			sections: (dashboard.sections ?? []).filter(
+				(section) => !STAFF_MANAGEMENT_LABELS.has(section.label),
+			),
+			quickActions: [],
+		};
 	}
 
-	async getAccess(req: Request, res: Response): Promise<AdminAccess> {
+	async getAccess(req: Request, res: Response): Promise<AdminContext> {
 		return this.toAccess(
 			await this.sessions.request<AdminDashboard>("/admin", req, res),
 		);
 	}
 
-	toAccess(dashboard: Partial<AdminDashboard>): AdminAccess {
+	toAccess(dashboard: Partial<AdminDashboard>): AdminContext {
 		const sections = Array.isArray(dashboard.sections)
 			? dashboard.sections
 			: [];
 		const quickActions = Array.isArray(dashboard.quickActions)
 			? dashboard.quickActions
 			: [];
+		const isFinanceDashboard = dashboard.role === "FinanceManager";
+		const inventoryVisible = dashboard.inventoryPermissions?.view !== false;
+		const visibleSections = sections.filter(
+			(section) => toNavKey(section.label) !== "inventory" || inventoryVisible,
+		);
 		return {
+			inventoryPermissions: {
+				view: dashboard.inventoryPermissions?.view === true,
+				create: dashboard.inventoryPermissions?.create === true,
+				update: dashboard.inventoryPermissions?.update === true,
+				delete: dashboard.inventoryPermissions?.delete === true,
+			},
+			basketPermissions: {
+				view: dashboard.basketPermissions?.view === true,
+				create: dashboard.basketPermissions?.create === true,
+				update: dashboard.basketPermissions?.update === true,
+				delete: dashboard.basketPermissions?.delete === true,
+			},
 			staff: { name: dashboard.staff?.name ?? "" },
 			role: dashboard.role ?? "",
-			nav: toNav(sections),
-			canChangeUserStatus: quickActions.some(
-				(action) => action?.label === USER_STATUS_QUICK_ACTION,
-			),
+			roleLabel: ROLE_LABELS[dashboard.role ?? ""] ?? dashboard.role ?? "",
+			isFinanceDashboard,
+			canViewInventory:
+				!isFinanceDashboard &&
+				visibleSections.some(
+					(section) =>
+						typeof section?.label === "string" &&
+						toNavKey(section.label) === "inventory",
+				),
+			nav: isFinanceDashboard ? [DASHBOARD_NAV_ITEM] : toNav(visibleSections),
+			canChangeUserStatus:
+				!isFinanceDashboard &&
+				quickActions.some(
+					(action) => action?.label === USER_STATUS_QUICK_ACTION,
+				),
+			canDeleteUsers:
+				!isFinanceDashboard &&
+				quickActions.some(
+					(action) => action?.label === USER_DELETE_QUICK_ACTION,
+				),
 		};
 	}
 
 	// Used when the role cannot be confirmed: only the dashboard link and no actions.
-	getRestrictedAccess(): AdminAccess {
+	getRestrictedAccess(): AdminContext {
 		return this.toAccess({});
 	}
 
@@ -373,6 +389,10 @@ export class AdminService {
 		return STATUS_UPDATES[action];
 	}
 
+	async deleteUser(req: Request, res: Response, id: string): Promise<void> {
+		await this.sessions.request(`${userPath(id)}/delete`, req, res, {}, {});
+	}
+
 	parseStatusUpdate(value: unknown): AdminUserStatusUpdate | undefined {
 		return value === "suspended" || value === "reactivated" ? value : undefined;
 	}
@@ -403,122 +423,126 @@ export class AdminService {
 		req: Request,
 		res: Response,
 		id: string,
-	): Promise<BasketDetails> {
-		const { basket } = await this.sessions.request<BasketDetailsResponse>(
-			basketPath(id),
-			req,
-			res,
+	): Promise<BasketPage> {
+		return this.toBasketPage(
+			await this.sessions.request<BasketDetailsResponse>(
+				basketPath(id),
+				req,
+				res,
+			),
 		);
-		return basket;
 	}
 
-	getOrderDetailsHref(id: string): string {
-		return orderPath(id);
+	getBasketDetailsHref(id: string): string {
+		return basketPath(id);
 	}
 
-	async getOrders(
+	// Returns the new basket ID; a 409 from the backend carries the existing basket's ID.
+	async createBasket(
 		req: Request,
 		res: Response,
-		query: AdminOrderListQuery = {},
-	): Promise<AdminOrderListView> {
-		const search = query.search ?? "";
-		const params = new URLSearchParams();
-		if (search) {
-			params.set("search", search);
-		}
-		if (query.page && query.page > 1) {
-			params.set("page", String(query.page));
-		}
-		const queryString = params.toString();
-		const result = await this.sessions.request<AdminOrderListResponse>(
-			`/admin/orders${queryString ? `?${queryString}` : ""}`,
-			req,
-			res,
-		);
-		const pagination = toOrderPaginationView(result, search);
-		return {
-			orders: (result.orders ?? []).map(toOrderSummaryView),
-			...(pagination ? { pagination } : {}),
-		};
-	}
-
-	async getOrderById(
-		req: Request,
-		res: Response,
-		id: string,
-	): Promise<AdminOrderDetailsView> {
-		// Started together so a token refresh is shared rather than repeated with a rotated refresh token.
-		const [details, role] = await Promise.all([
-			this.sessions.request<AdminOrderDetailsResponse>(orderPath(id), req, res),
-			this.sessions
-				.request<{ role?: unknown }>("/admin/me", req, res)
-				.then((me) => (typeof me.role === "string" ? me.role : undefined))
-				.catch(() => undefined),
-		]);
-		const { order } = details;
-		const address = order.customer.address ?? {};
-		const transitions = (order.allowedTransitions ?? []).filter(
-			(status): status is OrderStatus => this.isOrderStatus(status),
-		);
-		return {
-			order: {
-				...order,
-				detailsHref: orderPath(String(order.orderId)),
-				statusLabel: formatStatus(order.status),
-				displayOrderDate: formatDate(order.orderDate),
-				displayLastUpdated: formatDate(order.lastUpdated),
-				displayOrderTotal: formatPrice(Number(order.orderTotal ?? 0)),
-				addressLines: [
-					address.line1,
-					address.line2,
-					address.city,
-					address.postcode,
-				].filter((line): line is string => Boolean(line?.trim())),
-				items: (order.items ?? []).map((item) => ({
-					...item,
-					displayUnitPrice: formatPrice(Number(item.unitPrice ?? 0)),
-					displayItemTotal: formatPrice(Number(item.itemTotal ?? 0)),
-				})),
-				transitions: transitions.map((value) => ({
-					value,
-					label: formatStatus(value),
-				})),
-			},
-			canUpdateStatus:
-				role !== undefined &&
-				ORDER_UPDATE_ROLES.has(role) &&
-				transitions.length > 0,
-		};
-	}
-
-	async updateOrderStatus(
-		req: Request,
-		res: Response,
-		id: string,
-		status: OrderStatus,
-	): Promise<OrderStatus> {
-		await this.sessions.request<AdminOrderDetailsResponse>(
-			`${orderPath(id)}/status`,
+		email: string,
+	): Promise<string> {
+		const { basketId } = await this.sessions.request<{ basketId: number }>(
+			"/admin/baskets",
 			req,
 			res,
 			{},
-			{ status },
+			{ email },
 		);
-		return status;
+		return String(basketId);
 	}
 
-	isOrderStatus(value: unknown): value is OrderStatus {
-		return (
-			typeof value === "string" &&
-			(ORDER_STATUSES as readonly string[]).includes(value)
+	async addBasketItem(
+		req: Request,
+		res: Response,
+		id: string,
+		productId: number,
+		quantity: number,
+	): Promise<void> {
+		await this.sessions.request(
+			`${basketPath(id)}/items`,
+			req,
+			res,
+			{},
+			{ productId, quantity },
 		);
 	}
 
-	parseOrderStatusError(value: unknown): AdminOrderStatusError | undefined {
-		return ORDER_STATUS_ERRORS.find((error) => error === value);
+	async updateBasketItem(
+		req: Request,
+		res: Response,
+		id: string,
+		productId: number,
+		quantity: number,
+	): Promise<void> {
+		await this.sessions.request(
+			`${basketPath(id)}/items/${productId}`,
+			req,
+			res,
+			{},
+			{ quantity },
+			"PATCH",
+		);
 	}
 
-	formatOrderStatus(status: string): string {
-		return formatStatus(status);
+	async removeBasketItem(
+		req: Request,
+		res: Response,
+		id: string,
+		productId: number,
+	): Promise<void> {
+		await this.sessions.request(
+			`${basketPath(id)}/items/${productId}`,
+			req,
+			res,
+			{},
+			undefined,
+			"DELETE",
+		);
+	}
+
+	async clearBasket(req: Request, res: Response, id: string): Promise<void> {
+		await this.sessions.request(
+			`${basketPath(id)}/items`,
+			req,
+			res,
+			{},
+			undefined,
+			"DELETE",
+		);
+	}
+
+	async deleteBasket(req: Request, res: Response, id: string): Promise<void> {
+		await this.sessions.request(
+			basketPath(id),
+			req,
+			res,
+			{},
+			undefined,
+			"DELETE",
+		);
+	}
+
+	// Positive whole numbers within the Postgres INTEGER range, or undefined.
+	parsePositiveInt(value: unknown): number | undefined {
+		const text = typeof value === "string" ? value.trim() : "";
+		if (!/^[1-9]\d{0,9}$/.test(text)) return undefined;
+		const number = Number(text);
+		return number <= 2_147_483_647 ? number : undefined;
+	}
+
+	private toBasketPage(response: BasketDetailsResponse): BasketPage {
+		const basket = response.basket;
+		return {
+			basket: {
+				...basket,
+				items: (basket.items ?? []).map((item) => ({
+					...item,
+					maxQuantity: item.maxQuantity ?? MAX_BASKET_QUANTITY,
+				})),
+			},
+			products: response.products ?? [],
+		};
 	}
 }

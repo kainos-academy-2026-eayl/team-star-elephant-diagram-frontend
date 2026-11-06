@@ -11,6 +11,7 @@ type RefreshOperation = {
 	promise: Promise<SessionCredentials>;
 	invalidated: boolean;
 	users: number;
+	responses: Set<Response>;
 };
 
 const COOKIE_OPTIONS = {
@@ -47,7 +48,7 @@ export class SessionService {
 	private readonly refreshedAccess = new WeakMap<Request, string>();
 	private readonly establishedResponses = new WeakSet<Response>();
 	private readonly clearedResponses = new WeakSet<Response>();
-	private readonly refreshing = new Map<string, RefreshOperation>();
+	private readonly refreshOperations = new Map<string, RefreshOperation>();
 	private readonly renewedForRequest = new WeakMap<
 		Request,
 		{ credentials: SessionCredentials; operation: RefreshOperation }
@@ -89,6 +90,7 @@ export class SessionService {
 				headers,
 				body,
 				renewed,
+				method,
 			);
 		}
 		const authorization =
@@ -117,13 +119,14 @@ export class SessionService {
 						headers,
 						body,
 						renewedAfterFailure,
+						method,
 					);
 				}
 			}
 		}
 		const refresh = cookieValue(req, "refreshToken");
 		if (!refresh) throw new BackendApiError(401, "Please log in.");
-		let operation = this.refreshing.get(refresh);
+		let operation = this.refreshOperations.get(refresh);
 		if (!operation) {
 			operation = {
 				promise: this.api.requestWithResponse<LoginResponse>(
@@ -135,10 +138,12 @@ export class SessionService {
 				),
 				invalidated: false,
 				users: 0,
+				responses: new Set(),
 			};
-			this.refreshing.set(refresh, operation);
+			this.refreshOperations.set(refresh, operation);
 		}
 		operation.users += 1;
+		this.trackResponse(refresh, operation, res);
 		let credentials: SessionCredentials | undefined;
 		try {
 			try {
@@ -149,7 +154,9 @@ export class SessionService {
 				}
 				throw error;
 			}
-			this.renewedForRequest.set(req, { credentials, operation });
+			if (!operation.invalidated) {
+				this.renewedForRequest.set(req, { credentials, operation });
+			}
 			const result = await this.api.request<Result>(
 				path,
 				body,
@@ -183,8 +190,7 @@ export class SessionService {
 			throw error;
 		} finally {
 			operation.users -= 1;
-			if (operation.users === 0 && this.refreshing.get(refresh) === operation)
-				this.refreshing.delete(refresh);
+			this.cleanupRefreshOperation(refresh, operation);
 		}
 	}
 
@@ -195,15 +201,20 @@ export class SessionService {
 		headers: Record<string, string>,
 		body: Record<string, string | number> | undefined,
 		renewed: { credentials: SessionCredentials; operation: RefreshOperation },
+		method?: string,
 	): Promise<Result> {
 		const { credentials, operation } = renewed;
 		try {
-			const result = await this.api.request<Result>(path, body, {
-				...headers,
-				Authorization: `Bearer ${credentials.result.accessToken}`,
-			});
-			if (!operation.invalidated)
-				this.establishForRequest(req, res, credentials);
+			const result = await this.api.request<Result>(
+				path,
+				body,
+				{
+					...headers,
+					Authorization: ["Bearer", credentials.result.accessToken].join(" "),
+				},
+				method,
+			);
+			if (!operation.invalidated) this.establish(res, credentials);
 			return result;
 		} catch (error) {
 			if (
@@ -256,8 +267,8 @@ export class SessionService {
 		this.renewedForRequest.delete(req);
 		const refresh = cookieValue(req, "refreshToken");
 		if (refresh) {
-			const operation = this.refreshing.get(refresh);
-			if (operation) operation.invalidated = true;
+			const operation = this.refreshOperations.get(refresh);
+			if (operation) this.invalidate(operation);
 		}
 		await this.api.request(
 			"/auth/logout",
@@ -265,8 +276,8 @@ export class SessionService {
 			refresh ? { Cookie: `refreshToken=${refresh}` } : {},
 		);
 		if (refresh) {
-			const operation = this.refreshing.get(refresh);
-			if (operation) operation.invalidated = true;
+			const operation = this.refreshOperations.get(refresh);
+			if (operation) this.invalidate(operation);
 		}
 		this.clear(res);
 	}
@@ -279,6 +290,52 @@ export class SessionService {
 		this.establish(res, credentials);
 		// Later API calls still see the original browser cookies on this request.
 		this.refreshedAccess.set(req, `Bearer ${credentials.result.accessToken}`);
+	private trackResponse(
+		refresh: string,
+		operation: RefreshOperation,
+		res: Response,
+	): void {
+		if (operation.responses.has(res)) return;
+		operation.responses.add(res);
+		let released = false;
+		const release = (): void => {
+			if (released) return;
+			released = true;
+			res.off("finish", release);
+			res.off("close", release);
+			operation.responses.delete(res);
+			this.cleanupRefreshOperation(refresh, operation);
+		};
+		res.once("finish", release);
+		res.once("close", release);
+	}
+
+	private cleanupRefreshOperation(
+		refresh: string,
+		operation: RefreshOperation,
+	): void {
+		if (
+			operation.users === 0 &&
+			operation.responses.size === 0 &&
+			this.refreshOperations.get(refresh) === operation
+		) {
+			this.refreshOperations.delete(refresh);
+		}
+	}
+
+	private invalidate(operation: RefreshOperation): void {
+		operation.invalidated = true;
+		for (const res of operation.responses) {
+			if (res.headersSent) continue;
+			const header = res.getHeader("Set-Cookie");
+			if (!header) continue;
+			const cookies = (Array.isArray(header) ? header : [header]).map(String);
+			const remaining = cookies.filter(
+				(cookie) => !/^(?:accessToken|refreshToken)=/.test(cookie),
+			);
+			if (remaining.length) res.setHeader("Set-Cookie", remaining);
+			else res.removeHeader("Set-Cookie");
+		}
 	}
 
 	private write(

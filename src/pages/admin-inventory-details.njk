@@ -1,0 +1,76 @@
+{% import "partials/inventory-controls.njk" as controls %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ product.name }} | Inventory | Admin | Sedshed</title>
+    <link rel="stylesheet" href="/admin.css">
+</head>
+<body class="admin">
+    {% set activeNav = "inventory" %}
+    {% include "partials/admin-nav.njk" %}
+    <main id="main" class="admin-main">
+        <a href="/admin/inventory" class="admin-back-link">&larr; Back to inventory</a>
+        <header class="admin-page-head"><h1 class="admin-page-head__title">{{ product.name or "Product details" }}</h1></header>
+        {% if notice %}<div class="admin-alert admin-alert--success" role="status">{{ notice }}</div>{% endif %}
+        {% if error %}<div class="admin-alert admin-alert--error" role="alert">{{ error }}{% for field, messages in errors %}<span>{{ field }}: {{ messages | join(" ") }}</span>{% endfor %}</div>{% endif %}
+        {% if product %}
+        <section class="admin-card" aria-label="Product information">
+            <img class="admin-product-image" src="{{ product.imageURL }}" alt="{{ product.name }}" width="160" height="160" referrerpolicy="no-referrer">
+            <p>{{ product.description }}</p>
+            <dl class="admin-details">
+                <div class="admin-details__row"><dt>SKU</dt><dd>{{ product.sku }}</dd></div>
+                <div class="admin-details__row"><dt>Price</dt><dd>{{ product.displayPrice }}</dd></div>
+                <div class="admin-details__row"><dt>Category</dt><dd>{{ product.category }}</dd></div>
+                <div class="admin-details__row"><dt>Current Stock</dt><dd>{{ product.stockQuantity }}</dd></div>
+                <div class="admin-details__row"><dt>Threshold</dt><dd>{{ product.lowStockThreshold }}</dd></div>
+                <div class="admin-details__row"><dt>Status</dt><dd>{{ controls.status(product) }}</dd></div>
+            </dl>
+            <div class="admin-card__actions">
+                {% if inventoryPermissions.update %}<a href="{{ product.href }}/edit" class="admin-btn admin-btn--primary">Edit product</a>{% endif %}
+                {% if inventoryPermissions.delete %}{{ controls.deleteProduct(product) }}{% endif %}
+            </div>
+        </section>
+        {% if inventoryPermissions.update %}
+        <div class="admin-grid admin-grid--two">
+            <section class="admin-card">
+                <h2 class="admin-card__title">Adjust stock</h2>
+                <p>Use a positive quantity to increase stock or a negative quantity to decrease it. Reserved stock cannot be removed.</p>
+                <form method="post" action="{{ product.href }}/stock" class="admin-product-form">
+                    <input type="hidden" name="{{ submissionField }}" value="{{ submissionToken() }}">
+                    {{ controls.field("adjustment", "Adjustment", values, errors, "number", "", "-2147483647", "2147483647", "1") }}
+                    {{ controls.field("reason", "Reason", values, errors, "text", "255") }}
+                    <button type="submit" class="admin-btn admin-btn--primary">Adjust stock</button>
+                </form>
+            </section>
+            <section class="admin-card">
+                <h2 class="admin-card__title">Set threshold</h2>
+                <form method="post" action="{{ product.href }}/threshold" class="admin-product-form">
+                    <input type="hidden" name="{{ submissionField }}" value="{{ submissionToken() }}">
+                    {{ controls.field("lowStockThreshold", "Low Stock Threshold", values or product, errors, "number", "", "0", "2147483647", "1") }}
+                    <button type="submit" class="admin-btn admin-btn--primary">Set threshold</button>
+                </form>
+            </section>
+        </div>
+        {% endif %}
+        {% if inventoryPermissions.view and history %}
+        <section class="admin-card" aria-labelledby="history-title">
+            <h2 id="history-title" class="admin-card__title">Adjustment history</h2>
+            <p class="admin-card__note">Dates and times are UTC.</p>
+            <div class="admin-table-wrap" tabindex="0" role="region" aria-label="Stock adjustment history">
+                <table class="admin-table">
+                    <thead><tr><th scope="col">Date</th><th scope="col">User</th><th scope="col">Adjustment</th><th scope="col">Reason</th><th scope="col">Previous Stock</th><th scope="col">New Stock</th></tr></thead>
+                    <tbody>
+                        {% for row in history.items %}<tr><td>{{ row.displayDate }}</td><td>{{ row.user }}</td><td>{{ row.displayAdjustment }}</td><td>{{ row.reason }}</td><td>{{ row.previousStock }}</td><td>{{ row.newStock }}</td></tr>
+                        {% else %}<tr><td colspan="6" class="admin-empty">No stock adjustments recorded.</td></tr>{% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {{ controls.pagination(history.pagination, "Stock history pages") }}
+        </section>
+        {% endif %}
+        {% endif %}
+    </main>
+</body>
+</html>

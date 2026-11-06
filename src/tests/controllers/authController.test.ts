@@ -167,25 +167,32 @@ describe("auth", () => {
 		expect(fetchApi).toHaveBeenCalledTimes(10);
 	});
 
-	it("keeps a failed login on the form", async () => {
-		const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
-			new Response(JSON.stringify({ error: "Invalid email or password" }), {
-				status: 401,
-			}),
-		);
-		const res = await request(createApp({ fetch: fetchApi }))
-			.post("/login")
-			.type("form")
-			.send({
-				email: "ada@example.com",
-				password: "wrong-password",
-			});
-		expect(res.status).toBe(401);
-		expect(res.text).toContain("Invalid email or password");
-		expect(res.text).toContain('value="ada@example.com"');
-		expect(res.headers.location).toBeUndefined();
-		expect(res.text).not.toContain("wrong-password");
-	});
+	it.each(["/login", "/admin/login"])(
+		"keeps a failed %s on the form",
+		async (path) => {
+			const fetchApi = vi.fn<typeof fetch>().mockResolvedValue(
+				new Response(JSON.stringify({ error: "Invalid email or password" }), {
+					status: 401,
+				}),
+			);
+			const res = await request(createApp({ fetch: fetchApi }))
+				.post(path)
+				.type("form")
+				.send({
+					email: "ada@example.com",
+					password: "wrong-password",
+				});
+			expect(res.status).toBe(401);
+			expect(res.text).toContain("Invalid email or password");
+			expect(res.text).toContain('value="ada@example.com"');
+			expect(res.headers.location).toBeUndefined();
+			expect(res.text).not.toContain("wrong-password");
+			expect(res.text).toContain(`action="${path}"`);
+			expect(res.text).toContain('aria-invalid="true"');
+			expect(res.text).toContain('aria-describedby="login-error"');
+			expect(res.headers["set-cookie"]).toBeUndefined();
+		},
+	);
 
 	it("keeps the token but never passwords after a reset confirmation mismatch", async () => {
 		const fetchApi = vi.fn<typeof fetch>();

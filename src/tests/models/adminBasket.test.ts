@@ -4,6 +4,7 @@ import type {
 	BasketDetailsResponse,
 	BasketItem,
 	BasketListResponse,
+	BasketProductOption,
 	BasketSummary,
 	BasketSummaryView,
 	CustomerSummary,
@@ -31,19 +32,25 @@ describe("adminBasket model", () => {
 
 	it("describes basket details with customer and items", () => {
 		expectTypeOf<CustomerSummary>().toEqualTypeOf<{
+			id?: number;
 			name: string;
 			email: string;
 		}>();
 		expectTypeOf<BasketItem>().toEqualTypeOf<{
+			productId?: number;
 			productName: string;
 			quantity: number;
 			unitPrice: string;
 			totalPrice: string;
+			availableStock?: number;
+			maxQuantity?: number;
+			exceedsStock?: boolean;
 		}>();
 		expectTypeOf<BasketDetails["customer"]>().toEqualTypeOf<CustomerSummary>();
 		expectTypeOf<BasketDetails["items"]>().toEqualTypeOf<BasketItem[]>();
 		expectTypeOf<BasketDetailsResponse>().toEqualTypeOf<{
 			basket: BasketDetails;
+			products?: BasketProductOption[];
 		}>();
 	});
 

@@ -13,9 +13,6 @@ const methodNames = [
 	"postReactivateUser",
 	"getBaskets",
 	"getBasketDetails",
-	"getOrders",
-	"getOrderDetails",
-	"postOrderStatus",
 ] as const;
 
 type MethodName = (typeof methodNames)[number];
@@ -80,19 +77,6 @@ describe("createAdminRoutes", () => {
 			handler: "getBasketDetails",
 			params: { id: "b-7" },
 		},
-		{ method: "get", path: "/admin/orders", handler: "getOrders", params: {} },
-		{
-			method: "get",
-			path: "/admin/orders/99",
-			handler: "getOrderDetails",
-			params: { id: "99" },
-		},
-		{
-			method: "post",
-			path: "/admin/orders/99/status",
-			handler: "postOrderStatus",
-			params: { id: "99" },
-		},
 	])(
 		"$method $path calls $handler",
 		async ({ method, path, handler, params }) => {
@@ -115,6 +99,9 @@ describe("createAdminRoutes", () => {
 		["get", "/admin/users/42/suspend"],
 		["get", "/admin/users/42/reactivate"],
 		["get", "/admin/orders/99/status"],
+		["get", "/admin/orders"],
+		["get", "/admin/orders/99"],
+		["post", "/admin/orders/99/status"],
 		["post", "/admin/baskets/1"],
 	] as const)("returns 404 for unmapped %s %s", async (method, path) => {
 		const response = await request(app)[method](path);

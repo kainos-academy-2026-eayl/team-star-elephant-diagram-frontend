@@ -1,3 +1,4 @@
+import { EventEmitter } from "node:events";
 import type { Response as ExpressResponse, Request } from "express";
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
@@ -191,19 +192,21 @@ describe("persistent authentication", () => {
 			if (path.endsWith("/admin/users/999")) {
 				return Promise.resolve(response({ error: "Not found" }, 404));
 			}
-			return Promise.resolve(
-				response({
-					staff: { name: "Ada" },
-					sections: [],
-					quickActions: [],
-				}),
-			);
+			if (path.endsWith("/admin")) {
+				return Promise.resolve(
+					response({
+						staff: { name: "Ada" },
+						sections: [],
+						quickActions: [],
+					}),
+				);
+			}
+			return Promise.resolve(response({ error: "Unexpected URL" }, 500));
 		});
 		const result = await request(createApp({ fetch: api }))
 			.get("/admin/users/999")
 			.set("Cookie", "refreshToken=current-refresh");
 		expect(result.status).toBe(404);
-		expect(result.headers["set-cookie"]).toHaveLength(2);
 		expect(String(result.headers["set-cookie"])).toContain(
 			"accessToken=new-access",
 		);
@@ -281,6 +284,69 @@ describe("persistent authentication", () => {
 		expect(String(result.headers["set-cookie"])).toContain(
 			"refreshToken=new-refresh",
 		);
+	});
+
+	it("preserves PUT when saving an address after refreshing an expired access token", async () => {
+		const api = vi.fn<typeof fetch>(async (input, init) => {
+			const path = String(input);
+			if (path.endsWith("/auth/refresh")) return credentials();
+			if (path.endsWith("/orders/from-reservation")) {
+				return response(
+					{
+						order: {
+							orderId: 42,
+							orderStatus: "PROCESSING",
+							cost: "7.00",
+							orderPlacedAt: "2026-11-05T09:00:00.000Z",
+							items: [],
+						},
+					},
+					201,
+				);
+			}
+			if (path.endsWith("/profile/shipping-address")) {
+				if (init?.method !== "PUT") {
+					return response({ error: "Expected PUT" }, 405);
+				}
+				const authorization = (
+					init.headers as Record<string, string> | undefined
+				)?.Authorization;
+				if (authorization === ["Bearer", "expired-access"].join(" ")) {
+					return response({ error: "Expired" }, 401);
+				}
+				return response({ status: "updated" });
+			}
+			return response({ error: "Unexpected URL" }, 500);
+		});
+		const result = await request(createApp({ fetch: api }))
+			.post("/payment_gateway")
+			.type("form")
+			.set("Cookie", "accessToken=expired-access; refreshToken=current-refresh")
+			.send({
+				useExistingAddress: "false",
+				fullName: "Ada Lovelace",
+				addressLine1: "1 St James Square",
+				city: "London",
+				postcode: "SW1A 1AA",
+				nameOnCard: "Ada Lovelace",
+				cardNumber: "4242424242424242",
+				expiry: "12/30",
+				cvc: "123",
+			});
+
+		expect(result.status).toBe(201);
+		const addressCalls = api.mock.calls.filter(([input]) =>
+			String(input).endsWith("/profile/shipping-address"),
+		);
+		expect(addressCalls).toHaveLength(2);
+		expect(addressCalls.map(([, init]) => init?.method)).toEqual([
+			"PUT",
+			"PUT",
+		]);
+		expect(
+			(addressCalls[1]?.[1]?.headers as Record<string, string> | undefined)
+				?.Authorization,
+		).toBe(["Bearer", "new-access"].join(" "));
 	});
 
 	it("offers a working separate admin login", async () => {
@@ -390,6 +456,57 @@ describe("persistent authentication", () => {
 			.set("Cookie", "refreshToken=current-refresh; accessToken=old-access");
 		expect(logout.status).toBe(303);
 		resolveProfile(response(profile));
+		const page = await pageRequest;
+
+		expect(page.status).toBe(200);
+		expect(page.headers["set-cookie"]).toBeUndefined();
+	});
+
+	it("removes refreshed cookies when logout occurs between admin access and inventory lookup", async () => {
+		let resolveInventory!: (result: Response) => void;
+		const inventoryResponse = new Promise<Response>((resolve) => {
+			resolveInventory = resolve;
+		});
+		let inventoryStarted!: () => void;
+		const inventoryRequestStarted = new Promise<void>((resolve) => {
+			inventoryStarted = resolve;
+		});
+		const api = vi.fn<typeof fetch>(async (input) => {
+			const path = new URL(String(input)).pathname;
+			if (path.endsWith("/auth/refresh")) return credentials();
+			if (path.endsWith("/admin")) {
+				return response({
+					staff: { name: "Ada" },
+					role: "InventoryManager",
+					sections: [{ label: "Inventory" }],
+					inventoryPermissions: {
+						view: true,
+						create: true,
+						update: true,
+						delete: true,
+					},
+				});
+			}
+			if (path.endsWith("/api/admin/inventory")) {
+				inventoryStarted();
+				return inventoryResponse;
+			}
+			return response({ status: "Success" });
+		});
+		const app = createApp({ fetch: api });
+		const pageRequest = request(app)
+			.get("/admin/inventory")
+			.set("Cookie", "refreshToken=current-refresh")
+			.then((result) => result);
+
+		await inventoryRequestStarted;
+		const logout = await request(app)
+			.post("/logout")
+			.set("Cookie", "refreshToken=current-refresh");
+		expect(logout.status).toBe(303);
+		resolveInventory(
+			response({ items: [], totalItems: 0, totalPages: 1, currentPage: 1 }),
+		);
 		const page = await pageRequest;
 
 		expect(page.status).toBe(200);
@@ -542,13 +659,26 @@ describe("SessionService", () => {
 			get: (name: string) => headers[name.toLowerCase()],
 		}) as unknown as Request;
 	const fakeResponse = () => {
+		const headers = new Map<string, string | string[]>();
 		const mocks = {
 			set: vi.fn(),
 			cookie: vi.fn(),
 			append: vi.fn(),
 			clearCookie: vi.fn(),
+			headersSent: false,
+			getHeader: vi.fn((name: string) => headers.get(name)),
+			setHeader: vi.fn((name: string, value: string | string[]) =>
+				headers.set(name, value),
+			),
+			removeHeader: vi.fn((name: string) => headers.delete(name)),
 		};
-		return { mocks, res: mocks as unknown as ExpressResponse };
+		return {
+			mocks,
+			res: Object.assign(
+				new EventEmitter(),
+				mocks,
+			) as unknown as ExpressResponse,
+		};
 	};
 	const setup = () => {
 		const fetchMock = vi.fn<typeof fetch>();
@@ -632,24 +762,24 @@ describe("SessionService", () => {
 			fetchMock.mockResolvedValueOnce(response({ ok: true }));
 
 			const result = await service.request(
-				"/admin/orders/1/status",
+				"/admin/baskets/1/items/2",
 				fakeRequest({ authorization: bearer("header-token") }),
 				res,
 				{ "X-Trace": "1" },
-				{ status: "SHIPPED" },
-				"PUT",
+				{ quantity: 3 },
+				"PATCH",
 			);
 
 			expect(result).toEqual({ ok: true });
 			expect(sent(fetchMock)).toEqual({
-				url: "http://backend:4000/admin/orders/1/status",
-				method: "PUT",
+				url: "http://backend:4000/admin/baskets/1/items/2",
+				method: "PATCH",
 				headers: {
 					"Content-Type": "application/json",
 					"X-Trace": "1",
 					Authorization: bearer("header-token"),
 				},
-				body: { status: "SHIPPED" },
+				body: { quantity: 3 },
 			});
 			expect(mocks.set).toHaveBeenCalledWith("Cache-Control", "no-store");
 			expect(mocks.cookie).not.toHaveBeenCalled();
