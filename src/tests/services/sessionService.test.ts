@@ -347,6 +347,11 @@ describe("persistent authentication", () => {
 			(addressCalls[1]?.[1]?.headers as Record<string, string> | undefined)
 				?.Authorization,
 		).toBe(["Bearer", "new-access"].join(" "));
+		expect(
+			api.mock.calls.find(([input]) =>
+				String(input).endsWith("/orders/from-reservation"),
+			)?.[1]?.method,
+		).toBe("POST");
 	});
 
 	it("offers a working separate admin login", async () => {
