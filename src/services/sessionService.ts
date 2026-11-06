@@ -290,6 +290,8 @@ export class SessionService {
 		this.establish(res, credentials);
 		// Later API calls still see the original browser cookies on this request.
 		this.refreshedAccess.set(req, `Bearer ${credentials.result.accessToken}`);
+	}
+
 	private trackResponse(
 		refresh: string,
 		operation: RefreshOperation,
