@@ -880,6 +880,41 @@ describe("SessionService", () => {
 			);
 		});
 
+		it.each([200, 404])(
+			"reuses refreshed access for sequential calls in one request after status %s",
+			async (status) => {
+				const { fetchMock, service } = setup();
+				const { res, mocks } = fakeResponse();
+				const req = fakeRequest({
+					cookie: "accessToken=old; refreshToken=refresh-one",
+				});
+				fetchMock
+					.mockResolvedValueOnce(response({ error: "Expired" }, 401))
+					.mockResolvedValueOnce(refreshResponse())
+					.mockResolvedValueOnce(
+						response(status === 200 ? profile : { error: "Not found" }, status),
+					)
+					.mockResolvedValueOnce(response({ ok: true }));
+
+				const first = service.request("/profile", req, res);
+				if (status === 200) {
+					await expect(first).resolves.toEqual(profile);
+				} else {
+					await expect(first).rejects.toMatchObject({ status });
+				}
+				await expect(
+					service.request("/orders/from-reservation", req, res, {}, {}, "POST"),
+				).resolves.toEqual({ ok: true });
+
+				expect(fetchMock).toHaveBeenCalledTimes(4);
+				expect(sent(fetchMock, 3)).toMatchObject({
+					headers: { Authorization: bearer("access-two") },
+					method: "POST",
+				});
+				expect(mocks.cookie).toHaveBeenCalledTimes(1);
+			},
+		);
+
 		it("shares one refresh between concurrent requests with the same token", async () => {
 			const { fetchMock, service } = setup();
 			fetchMock.mockImplementation(async (url) =>

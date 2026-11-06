@@ -45,6 +45,7 @@ export class CustomerSessionError extends BackendApiError {
 }
 
 export class SessionService {
+	private readonly refreshedAccess = new WeakMap<Request, string>();
 	private readonly establishedResponses = new WeakSet<Response>();
 	private readonly clearedResponses = new WeakSet<Response>();
 	private readonly refreshOperations = new Map<string, RefreshOperation>();
@@ -84,6 +85,7 @@ export class SessionService {
 		if (renewed) {
 			return this.requestWithCredentials(
 				path,
+				req,
 				res,
 				headers,
 				body,
@@ -91,7 +93,8 @@ export class SessionService {
 				method,
 			);
 		}
-		const authorization = req.get("authorization");
+		const authorization =
+			this.refreshedAccess.get(req) ?? req.get("authorization");
 		const access = cookieValue(req, "accessToken");
 		if (authorization || access) {
 			try {
@@ -111,6 +114,7 @@ export class SessionService {
 				if (renewedAfterFailure) {
 					return this.requestWithCredentials(
 						path,
+						req,
 						res,
 						headers,
 						body,
@@ -162,7 +166,8 @@ export class SessionService {
 				},
 				method,
 			);
-			if (!operation.invalidated) this.establish(res, credentials);
+			if (!operation.invalidated)
+				this.establishForRequest(req, res, credentials);
 			return result;
 		} catch (error) {
 			if (
@@ -171,13 +176,16 @@ export class SessionService {
 				credentials &&
 				this.tokenKind(credentials.result.accessToken) === "customer"
 			) {
-				if (!operation.invalidated) this.establish(res, credentials);
+				if (!operation.invalidated)
+					this.establishForRequest(req, res, credentials);
 				throw new CustomerSessionError();
 			}
 			if (error instanceof BackendApiError && error.status === 401) {
+				this.refreshedAccess.delete(req);
+				this.renewedForRequest.delete(req);
 				this.clear(res);
 			} else if (credentials && !operation.invalidated) {
-				this.establish(res, credentials);
+				this.establishForRequest(req, res, credentials);
 			}
 			throw error;
 		} finally {
@@ -188,6 +196,7 @@ export class SessionService {
 
 	private async requestWithCredentials<Result>(
 		path: string,
+		req: Request,
 		res: Response,
 		headers: Record<string, string>,
 		body: Record<string, string | number> | undefined,
@@ -213,13 +222,16 @@ export class SessionService {
 				error.status === 403 &&
 				this.tokenKind(credentials.result.accessToken) === "customer"
 			) {
-				if (!operation.invalidated) this.establish(res, credentials);
+				if (!operation.invalidated)
+					this.establishForRequest(req, res, credentials);
 				throw new CustomerSessionError();
 			}
 			if (error instanceof BackendApiError && error.status === 401) {
+				this.refreshedAccess.delete(req);
+				this.renewedForRequest.delete(req);
 				this.clear(res);
 			} else if (!operation.invalidated) {
-				this.establish(res, credentials);
+				this.establishForRequest(req, res, credentials);
 			}
 			throw error;
 		}
@@ -251,6 +263,8 @@ export class SessionService {
 	}
 
 	async logout(req: Request, res: Response): Promise<void> {
+		this.refreshedAccess.delete(req);
+		this.renewedForRequest.delete(req);
 		const refresh = cookieValue(req, "refreshToken");
 		if (refresh) {
 			const operation = this.refreshOperations.get(refresh);
@@ -266,6 +280,16 @@ export class SessionService {
 			if (operation) this.invalidate(operation);
 		}
 		this.clear(res);
+	}
+
+	private establishForRequest(
+		req: Request,
+		res: Response,
+		credentials: { result: LoginResponse; cookies: string[] },
+	): void {
+		this.establish(res, credentials);
+		// Later API calls still see the original browser cookies on this request.
+		this.refreshedAccess.set(req, `Bearer ${credentials.result.accessToken}`);
 	}
 
 	private trackResponse(

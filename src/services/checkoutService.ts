@@ -11,6 +11,8 @@ export interface CheckoutData {
 	itemCount: number;
 	subtotal: number;
 	displaySubtotal: string;
+	shippingFee: number;
+	displayShippingFee: string;
 	total: number;
 	displayTotal: string;
 }
@@ -30,6 +32,10 @@ export interface Basket {
 
 export class CheckoutService {
 	constructor() {}
+
+	private calculateShippingFee(subtotal: number): number {
+		return subtotal > 200 ? 30 : 20;
+	}
 
 	async prepareCheckout(basket: Basket): Promise<CheckoutData> {
 		const items = basket.items.map((item) => {
@@ -56,7 +62,9 @@ export class CheckoutService {
 
 		const itemCount = items.reduce((total, item) => total + item.quantity, 0);
 		const subtotal = items.reduce((total, item) => total + item.subtotal, 0);
-		const total = subtotal;
+		const shippingFee =
+			items.length > 0 ? this.calculateShippingFee(subtotal) : 0;
+		const total = subtotal + shippingFee;
 
 		if (!Number.isFinite(itemCount) || !Number.isFinite(total)) {
 			throw new Error("Order calculation resulted in invalid values.");
@@ -67,6 +75,8 @@ export class CheckoutService {
 			itemCount,
 			subtotal,
 			displaySubtotal: this.formatPrice(subtotal),
+			shippingFee,
+			displayShippingFee: this.formatPrice(shippingFee),
 			total,
 			displayTotal: this.formatPrice(total),
 		};

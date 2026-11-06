@@ -70,7 +70,6 @@ export function createApp({
 	);
 	const paymentGatewayController = new PaymentGatewayController(
 		new PaymentGatewayService(),
-		new BasketService(api),
 		sessions,
 	);
 	const profileController = new ProfileController(new ProfileService(sessions));

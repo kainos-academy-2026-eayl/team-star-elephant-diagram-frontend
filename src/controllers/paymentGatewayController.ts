@@ -1,8 +1,9 @@
 import type { Request, Response } from "express";
 import { BackendApiError } from "../backendApi";
-import type { BasketService } from "../services/basketService";
+import type { Basket } from "../services/basketService";
 import type { PaymentGatewayService } from "../services/paymentGatewayService";
 import type { SessionService } from "../services/sessionService";
+import { basketCookieHeader } from "./basketController";
 
 export interface UserProfile {
 	user: {
@@ -31,27 +32,18 @@ interface OrderFromReservationResponse {
 export class PaymentGatewayController {
 	constructor(
 		private readonly paymentGatewayService: PaymentGatewayService,
-		private readonly basketService: BasketService,
 		private readonly sessions: SessionService,
 	) {}
 
 	async show(req: Request, res: Response): Promise<void> {
 		try {
-			const authorization = req.get("authorization");
-
-			if (!authorization) {
-				res.status(401).render("payment_gateway", {
-					error: "Please log in to complete payment.",
-					loginRequired: true,
-					payment: null,
-					savedAddress: null,
-				});
-				return;
-			}
-
-			const basket = await this.basketService.getBasket({
-				authorization,
-			});
+			const cookie = basketCookieHeader(req);
+			const basket = await this.sessions.request<Basket>(
+				"/basket",
+				req,
+				res,
+				cookie ? { Cookie: cookie } : {},
+			);
 
 			if (!basket || basket.items.length === 0) {
 				res.status(400).render("payment_gateway", {
@@ -71,8 +63,11 @@ export class PaymentGatewayController {
 					res,
 					{},
 				);
-			} catch {
-				// If profile fetch fails, continue without saved address
+			} catch (error) {
+				if (error instanceof BackendApiError && error.status === 401) {
+					throw error;
+				}
+				console.error("Failed to load saved shipping address:", error);
 			}
 
 			res.render("payment_gateway", {
@@ -154,7 +149,7 @@ export class PaymentGatewayController {
 				order,
 				payment: {
 					status: order.orderStatus.toLowerCase(),
-					message: `Payment complete. Order #${order.orderId} is processing.`,
+					message: "Payment complete. Your order is processing.",
 				},
 			});
 		} catch (error) {

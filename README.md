@@ -73,6 +73,9 @@ the Authorization header. Protected pages restore expired access credentials
 through backend `POST /auth/refresh`, with one retry. A reload/browser restart
 can restore the session until its absolute seven-day expiry. Stable backend
 secrets and the refresh-session database migration are required.
+Checkout and payment use these same cookie-based sessions. If access expires,
+the refreshed credentials are reused for subsequent API calls in that page
+request, including saving a shipping address before placing the order.
 `POST /logout` revokes the refresh session and expires both cookies.
 Access tokens already issued may remain valid for their remaining 15 minutes.
 Customer and staff login share cookie names, so they replace one another.
