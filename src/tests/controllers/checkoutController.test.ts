@@ -25,7 +25,10 @@ describe("checkout", () => {
 				}),
 			)
 			.mockResolvedValueOnce(loginResponse())
-			.mockResolvedValueOnce(new Response(JSON.stringify(basket)));
+			.mockResolvedValueOnce(new Response(JSON.stringify(basket)))
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ success: true }), { status: 201 }),
+			);
 		const res = await request(
 			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
 		)
@@ -47,6 +50,39 @@ describe("checkout", () => {
 			Authorization: ["Bearer", "access-one"].join(" "),
 			Cookie: `basketId=${basketId}`,
 		});
+		expect(String(fetchApi.mock.calls[3]?.[0])).toBe(
+			"http://backend:4000/checkout/reserve",
+		);
+		expect(fetchApi.mock.calls[3]?.[1]?.method).toBe("POST");
+	});
+
+	it("shows a stock error when the basket cannot be reserved", async () => {
+		const basket = {
+			items: [
+				{ productId: 1, productName: "Green tea", quantity: 5, unitPrice: 3.5 },
+			],
+			subtotal: 17.5,
+		};
+		const fetchApi = vi
+			.fn<typeof fetch>()
+			.mockResolvedValueOnce(new Response(JSON.stringify(basket)))
+			.mockResolvedValueOnce(
+				new Response(
+					JSON.stringify({
+						error:
+							"Insufficient stock for Green tea. Available: 2, Requested: 5",
+					}),
+					{ status: 409 },
+				),
+			);
+		const res = await request(
+			createApp({ apiBaseUrl: "http://backend:4000", fetch: fetchApi }),
+		)
+			.get("/checkout")
+			.set("Cookie", "accessToken=access-one");
+
+		expect(res.status).toBe(409);
+		expect(res.text).toContain("Insufficient stock for Green tea");
 	});
 
 	it("treats rejected checkout credentials as login-required", async () => {

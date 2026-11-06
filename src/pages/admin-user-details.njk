@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% if user %}{{ user.name }} | {% endif %}Users | Admin | Shop</title>
     <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/admin.css">
+    <script src="/admin.js" defer></script>
 </head>
 
 <body>
@@ -81,7 +83,7 @@
                             <th scope="col">Order</th>
                             <th scope="col">Date</th>
                             <th scope="col">Status</th>
-                            <th scope="col">Total</th>
+                            <th scope="col" class="admin-numeric">Total</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -90,7 +92,7 @@
                             <td>#{{ order.id }}</td>
                             <td>{{ order.displayPlacedAt }}</td>
                             <td><span class="order-status">{{ order.status }}</span></td>
-                            <td>{{ order.displayTotal }}</td>
+                            <td class="admin-numeric">{{ order.displayTotal }}</td>
                         </tr>
                         {% else %}
                         <tr>
@@ -108,14 +110,14 @@
                     <thead>
                         <tr>
                             <th scope="col">Product</th>
-                            <th scope="col">Quantity</th>
+                            <th scope="col" class="admin-numeric">Quantity</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in basket.items %}
                         <tr>
                             <td>{{ item.productName }}</td>
-                            <td>{{ item.quantity }}</td>
+                            <td class="admin-numeric">{{ item.quantity }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>

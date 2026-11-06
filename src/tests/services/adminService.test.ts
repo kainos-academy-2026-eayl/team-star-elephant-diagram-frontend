@@ -59,9 +59,12 @@ describe("AdminService", () => {
 			const dashboard = { staff: { name: "Ada" } };
 			request.mockResolvedValueOnce(dashboard);
 
-			await expect(service.getDashboard(req, res)).resolves.toMatchObject(
-				dashboard,
-			);
+			await expect(service.getDashboard(req, res)).resolves.toMatchObject({
+				...dashboard,
+				role: "",
+				nav: [{ key: "dashboard", label: "Dashboard", href: "/admin" }],
+				canChangeUserStatus: false,
+			});
 			expect(request).toHaveBeenCalledExactlyOnceWith("/admin", req, res);
 		});
 
@@ -79,6 +82,28 @@ describe("AdminService", () => {
 	});
 
 	describe("input helpers", () => {
+		it("derives role-scoped access from the dashboard", () => {
+			const { service } = setup();
+
+			expect(
+				service.toAccess({
+					staff: { name: "Ada" },
+					role: "Admin",
+					sections: [{ label: "Users" }, { label: "Orders" }],
+					quickActions: [{ label: "Suspend or reactivate customers" }],
+				}),
+			).toEqual({
+				staff: { name: "Ada" },
+				role: "Admin",
+				nav: [
+					{ key: "dashboard", label: "Dashboard", href: "/admin" },
+					{ key: "users", label: "Users", href: "/admin/users" },
+					{ key: "orders", label: "Orders", href: "/admin/orders" },
+				],
+				canChangeUserStatus: true,
+			});
+		});
+
 		it("trims and limits search terms", () => {
 			const { service } = setup();
 

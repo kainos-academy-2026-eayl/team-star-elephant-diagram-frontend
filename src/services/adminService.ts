@@ -62,7 +62,7 @@ export interface AdminNavItem {
 }
 
 // What the logged-in role may see, derived only from the backend's role-scoped dashboard response.
-export interface AdminContext {
+export interface AdminAccess {
 	staff: { name: string };
 	role: string;
 	nav: AdminNavItem[];
@@ -234,7 +234,7 @@ export class AdminService {
 	async getDashboard(
 		req: Request,
 		res: Response,
-	): Promise<AdminDashboard & AdminContext> {
+	): Promise<AdminDashboard & AdminAccess> {
 		const dashboard = await this.sessions.request<AdminDashboard>(
 			"/admin",
 			req,
@@ -243,13 +243,13 @@ export class AdminService {
 		return { ...dashboard, ...this.toAccess(dashboard) };
 	}
 
-	async getAccess(req: Request, res: Response): Promise<AdminContext> {
+	async getAccess(req: Request, res: Response): Promise<AdminAccess> {
 		return this.toAccess(
 			await this.sessions.request<AdminDashboard>("/admin", req, res),
 		);
 	}
 
-	toAccess(dashboard: Partial<AdminDashboard>): AdminContext {
+	toAccess(dashboard: Partial<AdminDashboard>): AdminAccess {
 		const sections = Array.isArray(dashboard.sections)
 			? dashboard.sections
 			: [];
@@ -267,7 +267,7 @@ export class AdminService {
 	}
 
 	// Used when the role cannot be confirmed: only the dashboard link and no actions.
-	getRestrictedAccess(): AdminContext {
+	getRestrictedAccess(): AdminAccess {
 		return this.toAccess({});
 	}
 

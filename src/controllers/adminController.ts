@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { BackendApiError } from "../backendApi";
 import type { AdminUserStatusAction } from "../models/adminUser";
-import type { AdminContext, AdminService } from "../services/adminService";
+import type { AdminAccess, AdminService } from "../services/adminService";
 import {
 	CustomerSessionError,
 	SessionExpiredError,
@@ -406,7 +406,7 @@ export class AdminController {
 		req: Request,
 		res: Response,
 		page: Promise<T>,
-	): Promise<{ access: AdminContext; result: PromiseSettledResult<T> }> {
+	): Promise<{ access: AdminAccess; result: PromiseSettledResult<T> }> {
 		const [result, accessResult] = await Promise.allSettled([
 			page,
 			this.adminService.getAccess(req, res),
@@ -419,7 +419,7 @@ export class AdminController {
 		const mustLeave =
 			reason instanceof CustomerSessionError ||
 			(reason instanceof BackendApiError && reason.status === 401);
-		if (result.status === "fulfilled" && mustLeave) {
+		if (mustLeave) {
 			return { access, result: { status: "rejected", reason } };
 		}
 		return { access, result };
@@ -429,7 +429,7 @@ export class AdminController {
 		error: unknown,
 		req: Request,
 		res: Response,
-		access: AdminContext,
+		access: AdminAccess,
 	): boolean {
 		if (redirectToAdminLogin(error, req, res)) {
 			return true;
@@ -441,15 +441,15 @@ export class AdminController {
 		return false;
 	}
 
-	private renderForbidden(res: Response, access: AdminContext): void {
+	private renderForbidden(res: Response, access: AdminAccess): void {
 		res.status(403).render("admin", { ...access, forbidden: true });
 	}
 
-	private renderUserNotFound(res: Response, access?: AdminContext): void {
+	private renderUserNotFound(res: Response, access?: AdminAccess): void {
 		res.status(404).render("admin-user-details", { ...access, notFound: true });
 	}
 
-	private renderBasketNotFound(res: Response, access?: AdminContext): void {
+	private renderBasketNotFound(res: Response, access?: AdminAccess): void {
 		res
 			.status(404)
 			.render("partials/admin-basket-details", { ...access, notFound: true });
