@@ -1,11 +1,13 @@
-<!doctype html>
+{%- import "partials/icons.njk" as i -%}
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login</title>
-    <link rel="stylesheet" href="/styles.css">
+    <title>{% if admin %}Staff log in{% else %}Log in{% endif %} | Sedshed</title>
+    <link rel="stylesheet" href="/site.css">
+    <link rel="stylesheet" href="/login.css">
 </head>
 
 <body>
@@ -36,15 +38,59 @@
             <div class="field">
                 <label for="password">Password</label>
                 <input type="password" name="password" id="password" autocomplete="current-password" {% if invalidCredentials %}aria-invalid="true" aria-describedby="login-error"{% endif %} required>
+<body class="site">
+    {% include "partials/site-header.njk" %}
+
+    <main class="auth">
+        <section class="auth-card{% if admin %} auth-card--admin{% endif %}">
+            <div class="auth-card__intro">
+                <p class="auth-card__eyebrow">{{ i.icon("user") }}<span>{% if admin %}Staff portal{% else %}My account{% endif %}</span></p>
+                <h1 class="login__title">{% if admin %}Admin log in{% else %}Log in{% endif %}</h1>
+                <p class="login__intro">{% if admin %}Welcome back. Sign in with your staff account to manage the shop.{% else %}Welcome back. Sign in to check out faster and track your orders.{% endif %}</p>
             </div>
 
-            <button type="submit" class="btn btn--primary">Log in</button>
-        </form>
+            {% if registered %}<p class="auth-message auth-message--success" role="status">Account created. You can now log in.</p>{% endif %}
+            {% if passwordReset %}<p class="auth-message auth-message--success" role="status">Password reset. You can now log in with your new password.</p>{% endif %}
+            {% if admin and sessionExpired %}<p class="auth-message" role="status">Your session has expired. Please log in again.</p>{% endif %}
+            {% if admin and forbidden %}<p class="auth-message auth-message--error" role="alert">You need a staff account to access that page.</p>{% endif %}
+            {% if error %}
+            <div class="auth-message auth-message--error" role="alert">
+                <p>{{ error }}</p>
+                {% for field, messages in details %}
+                {% for message in messages %}<p>{{ field }}: {{ message }}</p>{% endfor %}
+                {% endfor %}
+            </div>
+            {% endif %}
 
-        <p class="login__switch">Don't have an account? <a href="/register">Create one</a></p>
-        <p class="login__switch">Forgot your password? <a href="/forgot-password">Reset it</a></p>
-        {% if not admin %}<p class="login__switch"><a href="/admin/login">Staff login</a></p>{% endif %}
+            <form class="login__form" action="{% if admin %}/admin/login{% else %}/login{% endif %}" method="post">
+                {% if admin and returnTo %}<input type="hidden" name="returnTo" value="{{ returnTo }}">{% endif %}
+                <div class="auth-field">
+                    <label for="email">Email</label>
+                    <input type="email" name="email" id="email" autocomplete="email" value="{{ values.email }}" required>
+                </div>
+
+                <div class="auth-field">
+                    <label for="password">Password</label>
+                    <input type="password" name="password" id="password" autocomplete="current-password" required>
+                </div>
+
+                <button type="submit" class="auth-submit">Log in</button>
+            </form>
+
+            <ul class="auth-links">
+                <li>Don't have an account? <a href="/register">Create one</a></li>
+                <li>Forgot your password? <a href="/forgot-password">Reset it</a></li>
+            </ul>
+
+            {% if admin %}
+            <a class="auth-switch" href="/login"><span>Not staff? Go to the customer log in</span>{{ i.icon("arrow") }}</a>
+            {% else %}
+            <a class="auth-switch" href="/admin/login"><span>Staff login</span>{{ i.icon("arrow") }}</a>
+            {% endif %}
+        </section>
     </main>
+
+    {% include "partials/site-menu.njk" %}
 </body>
 
 </html>
