@@ -36,7 +36,7 @@ exist, then run:
 ```sh
 docker run -d --name elephant-frontend \
   --user "$(id -u):$(id -g)" \
-  -p 127.0.0.1:3002:3000 \
+  -p 127.0.0.1:3000:3000 \
   -e API_BASE_URL=http://host.docker.internal:3001 \
   -e TLS_CERT_FILE=/app/.certs/localhost.pem \
   -e TLS_KEY_FILE=/app/.certs/localhost-key.pem \
