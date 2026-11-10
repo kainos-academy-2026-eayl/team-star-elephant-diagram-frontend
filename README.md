@@ -1,6 +1,96 @@
 # team-star-elephant-diagram-frontend
 Team Star Elephant Diagram Frontend
 
+## Run with Docker
+
+Run these commands from this frontend repository with Docker Desktop running.
+This is a server-rendered Node.js application, not a static frontend: the image
+includes the compiled server, Nunjucks pages, styles, assets and production
+dependencies. It runs as a non-root user on container port 3000.
+
+### Build the image
+
+```sh
+docker build -t elephant-frontend:1.0.0 .
+```
+
+`-t` sets the image name and version; `.` is the build context containing the
+[Dockerfile](Dockerfile). The build installs locked dependencies with `npm ci`,
+type-checks and bundles the server, removes development dependencies, then copies
+only runtime files into the final Node.js 22 Alpine image. Dependency installation
+is cached until the package manifests change. `CACHED` means a layer was reused;
+`exporting to image` and the tagged image name indicate a successful build.
+An error and nonzero exit status mean the build failed; inspect the first failing
+step. For more detailed output, rerun with `--progress=plain`.
+
+The [.dockerignore](.dockerignore) excludes local dependencies, Git history,
+environment files and certificates. Configuration and TLS keys are supplied at
+runtime, never baked into the image.
+
+### Run the container
+
+Start the backend on host port 3001 first (see below). For local authenticated
+browser use, generate certificates with `npm run dev:cert` if they do not already
+exist, then run:
+
+```sh
+docker run -d --name elephant-frontend \
+  --user "$(id -u):$(id -g)" \
+  -p 127.0.0.1:3002:3000 \
+  -e API_BASE_URL=http://host.docker.internal:3001 \
+  -e TLS_CERT_FILE=/app/.certs/localhost.pem \
+  -e TLS_KEY_FILE=/app/.certs/localhost-key.pem \
+  --mount "type=bind,source=$(pwd)/.certs,target=/app/.certs,readonly" \
+  elephant-frontend:1.0.0
+```
+
+Open **https://localhost:3002/login** and accept the self-signed certificate
+warning for this local development server only. Host port 3002 avoids a running
+development server on 3000; `3002:3000` maps the host port to the container port.
+The user override matches your macOS/Linux user so the container can read the
+owner-only development private key without weakening its file permissions.
+The default image user remains `node` for deployments without this bind mount.
+
+`host.docker.internal` reaches the host from Docker Desktop; `localhost` inside
+the container refers to the container itself. On native Linux Docker Engine,
+add `--add-host=host.docker.internal:host-gateway` and ensure the backend is
+reachable on that interface. If the backend is on a shared Docker network,
+use its container/service name instead.
+
+For production, use a trusted certificate or a TLS-terminating reverse proxy
+with the existing `TRUSTED_PROXY` configuration described below. Behind a TLS
+proxy, omit the certificate mount, TLS variables and local user override.
+HTTP alone can render public pages but cannot support authenticated sessions
+because cookies are always Secure.
+
+### Verify and inspect
+
+```sh
+docker ps --filter name=elephant-frontend
+docker logs elephant-frontend
+curl --fail --insecure https://localhost:3002/login
+curl --fail --insecure https://localhost:3002/products
+docker exec elephant-frontend node --input-type=module -e \
+  'const response = await fetch(`${process.env.API_BASE_URL}/products`); console.log("Backend /products:", response.status); if (!response.ok) process.exit(1);'
+```
+
+Use `--insecure` only for this local self-signed certificate. The first requests
+verify frontend rendering; the final command verifies the backend API from
+inside the container. Check that the catalogue renders backend products, not
+an unavailable message, and that browser styles/images load. The frontend calls
+the API server-side; API endpoints themselves live in the backend.
+`docker logs -f elephant-frontend` streams logs (Ctrl+C stops following, not
+the container). A certificate permission error means the mounted key is not
+readable by the selected user. A backend connection failure means the backend
+is stopped or `API_BASE_URL` is unreachable.
+
+Stop and remove this container when finished:
+
+```sh
+docker stop elephant-frontend
+docker rm elephant-frontend
+```
+
 ## Run with the backend
 
 Use Node.js 22 and run `npm ci` in each repository. In the sibling backend repo,
