@@ -1,7 +1,6 @@
 # team-star-elephant-diagram-frontend
 Team Star Elephant Diagram Frontend
 
-<<<<<<< Updated upstream
 ## Run with Docker
 
 Run these commands from this frontend repository with Docker Desktop running.
@@ -91,13 +90,12 @@ Stop and remove this container when finished:
 docker stop elephant-frontend
 docker rm elephant-frontend
 ```
-=======
+
 ## Order management
 
 See [Order management](ORDER_MANAGEMENT.md) for routes, existing-status workflow,
 data limitations and the file-by-file pattern review. No database changes or
 real email delivery are included.
->>>>>>> Stashed changes
 
 ## Run with the backend
 
