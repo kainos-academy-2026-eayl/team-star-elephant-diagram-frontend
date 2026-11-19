@@ -1,0 +1,51 @@
+name: Frontend Image
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  publish-image:
+    name: Build and push frontend image
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+      GIT_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Check ACR configuration
+        run: |
+          if [[ -z "$ACR_NAME" || -z "$ACR_LOGIN_SERVER" ]]; then
+            echo "::error::Set ACR_NAME and ACR_LOGIN_SERVER as repository variables."
+            exit 1
+          fi
+
+      - name: Check out tested commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Azure login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.CLIENT_ID }}
+          tenant-id: ${{ secrets.TENANT_ID }}
+          subscription-id: ${{ secrets.SUBSCRIPTION_ID }}
+
+      - name: Build and push image to ACR
+        run: |
+          az acr login --name "$ACR_NAME"
+          IMAGE="$ACR_LOGIN_SERVER/frontend:$GIT_SHA"
+          docker build --target runtime --tag "$IMAGE" .
+          docker push "$IMAGE"
