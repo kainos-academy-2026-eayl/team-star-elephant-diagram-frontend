@@ -27,18 +27,33 @@ jobs:
         run: npm run format
       - name: Test
         run: npm test
+        
   build:
-    name: Build
+    name: Build Container Image
+    needs: test
+
     runs-on: ubuntu-latest
     timeout-minutes: 10
+
     steps:
-      - name: Check out code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: npm
+
       - name: Install dependencies
         run: npm ci
-      - name: Build
+
+      - name: Build Application
         run: npm run build
+
+      - name: Build Docker Image
+        env:
+          GIT_SHA: ${{ github.sha }}
+        run: |
+          docker build \
+            --target runtime \
+            -t "team-star-elephant-frontend:${GIT_SHA}" \
+            .
