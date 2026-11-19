@@ -1,9 +1,9 @@
 name: Frontend Image
 
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types: [completed]
+  push:
+    branches: [main]
+  pull_request:
     branches: [main]
 
 permissions: {}
@@ -11,9 +11,7 @@ permissions: {}
 jobs:
   publish-image:
     name: Build and push frontend image
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' 
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -22,7 +20,7 @@ jobs:
     env:
       ACR_NAME: ${{ vars.ACR_NAME }}
       ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
-      GIT_SHA: ${{ github.event.workflow_run.head_sha }}
+      GIT_SHA: ${{ github.sha }}
     steps:
       - name: Check ACR configuration
         run: |
@@ -34,7 +32,7 @@ jobs:
       - name: Check out tested commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.sha }}
 
       - name: Azure login with OIDC
         uses: azure/login@v2
